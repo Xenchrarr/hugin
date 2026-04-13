@@ -12,7 +12,7 @@ import os
 
 from src.persistence.JobDb import JobDb
 from src.persistence.JobStorage import JobStorage
-from src.services.job_run_service import update_job_run
+from src.services.core.job_run_service import update_job_run
 
 log = logging.getLogger(__name__)
 

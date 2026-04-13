@@ -3,7 +3,7 @@ import logging
 from flask import Blueprint, make_response, request
 
 from src.api.powershell_runner.health_check import check_if_powershell_script_engine_is_up
-from src.services.connection_status_service import check_if_connection_to_job_db_is_valid
+from src.services.core.connection_status_service import check_if_connection_to_job_db_is_valid
 
 log = logging.getLogger(__name__)
 

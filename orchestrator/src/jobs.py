@@ -3,9 +3,9 @@ import os
 
 from src.persistence.DatabaseLogger import DatabaseLogger
 
-from src.services.powershell_service import run_test_script, run_script
-from src.services.git_service import run_git_sync
-from src.services.power_aggregation_service import run_power_aggregation
+from src.services.external.powershell_service import run_test_script, run_script
+from src.services.external.git_service import run_git_sync
+from src.services.external.power_aggregation_service import run_power_aggregation
 
 from src.jobs_registry import job_type
 

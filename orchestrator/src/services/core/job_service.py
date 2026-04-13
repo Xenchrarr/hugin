@@ -17,10 +17,10 @@ from src.models.orchestrator.JobRun import JobRun
 from src.persistence.DatabaseLogger import DatabaseLogger
 from src.persistence.JobDb import JobDb
 from src.persistence.JobStorage import JobStorage
-from src.services.job_run_service import create_job_run, get_job_run_by_id, update_job_run
-from src.services.job_scheduler_service import JobSchedulerService
-from src.services.threading_service import get_value_from_thread, add_value_to_thread, JobCancelledException
-from src.services.cancellation_service import register_cancellation_token, cleanup as cleanup_cancellation_token, request_cancellation, is_cancelled
+from src.services.core.job_run_service import create_job_run, get_job_run_by_id, update_job_run
+from src.services.core.job_scheduler_service import JobSchedulerService
+from src.services.core.threading_service import get_value_from_thread, add_value_to_thread, JobCancelledException
+from src.services.core.cancellation_service import register_cancellation_token, cleanup as cleanup_cancellation_token, request_cancellation, is_cancelled
 
 _job_storage = JobStorage()
 
@@ -71,7 +71,7 @@ def run_job_once(job: Job, run_by: str = "system", run_by_group: str = "system",
     job_run = JobRun(
         id="",
         name=job.name,
-        start_time=datetime.datetime.now(),
+        start_time=datetime.datetime.now().isoformat(),
         end_time=None,
         status='Started',
         job_type=job.job_type,
@@ -111,7 +111,7 @@ def cancel_job_run(job_run_id: str) -> None:
         # or never registered a token. Force-update the DB as a safety net.
         job_run.status = 'Cancelled'
         job_run.result = f"{job_run.name} job was cancelled (force)"
-        job_run.end_time = datetime.datetime.now()
+        job_run.end_time = datetime.datetime.now().isoformat()
         update_job_run(job_run)
         return
 
@@ -122,7 +122,7 @@ def cancel_job_run(job_run_id: str) -> None:
         if run is not None and run.status == 'Started':
             run.status = 'Cancelled'
             run.result = f"{run.name} job was cancelled (timeout)"
-            run.end_time = datetime.datetime.now()
+            run.end_time = datetime.datetime.now().isoformat()
             update_job_run(run)
 
     timer = threading.Timer(30.0, _safety_net)

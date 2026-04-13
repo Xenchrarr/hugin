@@ -5,7 +5,7 @@ import pytz
 
 from src.api.TeamsBot.TeamsBotMessageSender import send_message
 from src.persistence.DatabaseLogger import DatabaseLogger
-from src.services.threading_service import add_value_to_thread
+from src.services.core.threading_service import add_value_to_thread
 
 
 

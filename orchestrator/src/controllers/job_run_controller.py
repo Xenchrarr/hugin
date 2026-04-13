@@ -2,9 +2,9 @@
 
 from flask import Blueprint, request
 
-from src.services.job_run_service import get_job_runs, get_total_job_runs, get_job_run_by_id
-from src.services.job_service import cancel_job_run
-from src.services.utils import comma_separated_params_to_list
+from src.services.core.job_run_service import get_job_runs, get_total_job_runs, get_job_run_by_id
+from src.services.core.job_service import cancel_job_run
+from src.services.core.utils import comma_separated_params_to_list
 
 job_run_blueprint = Blueprint('job_run', __name__)
 
@@ -145,7 +145,7 @@ def delete_run():
                 'status': 400,
             }, 400
 
-        from src.services.job_run_service import delete_job_run
+        from src.services.core.job_run_service import delete_job_run
         delete_job_run(job_run_id)
 
         return {

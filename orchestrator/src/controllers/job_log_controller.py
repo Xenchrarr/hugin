@@ -1,6 +1,6 @@
 from flask import Blueprint, request
 
-from src.services.job_log_service import (
+from src.services.core.job_log_service import (
     get_logs_for_job_run,
     get_request_log_for_job_run,
     get_total_count_request_log_for_job_run,

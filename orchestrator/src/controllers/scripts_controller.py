@@ -5,7 +5,7 @@ from flask import Blueprint, request
 
 from src.api.powershell_runner.script_runner import list_scripts
 from src.models.orchestrator.Job import Job
-from src.services.job_service import get_jobs, create_job, run_job_once
+from src.services.core.job_service import get_jobs, create_job, run_job_once
 from src.persistence.ScriptReasonStorage import ScriptReasonStorage
 
 _reason_storage = ScriptReasonStorage()
@@ -21,7 +21,7 @@ def _get_or_create_placeholder_job() -> Job:
     global _placeholder_job_id
 
     if _placeholder_job_id is not None:
-        from src.services.job_service import get_job
+        from src.services.core.job_service import get_job
         job = get_job(_placeholder_job_id)
         if job is not None:
             return job

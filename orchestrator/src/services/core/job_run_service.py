@@ -6,7 +6,7 @@ import logging
 from src.api.TeamsBot.TeamsBotMessageSender import send_message
 from src.models.orchestrator.JobRun import JobRun
 from src.persistence.JobStorage import JobStorage
-from src.services.job_log_service import get_logs_for_job_run
+from src.services.core.job_log_service import get_logs_for_job_run
 
 log = logging.getLogger(__name__)
 

@@ -17,7 +17,7 @@ import src.jobs  # noqa: F401 — imported for side-effect: registers @job_type 
 
 
 def get_job_func(job: Job, job_run_id=None):
-    from src.services.job_service import run_job
+    from src.services.core.job_service import run_job
     job_function = jobs_registry.get(job.job_type)
     if job_function is None:
         raise Exception(f"No job function registered for job type: {job.job_type}")
@@ -112,7 +112,7 @@ class JobSchedulerService:
         self.start_all_jobs()
 
     def _register_stale_job_reaper(self):
-        from src.services.stale_job_reaper import reap_stale_job_runs
+        from src.services.core.stale_job_reaper import reap_stale_job_runs
 
         self.scheduler.add_job(
             reap_stale_job_runs,

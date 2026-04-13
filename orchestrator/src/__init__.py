@@ -7,7 +7,7 @@ from flask_cors import CORS
 
 from .config.config import Config
 from .routes import api
-from src.services.job_scheduler_service import JobSchedulerService
+from src.services.core.job_scheduler_service import JobSchedulerService
 from src.persistence.JobDb import JobDb
 from src.persistence.Database import run_init_sql, run_migrations
 

@@ -4,7 +4,7 @@ from src.persistence.JobDb import JobDb
 from src.ThreadLocalSingleton import ThreadLocalSingleton
 from src.models.api.LogFromLogController import LogFromLogController
 from src.persistence.Database import read_sql_file
-from src.services.file_storage_service import upload_log_file
+from src.services.core.file_storage_service import upload_log_file
 
 log = logging.getLogger(__name__)
 

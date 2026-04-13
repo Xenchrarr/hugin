@@ -1,6 +1,6 @@
 from flask import Blueprint, request
 
-from src.services.dashboard_service import get_dashboard_stats
+from src.services.core.dashboard_service import get_dashboard_stats
 
 dashboard_blueprint = Blueprint('dashboard', __name__)
 

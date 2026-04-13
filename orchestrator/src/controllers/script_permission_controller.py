@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 
-from src.services.script_permission_service import (
+from src.services.core.script_permission_service import (
     get_all_script_permissions,
     get_allowed_script_names,
     upsert_script_permission,

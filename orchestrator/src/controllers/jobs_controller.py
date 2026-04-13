@@ -2,7 +2,7 @@ from flask import Blueprint, request
 
 from src.jobs_registry import jobs_registry
 from src.models.orchestrator.Job import Job
-from src.services.job_service import (
+from src.services.core.job_service import (
     get_jobs,
     get_enabled_jobs,
     update_job,
