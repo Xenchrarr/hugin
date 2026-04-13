@@ -1,0 +1,146 @@
+.dialog-content {
+    padding: 20px;
+    width: 1400px;
+}
+
+
+table {
+    width: 100%;
+}
+
+tr.example-detail-row {
+    height: 0;
+}
+
+tr.example-element-row:not(.example-expanded-row):hover {
+    background: whitesmoke;
+}
+
+tr.example-element-row:not(.example-expanded-row):active {
+    background: #efefef;
+}
+
+.example-element-row td {
+    border-bottom-width: 0;
+}
+
+.example-element-detail {
+    overflow: hidden;
+    display: flex;
+}
+
+.example-element-diagram {
+    min-width: 80px;
+    border: 2px solid var(--app-border);
+    padding: 8px;
+    font-weight: lighter;
+    margin: 8px 0;
+    height: 104px;
+}
+
+.example-element-symbol {
+    font-weight: bold;
+    font-size: 40px;
+    line-height: normal;
+}
+
+.example-element-description {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.example-element-description-attribution {
+    opacity: 0.5;
+}
+
+
+th {
+    /*margin-right: 20px;*/
+    width: 150px;
+}
+
+.info-row {
+    border-bottom: 1px solid var(--app-border);
+}
+
+.info-table {
+    margin-bottom: 20px;
+    width: 100%;
+    display: block;
+
+}
+
+.client-error{
+    color: var(--app-warning);
+}
+
+.success{
+    color: var(--app-success);
+}
+
+.server-error{
+    color: var(--app-error);
+}
+
+.id-cell {
+    font-weight: bold;
+}
+td {
+    text-wrap: pretty;
+}
+
+.info-table td {
+    word-wrap: break-word;
+    white-space: normal;
+    max-width: 826px;
+}
+
+pre {
+    background-color: var(--app-slate-100);
+    padding: 10px;
+    border: 1px solid var(--app-border);
+    border-radius: var(--app-radius-sm);
+    overflow: auto;
+}
+
+.GET{
+    color: var(--app-success);
+}
+
+.POST {
+    color: var(--app-info);
+}
+
+.log-file-actions {
+    display: inline-flex;
+    gap: 8px;
+}
+
+.log-file-actions a {
+    cursor: pointer;
+    text-decoration: underline;
+    color: var(--app-info, #1976d2);
+}
+
+.PUT {
+    color: var(--app-warning);
+}
+
+.DELETE {
+    color: var(--app-error);
+}
+
+.PATCH {
+    color: #7c3aed;
+}
+
+.Pigfo {
+    color: #76a7c8;
+}
+
+.Individual_Animals{
+    color: #fb711c
+}
+

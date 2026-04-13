@@ -1,0 +1,5 @@
+<mat-toolbar color="primary" class="menu">
+    <span *ngIf="isProd" class="env-badge env-prod">PRODUCTION</span>
+    <span *ngIf="!isProd" class="env-badge env-test">TESTING</span>
+    <span class="spacer"></span>
+</mat-toolbar>

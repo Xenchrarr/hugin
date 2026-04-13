@@ -1,0 +1,185 @@
+<h2 mat-dialog-title>{{ isNew ? 'New job' : 'Edit job' }}</h2>
+<mat-dialog-content class="mat-typography dialog-content content2">
+    <mat-card class="job-card" appearance="outlined">
+        <mat-card-header>
+            <mat-card-title [hidden]="editMode">{{ job.name }}</mat-card-title>
+            <mat-card-title [hidden]="!editMode">
+                <mat-form-field>
+                    <span>Name</span>
+                    <input matInput placeholder="Name" [(ngModel)]="job.name">
+                </mat-form-field>
+            </mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+            <table>
+                <tr [hidden]="editMode">
+                    <th>Job Type</th>
+                    <td>{{ job.job_type }}</td>
+                </tr>
+                <tr [hidden]="!editMode">
+                    <th>Job Type</th>
+                    <td>
+                        <mat-form-field>
+                            <mat-label>Job Type</mat-label>
+                            <mat-select [(ngModel)]="job.job_type" (selectionChange)="onJobTypeChange($event.value)">
+                                <mat-option *ngFor="let type of job_types" [value]="type.job_type">
+                                    {{type.job_type}}
+                                </mat-option>
+                            </mat-select>
+                        </mat-form-field>
+                    </td>
+                </tr>
+
+
+                <tr>
+                    <th>Desription</th>
+                    <td [hidden]="editMode"  class="scrollable-td">{{ job.description }}</td>
+                    <td [hidden]="!editMode">
+                        <mat-form-field>
+                            <textarea matInput placeholder="Description" [(ngModel)]="job.description"> </textarea>
+                        </mat-form-field>
+                    </td>
+                </tr>
+
+                <tr>
+                    <th>Trigger Action</th>
+                    <td [hidden]="editMode">{{ job.trigger }}</td>
+                    <td [hidden]="!editMode">
+                        <mat-form-field>
+                            <mat-label>Trigger</mat-label>
+                            <mat-select [(ngModel)]="job.trigger">
+                                <mat-option value="weekly">Weekly</mat-option>
+                                <mat-option value="daily">Daily</mat-option>
+                                <mat-option value="interval">Interval</mat-option>
+                                <mat-option value="once">Once</mat-option>
+                            </mat-select>
+                        </mat-form-field>
+                    </td>
+                </tr>
+
+                @if (isWeeklyJob()) {
+                <tr>
+                    <th>running on day:</th>
+                    <td [hidden]="editMode">{{job.weekday}}</td>
+                    <td [hidden]="!editMode">
+                        <mat-form-field class="time-input1">
+                            <mat-label>Weekday</mat-label>
+                            <mat-select [(ngModel)]="job.weekday">
+                                <mat-option value="monday">Monday</mat-option>
+                                <mat-option value="tuesday">Tuesday</mat-option>
+                                <mat-option value="wednesday">Wednesday</mat-option>
+                                <mat-option value="thursday">Thursday</mat-option>
+                                <mat-option value="friday">Friday</mat-option>
+                                <mat-option value="saturday">Saturday</mat-option>
+                                <mat-option value="sunday">Sunday</mat-option>
+                            </mat-select>
+                        </mat-form-field>
+                    </td>
+                </tr>
+                }
+
+
+                <tr>
+                    <th>Running at (h:m)</th>
+                    <td [hidden]="editMode">{{job.hour}}:{{job.minute}}</td>
+                    <td [hidden]="!editMode">
+                        <mat-form-field class="time-input">
+                            <mat-label>Hour</mat-label>
+                            <input matInput  type="number" [(ngModel)]="job.hour">
+
+                        </mat-form-field>
+                        <mat-form-field class="time-input">
+                            <mat-label>Minute</mat-label>
+                            <input matInput type="number" [(ngModel)]="job.minute">
+                        </mat-form-field>
+                    </td>
+                </tr>
+
+                <tr>
+                    <th>Param</th>
+                    <td [hidden]="editMode"  class="scrollable-td">{{ job.param }}</td>
+                    <td [hidden]="!editMode">
+                        @if (isGitSyncJob()) {
+                            <mat-form-field>
+                                <mat-label>Repository</mat-label>
+                                <mat-select [(ngModel)]="job.param">
+                                    <mat-option value="">All repos</mat-option>
+                                    <mat-option *ngFor="let repo of repos" [value]="repo.name">
+                                        {{ repo.name }} ({{ repo.branch }})
+                                    </mat-option>
+                                </mat-select>
+                            </mat-form-field>
+                        } @else {
+                            <mat-form-field>
+                                <textarea matInput placeholder="parameter" [(ngModel)]="job.param"> </textarea>
+                            </mat-form-field>
+                        }
+                    </td>
+                </tr>
+
+
+
+
+                <tr>
+                    <th>Enabled</th>
+                    <td><mat-checkbox [disabled]="!editMode" [checked]="job.enabled" [(ngModel)]="job.enabled"></mat-checkbox></td>
+
+                </tr>
+
+                <tr>
+                        <th>Grouping value</th>
+                    <td [hidden]="!editMode">
+                        <mat-form-field>
+                            <input matInput placeholder="grouping" [(ngModel)]="job.grouping_value">
+                        </mat-form-field>
+                    </td>
+                </tr>
+
+
+            </table>
+
+        </mat-card-content>
+<!--        <mat-card-actions align="end">-->
+<!--            <div class="button-container" [hidden]="!editMode">-->
+<!--                <button mat-raised-button class="left" (click)="deleteJob()">-->
+<!--                    <mat-icon>delete</mat-icon>-->
+<!--                    Delete-->
+<!--                </button>-->
+<!--            </div>-->
+
+<!--            <div class="button-container" [hidden]="editMode">-->
+<!--&lt;!&ndash;                <button mat-raised-button (click)="startEditJob()">&ndash;&gt;-->
+<!--&lt;!&ndash;                    Edit&ndash;&gt;-->
+<!--&lt;!&ndash;                    <mat-icon>edit</mat-icon>&ndash;&gt;-->
+
+<!--&lt;!&ndash;                </button>&ndash;&gt;-->
+
+<!--&lt;!&ndash;                <button mat-raised-button (click)="startJobNow()">&ndash;&gt;-->
+<!--&lt;!&ndash;                    Start&ndash;&gt;-->
+<!--&lt;!&ndash;                    <mat-icon>start</mat-icon>&ndash;&gt;-->
+
+<!--&lt;!&ndash;                </button>&ndash;&gt;-->
+<!--            </div>-->
+
+<!--&lt;!&ndash;            <div class="button-container" [hidden]="!editMode">&ndash;&gt;-->
+<!--&lt;!&ndash;                <button mat-raised-button (click)="cancelEditJob()">&ndash;&gt;-->
+<!--&lt;!&ndash;                    <mat-icon>cancel</mat-icon>Cancel&ndash;&gt;-->
+<!--&lt;!&ndash;                </button>&ndash;&gt;-->
+<!--&lt;!&ndash;            </div>&ndash;&gt;-->
+
+<!--            <div class="button-container" [hidden]="!editMode">-->
+<!--                <button mat-raised-button class="save-button" (click)="saveJob()">-->
+<!--                    <mat-icon>save</mat-icon>-->
+<!--                    Save-->
+<!--                </button>-->
+<!--            </div>-->
+<!--        </mat-card-actions>-->
+    </mat-card>
+
+
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+<!--    <button mat-button (click)="reload_logs()">Reload</button>-->
+    <button mat-button mat-dialog-close>Close</button>
+    <button mat-flat-button color="primary" (click)="saveJob()">Save</button>
+</mat-dialog-actions>

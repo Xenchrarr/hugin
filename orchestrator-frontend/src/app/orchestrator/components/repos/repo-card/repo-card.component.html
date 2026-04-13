@@ -1,0 +1,50 @@
+<h2 mat-dialog-title>{{ isNew ? 'Add repository' : 'Edit repository' }}</h2>
+<mat-dialog-content class="mat-typography">
+    <mat-card appearance="outlined">
+        <mat-card-content>
+            <table>
+                <tr>
+                    <th>Name</th>
+                    <td>
+                        <mat-form-field>
+                            <mat-label>Name</mat-label>
+                            <input matInput [(ngModel)]="repo.name">
+                        </mat-form-field>
+                    </td>
+                </tr>
+
+                <tr>
+                    <th>URL</th>
+                    <td>
+                        <mat-form-field class="wide-field">
+                            <mat-label>Repository URL</mat-label>
+                            <input matInput [(ngModel)]="repo.url" placeholder="https://gitlab.example.com/org/repo.git">
+                        </mat-form-field>
+                    </td>
+                </tr>
+
+                <tr>
+                    <th>Branch</th>
+                    <td>
+                        <mat-form-field>
+                            <mat-label>Branch</mat-label>
+                            <input matInput [(ngModel)]="repo.branch">
+                        </mat-form-field>
+                    </td>
+                </tr>
+
+                <tr>
+                    <th>Enabled</th>
+                    <td>
+                        <mat-checkbox [(ngModel)]="repo.enabled"></mat-checkbox>
+                    </td>
+                </tr>
+            </table>
+        </mat-card-content>
+    </mat-card>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+    <button mat-button mat-dialog-close>Cancel</button>
+    <button mat-flat-button color="primary" (click)="saveRepo()"
+            [disabled]="!repo.name || !repo.url">Save</button>
+</mat-dialog-actions>

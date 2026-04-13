@@ -1,0 +1,76 @@
+.script-runner-container {
+    padding: 8px 0;
+}
+
+.loading-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 24px;
+    color: var(--app-slate-600, #475569);
+}
+
+.script-panel {
+    margin-bottom: 4px;
+}
+
+.script-icon {
+    margin-right: 8px;
+    color: var(--app-slate-500, #64748b);
+    font-size: 20px;
+    height: 20px;
+    width: 20px;
+}
+
+.script-params {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 8px 0 16px;
+}
+
+.param-row {
+    display: flex;
+    align-items: center;
+}
+
+.param-field {
+    width: 100%;
+    max-width: 400px;
+}
+
+.no-params {
+    color: var(--app-slate-500, #64748b);
+    font-style: italic;
+    font-size: 14px;
+}
+
+.script-actions {
+    display: flex;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--app-slate-200, #e2e8f0);
+}
+
+.reason-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 0 12px;
+}
+
+.reason-label {
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--app-slate-700, #334155);
+}
+
+.reason-label .required {
+    color: #f44336;
+}
+
+.no-scripts {
+    padding: 24px;
+    text-align: center;
+    color: var(--app-slate-500, #64748b);
+}

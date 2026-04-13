@@ -1,0 +1,41 @@
+.job-nav {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    background-color: var(--app-slate-100);
+    border-radius: var(--app-radius-lg);
+    margin-bottom: 20px;
+}
+
+.job-nav-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 20px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--app-slate-600);
+    font-family: Roboto, "Helvetica Neue", sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.job-nav-tab:hover {
+    background-color: #e2e8f0;
+    color: var(--app-slate-800);
+}
+
+.job-nav-tab.active {
+    background-color: #fff;
+    color: var(--app-accent);
+    box-shadow: var(--app-shadow-sm);
+}
+
+.tab-icon {
+    font-size: 12px;
+}
+

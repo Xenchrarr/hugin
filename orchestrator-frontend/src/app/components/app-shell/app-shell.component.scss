@@ -1,0 +1,27 @@
+   .shell {
+    //    height: 100vh;
+   }
+
+   .content {
+       margin: 16px;
+    //    height: 100%;
+   }
+
+   .spacer {
+       flex: 1;
+   }
+
+   .sidenav-header {
+       display: flex;
+       justify-content: flex-end;
+       padding: 8px;
+   }
+
+   .active {
+       background: rgba(255, 255, 255, 0.06);
+   }
+
+   .collapsed {
+    //    margin-left: 72px;
+    //    color: red;
+   }

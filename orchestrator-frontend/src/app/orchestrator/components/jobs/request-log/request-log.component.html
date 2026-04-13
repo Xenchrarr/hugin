@@ -1,0 +1,98 @@
+<h2 mat-dialog-title>Logs for {{data.name}}</h2>
+<mat-dialog-content class="mat-typography dialog-content content2">
+    <table mat-table
+           [dataSource]="jobLogs" multiTemplateDataRows
+           class="mat-elevation-z8">
+        @for (column of displayedColumns; track column) {
+            <ng-container matColumnDef="{{column}}">
+                <th mat-header-cell *matHeaderCellDef> {{column}} </th>
+                <!--                <td mat-cell *matCellDef="let element"> {{element[column]}} </td>-->
+                @if (column == 'response_code') {
+                    <td mat-cell *matCellDef="let element" [ngClass]="getClassFromResponseCode(element[column])" class="status" >{{element[column]}}</td>
+                } @else if (column == 'id'){
+                    <td mat-cell class="id-cell" *matCellDef="let element">{{element[column]}}</td>
+
+                } @else if (column == 'request_type'){
+                    <td mat-cell [ngClass]="element[column]" *matCellDef="let element">{{element[column]}}</td>
+
+                } @else if (column == 'created'){
+                    <td mat-cell [ngClass]="element[column]" *matCellDef="let element">{{getFormattedDate(element[column])}}</td>
+
+                }
+                @else if (column == 'api_name'){
+                    <td mat-cell [ngClass]="element[column]" *matCellDef="let element">{{element[column]}}</td>
+
+                }
+                @else if (column == 'description'){
+                    <td mat-cell [ngClass]="element[column]" *matCellDef="let element">{{element[column]}}</td>
+
+                }
+                @else {
+                    <td mat-cell *matCellDef="let element">{{element[column]}}</td>
+
+                }
+            </ng-container>
+        }
+        <ng-container matColumnDef="expand">
+            <th mat-header-cell *matHeaderCellDef aria-label="row actions">&nbsp;</th>
+            <td mat-cell *matCellDef="let element">
+                <button mat-icon-button aria-label="expand row" (click)="(expandedElement = expandedElement === element ? null : element); $event.stopPropagation()">
+                    @if (expandedElement === element) {
+                        <mat-icon>keyboard_arrow_up</mat-icon>
+                    } @else {
+                        <mat-icon>keyboard_arrow_down</mat-icon>
+                    }
+                </button>
+            </td>
+        </ng-container>
+
+        <!-- Expanded Content Column -->
+        <ng-container matColumnDef="expandedDetail">
+            <td mat-cell *matCellDef="let element" [attr.colspan]="displayedColumns.length + 1">
+                <div class="example-element-detail" [@detailExpand]="element == expandedElement ? 'expanded' : 'collapsed'">
+                    <div class="example-element-description">
+                        <table class="info-table">
+                            <tr class="info-row">
+                                <th class="job-info">Request data</th>
+                                <td>  <pre>{{ getFormattedJson(element.request_data) }}</pre>
+                            </tr>
+
+                            @if (containsLink(element.response)){
+                            <tr class="info-row">
+                                <th class="job-info">Response</th>
+                                <td>
+                                    <span class="log-file-actions">
+                                        <a href="{{element.response}}" target="_blank">View</a>
+                                        <a href="{{element.response}}" download>Download</a>
+                                    </span>
+                                </td>
+                            } @else {
+                                <tr class="info-row">
+                                    <th class="job-info">response</th>
+                                    <td>  <pre>{{ getFormattedJson(element.response) }}</pre>
+                                    </td>
+                                </tr>
+                            }
+
+                        </table>
+                    </div>
+                </div>
+            </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedColumns.concat('expand')"></tr>
+        <tr mat-row *matRowDef="let element; columns: displayedColumns.concat('expand');" class="example-element-row" [class.example-expanded-row]="expandedElement === element" (click)="expandedElement = expandedElement === element ? null : element"></tr>
+        <tr mat-row *matRowDef="let row; columns: ['expandedDetail']" class="example-detail-row"></tr>
+    </table>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+    <mat-paginator [length]="totalItems"
+                   [pageSize]="pageSize"
+                   [pageIndex]="currentPage"
+                   (page)="pageChanged($event)"
+                   [pageSizeOptions]="pageSizeOptions">
+    </mat-paginator>
+    <button mat-stroked-button (click)="reload()">Reload</button>
+    <button mat-button mat-dialog-close>Close</button>
+</mat-dialog-actions>

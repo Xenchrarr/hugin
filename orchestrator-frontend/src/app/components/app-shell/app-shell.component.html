@@ -1,0 +1,59 @@
+<mat-sidenav-container class="shell">
+    <mat-sidenav
+        #sidenav
+        class="sidenav"
+        mode="side"
+        [opened]="true"
+        [fixedInViewport]="false"
+        [style.width.px]="collapsed ? 72 : 240"
+    >
+        <div class="sidenav-header">
+            <button mat-icon-button (click)="toggleCollapsed()" aria-label="Toggle sidenav">
+                <mat-icon>{{ collapsed ? 'chevron_right' : 'chevron_left' }}</mat-icon>
+            </button>
+        </div>
+
+        <mat-nav-list>
+            <a mat-list-item routerLink="/dashboard" routerLinkActive="active">
+                <mat-icon matListItemIcon>dashboard</mat-icon>
+                @if(!collapsed) {
+                <span>Dashboard</span>
+                }
+            </a>
+
+            <a mat-list-item routerLink="/scripts" routerLinkActive="active">
+                <mat-icon matListItemIcon>code</mat-icon>
+                @if(!collapsed) {
+                <span>Scripts</span>
+                }
+            </a>
+
+            <a mat-list-item routerLink="/runs" routerLinkActive="active">
+                <mat-icon matListItemIcon>history</mat-icon>
+                @if(!collapsed) {
+                <span>Runs</span>
+                }
+            </a>
+
+            <a mat-list-item routerLink="/jobs" routerLinkActive="active">
+                <mat-icon matListItemIcon>schedule</mat-icon>
+                @if(!collapsed) {
+                <span>Jobs</span>
+                }
+            </a>
+
+            <a mat-list-item routerLink="/repos" routerLinkActive="active">
+                <mat-icon matListItemIcon>source</mat-icon>
+                @if(!collapsed) {
+                <span>Repos</span>
+                }
+            </a>
+        </mat-nav-list>
+    </mat-sidenav>
+
+    <mat-sidenav-content class="main" [style.margin-left.px]="collapsed ? 72 : 240" [class.collapsed]="collapsed">
+        <div class="content">
+            <router-outlet />
+        </div>
+    </mat-sidenav-content>
+</mat-sidenav-container>

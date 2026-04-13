@@ -1,0 +1,140 @@
+
+// Include theming for Angular Material with `mat.theme()`.
+// This Sass mixin will define CSS variables that are used for styling Angular Material
+// components according to the Material 3 design spec.
+// Learn more about theming and how to use it for your application's
+// custom components at https://material.angular.dev/guide/theming
+
+/* Then use it */
+
+@use '@angular/material' as mat;
+
+@import "@fontsource/roboto/300.css";
+@import "@fontsource/roboto/400.css";
+@import "@fontsource/roboto/500.css";
+@import "@fontsource/material-icons";
+
+
+html {
+  @include mat.theme((
+    color: (
+      primary: mat.$azure-palette,
+      tertiary: mat.$blue-palette,
+    ),
+    typography: Roboto,
+    density: 0,
+  ));
+}
+
+body {
+  // Default the application to a light color theme. This can be changed to
+  // `dark` to enable the dark color theme, or to `light dark` to defer to the
+  // user's system settings.
+  color-scheme: light;
+
+  // Set a default background, font and text colors for the application using
+  // Angular Material's system-level CSS variables. Learn more about these
+  // variables at https://material.angular.dev/guide/system-variables
+  background-color: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-medium);
+
+  // Reset the user agent margin.
+  margin: 0;
+}
+/* You can add global styles to this file, and also import other style files */
+
+html, body { height: 100%; }
+body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
+
+/* ─── Unified colour palette (based on orchestrator nav) ─── */
+:root {
+  --app-slate-900: #0f172a;
+  --app-slate-800: #1e293b;
+  --app-slate-700: #334155;
+  --app-slate-600: #475569;
+  --app-slate-500: #64748b;
+  --app-slate-100: #f1f5f9;
+
+  --app-accent: #1a73e8;
+  --app-success: #2e7d32;
+  --app-success-light: #4caf50;
+  --app-error: #dc2626;
+  --app-warning: #f59e0b;
+  --app-info: #2196f3;
+
+  --app-border: rgba(0, 0, 0, 0.12);
+  --app-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --app-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12);
+  --app-radius-sm: 4px;
+  --app-radius-md: 6px;
+  --app-radius-lg: 8px;
+}
+
+/* Global mat-toolbar override — slate gradient like orchestrator nav */
+.mat-toolbar {
+  background: linear-gradient(135deg, var(--app-slate-700), var(--app-slate-600)) !important;
+  color: #fff !important;
+  box-shadow: var(--app-shadow);
+}
+
+/* Global button border-radius — square-ish to match job-nav style */
+.mat-mdc-button,
+.mat-mdc-outlined-button,
+.mat-mdc-unelevated-button,
+.mat-mdc-raised-button,
+.mat-mdc-icon-button {
+  border-radius: var(--app-radius-md) !important;
+}
+
+/* ERROR snackbar */
+.mat-mdc-snack-bar-container.snack-error .mdc-snackbar__surface {
+    background-color: var(--app-error) !important;
+}
+
+.mat-mdc-snack-bar-container.snack-error .mdc-snackbar__label,
+.mat-mdc-snack-bar-container.snack-error .mat-mdc-button,
+.mat-mdc-snack-bar-container.snack-error .mat-mdc-button .mdc-button__label {
+    color: #ffffff !important;
+}
+
+/* SUCCESS snackbar */
+.mat-mdc-snack-bar-container.snack-success .mdc-snackbar__surface {
+    background-color: var(--app-success) !important;
+}
+
+.mat-mdc-snack-bar-container.snack-success .mdc-snackbar__label,
+.mat-mdc-snack-bar-container.snack-success .mat-mdc-button,
+.mat-mdc-snack-bar-container.snack-success .mat-mdc-button .mdc-button__label {
+    color: #ffffff !important;
+}
+
+
+
+html, body {
+  font-family: Roboto, "Helvetica Neue", sans-serif;
+}
+
+
+
+.material-icons,
+mat-icon.material-icons {
+  font-family: "Material Icons";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+}
+
+
+.mat-drawer-side {
+    border-right: 1px solid var(--app-border) !important;
+}

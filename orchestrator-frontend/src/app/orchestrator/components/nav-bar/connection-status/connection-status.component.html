@@ -1,0 +1,13 @@
+<div class="status-container">
+    <span class="connection-status-header">Connection status</span>
+    <table>
+        <tbody>
+        <tr *ngFor="let db of databases">
+            <th>{{ db.name }}</th>
+            <td [ngClass]="{'connected': db.status === 'Connected', 'disconnected': db.status === 'Disconnected'}">
+                {{ db.status }}
+            </td>
+        </tr>
+        </tbody>
+    </table>
+</div>

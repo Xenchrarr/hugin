@@ -1,0 +1,73 @@
+.nav-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 24px;
+    background: linear-gradient(135deg, var(--app-slate-700), var(--app-slate-600));
+    color: white;
+    box-shadow: var(--app-shadow);
+}
+
+.nav-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.nav-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.env-badge {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 3px 10px;
+    border-radius: var(--app-radius-sm);
+    text-transform: uppercase;
+}
+
+.env-prod {
+    background-color: var(--app-error);
+    color: #fff;
+}
+
+.env-test {
+    background-color: var(--app-warning);
+    color: var(--app-slate-800);
+}
+
+.nav-links {
+    display: flex;
+    gap: 4px;
+}
+
+.nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    border-radius: var(--app-radius-md);
+    color: rgba(255, 255, 255, 0.7);
+    text-decoration: none;
+    font-family: Roboto, "Helvetica Neue", sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.nav-link.active {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+.link-icon {
+    font-size: 14px;
+}

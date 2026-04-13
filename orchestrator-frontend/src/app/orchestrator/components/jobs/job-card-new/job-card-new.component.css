@@ -1,0 +1,105 @@
+hr {
+    display: block;
+    height: 1px;
+    border: 0;
+    border-top: 1px solid var(--app-border);
+    margin: 1em 0;
+    padding: 0;
+    width: 100%;
+}
+
+tr {
+    display: flex;
+    justify-content: space-between;
+}
+table {
+    width: 100%;
+    border: 1px solid var(--app-border);
+    table-layout: fixed;
+}
+
+th {
+    background-color: var(--app-slate-100);
+    border-right: 1px solid var(--app-border);
+    padding: 8px;
+    width: 150px;
+}
+
+td {
+    /*border: 1px solid #777474;*/
+    padding: 8px;
+    width: 100%;
+}
+
+tr {
+    border: 1px solid var(--app-border);
+    display: flex;
+    justify-content: space-between;
+}
+
+.job-card{
+    margin: 10px;
+    padding: 10px;
+    border: 1px solid var(--app-border);
+    border-radius: var(--app-radius-lg);
+    box-shadow: var(--app-shadow);
+}
+
+mat-card-header{
+    padding-bottom: 20px;
+}
+
+mat-card-content{
+    padding-bottom: 20px;
+}
+
+.left{
+    float: left;
+    margin-right: 200px;
+}
+
+.time-input{
+    width: 100px;
+    margin-right: 20px;
+}
+
+.button-container {
+    display: flex;
+    justify-content: center;
+    width: 120px;
+}
+
+.scrollable-td {
+    max-height: 100px; /* Adjust the height as needed */
+    overflow: auto;
+}
+textarea {
+    width: 100%;
+}
+
+mat-form-field {
+    width: 100%;
+}
+
+.group_header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--app-slate-700);
+    padding: 10px 16px;
+    margin-bottom: 12px;
+    border-left: 4px solid var(--app-accent);
+    background: var(--app-slate-100);
+    border-radius: var(--app-radius-md);
+    letter-spacing: 0.3px;
+}
+
+.group_header_icon {
+    color: var(--app-accent);
+    font-size: 22px;
+    height: 22px;
+    width: 22px;
+}
+

@@ -1,0 +1,53 @@
+.spacer{
+    width: 50px;
+}
+
+.nav-bar-right {
+    float: right!important;
+    padding-left: 60px;
+}
+
+.nav-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 24px;
+    background: linear-gradient(135deg, var(--app-slate-700), var(--app-slate-600));
+    color: white;
+    box-shadow: var(--app-shadow);
+}
+
+.nav-link {
+    color: rgba(255, 255, 255, 0.7);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+
+    &:hover {
+        color: #fff;
+    }
+}
+
+.menu {
+    border-bottom: none;
+}
+
+.env-badge {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 3px 10px;
+    border-radius: var(--app-radius-sm);
+    text-transform: uppercase;
+}
+
+.env-prod {
+    background-color: var(--app-error);
+    color: #fff;
+}
+
+.env-test {
+    background-color: var(--app-warning);
+    color: var(--app-slate-800);
+}

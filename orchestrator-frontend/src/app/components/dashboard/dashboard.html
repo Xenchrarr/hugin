@@ -1,0 +1,171 @@
+<!-- Toolbar -->
+<div class="dashboard-toolbar">
+  <h2 class="dashboard-title">Dashboard</h2>
+  <div class="toolbar-controls">
+    <mat-button-toggle-group
+      [(ngModel)]="selectedRange"
+      (change)="onRangeChange()"
+      aria-label="Time range"
+    >
+      <mat-button-toggle value="24h">24h</mat-button-toggle>
+      <mat-button-toggle value="7d">7d</mat-button-toggle>
+      <mat-button-toggle value="30d">30d</mat-button-toggle>
+      <mat-button-toggle value="all">All</mat-button-toggle>
+    </mat-button-toggle-group>
+    <mat-slide-toggle [(ngModel)]="autoRefresh" (change)="onAutoRefreshChange()">
+      Auto-refresh
+    </mat-slide-toggle>
+    <button mat-icon-button (click)="refresh()" aria-label="Refresh" [disabled]="loading">
+      <mat-icon>refresh</mat-icon>
+    </button>
+  </div>
+</div>
+
+@if (stats) {
+  <!-- Row 1: Stat cards -->
+  <div class="stats-row">
+    <mat-card class="stat-card">
+      <mat-card-content>
+        <span class="stat-number">{{ stats.total_runs }}</span>
+        <span class="stat-label">Total Runs</span>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="stat-card">
+      <mat-card-content>
+        <span class="stat-number">{{ stats.runs_last_24h }}</span>
+        <span class="stat-label">Runs Today</span>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="stat-card">
+      <mat-card-content>
+        <span class="stat-number" [class.success]="successRate >= 80" [class.warn]="successRate < 80">
+          {{ successRate }}%
+        </span>
+        <span class="stat-label">Success Rate</span>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="stat-card">
+      <mat-card-content>
+        @if (topControlRoom) {
+          <span class="stat-number stat-number-sm">{{ topControlRoom.name }}</span>
+          <span class="stat-label">Top Control Room ({{ topControlRoom.count }} runs)</span>
+        } @else {
+          <span class="stat-number">—</span>
+          <span class="stat-label">Top Control Room</span>
+        }
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <!-- Row 2: Charts -->
+  <div class="charts-row">
+    <mat-card class="chart-card chart-card--small">
+      <mat-card-title class="card-title">Runs by Status</mat-card-title>
+      <mat-card-content class="chart-container chart-container--small">
+        @if (statusChartData.labels && statusChartData.labels.length > 0) {
+          <canvas
+            baseChart
+            type="doughnut"
+            [data]="statusChartData"
+            [options]="statusChartOptions"
+          ></canvas>
+        } @else {
+          <div class="empty-chart">No data</div>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="chart-card">
+      <mat-card-title class="card-title">Control Rooms</mat-card-title>
+      <mat-card-content class="chart-container">
+        @if (controlRoomChartData.labels && controlRoomChartData.labels.length > 0) {
+          <canvas
+            baseChart
+            type="bar"
+            [data]="controlRoomChartData"
+            [options]="controlRoomChartOptions"
+          ></canvas>
+        } @else {
+          <div class="empty-chart">No control room data</div>
+        }
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <!-- Row 3: Job types chart + Run reasons chart -->
+  <div class="charts-row">
+    <mat-card class="chart-card">
+      <mat-card-title class="card-title">Runs by Job Type</mat-card-title>
+      <mat-card-content class="chart-container">
+        @if (jobTypeChartData.labels && jobTypeChartData.labels.length > 0) {
+          <canvas
+            baseChart
+            type="bar"
+            [data]="jobTypeChartData"
+            [options]="jobTypeChartOptions"
+          ></canvas>
+        } @else {
+          <div class="empty-chart">No data</div>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="chart-card">
+      <mat-card-title class="card-title">Run Reasons</mat-card-title>
+      <mat-card-content class="chart-container">
+        @if (reasonChartData.labels && reasonChartData.labels.length > 0) {
+          <canvas
+            baseChart
+            type="bar"
+            [data]="reasonChartData"
+            [options]="reasonChartOptions"
+          ></canvas>
+        } @else {
+          <div class="empty-chart">No reason data</div>
+        }
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <!-- Row 4: Recent runs table -->
+  <div class="charts-row">
+    <mat-card class="chart-card">
+      <mat-card-title class="card-title">Recent Runs</mat-card-title>
+      <mat-card-content>
+        <table class="recent-runs-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Status</th>
+              <th>Finished</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (run of stats.recent_runs; track run.end_time) {
+              <tr>
+                <td class="run-name" [title]="run.name">{{ run.name | slice: 0:40 }}</td>
+                <td>
+                  <span class="status-chip" [attr.data-status]="run.status">{{ run.status }}</span>
+                </td>
+                <td class="run-time">{{ getFormattedDate(run.end_time!) ?? '—' }}</td>
+              </tr>
+            }
+            @if (stats.recent_runs.length === 0) {
+              <tr>
+                <td colspan="3" class="empty-chart">No recent runs</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </mat-card-content>
+    </mat-card>
+  </div>
+} @else if (loading) {
+  <div class="loading-container">
+    <mat-icon class="spin">sync</mat-icon>
+    <span>Loading dashboard...</span>
+  </div>
+}

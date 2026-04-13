@@ -1,0 +1,229 @@
+.delete-btn {
+    margin-left: 8px;
+    border-color: #d32f2f !important;
+    color: #fff !important;
+    background: #d32f2f !important;
+}
+table {
+    width: 100%;
+}
+
+tr.example-detail-row {
+    height: 0;
+}
+
+tr.example-element-row.row-odd {
+    background: var(--app-slate-200, #e2e8f0);
+}
+
+tr.example-element-row:not(.example-expanded-row):hover {
+    background: var(--app-slate-300, #cbd5e1);
+}
+
+tr.example-element-row:not(.example-expanded-row):active {
+    background: #efefef;
+}
+
+.example-element-row td {
+    border-bottom-width: 0;
+}
+
+.expanded_detail {
+    border-left: 4px solid var(--app-accent);
+}
+
+.example-detail-row.row-odd .expanded_detail {
+    background: var(--app-slate-200, #e2e8f0);
+}
+
+.example-detail-row.row-even .expanded_detail {
+    background: white;
+}
+
+.example-element-detail {
+    overflow: hidden;
+    display: flex;
+}
+
+.example-element-diagram {
+    min-width: 80px;
+    /*border: 2px solid black;*/
+    padding: 8px;
+    font-weight: lighter;
+    margin: 8px 0;
+    height: 104px;
+}
+
+.example-element-symbol {
+    font-weight: bold;
+    font-size: 40px;
+    line-height: normal;
+}
+
+.example-element-description {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.example-element-description-attribution {
+    display: flex;
+    gap: 10px;
+    padding-top: 16px;
+    border-top: 1px solid var(--app-border);
+    margin-top: 16px;
+}
+
+
+th {
+    /*margin-right: 20px;*/
+    /*width: 150px;*/
+    /*background: #c4c6d0!important;*/
+}
+
+.detail-divider {
+    display: block;
+    height: 1px;
+    border: 0;
+    border-top: 1px solid var(--app-border);
+    margin: 1em 0;
+    padding: 0;
+    width: 100%;
+}
+
+.enabled-true{
+    /*background: green!important;*/
+}
+.mat-column-enabled{
+    width: 100px;
+}
+.mat-column-id {
+    width: 100px;
+}
+.mat-column-trigger {
+    width: 100px;
+}
+.mat-column-running-at {
+    width: 100px;
+}
+
+.mat-column-job_type {
+    width: 100px;
+}
+
+
+.header_info {
+    background: var(--app-slate-100) !important;
+}
+.info-row {
+    border-bottom: 1px solid var(--app-border);
+}
+
+.info-row th {
+    background-color: white;
+    border-right: 1px solid var(--app-border);
+    padding: 8px 12px;
+    width: 130px;
+    font-size: 13px;
+    color: var(--app-slate-600);
+    text-align: left;
+}
+
+.info-row td {
+    padding: 8px 12px;
+    background: white;
+}
+
+.info-table {
+    margin-bottom: 20px;
+    border: 1px solid var(--app-border);
+    border-radius: var(--app-radius-sm);
+    border-collapse: collapse;
+    overflow: hidden;
+    box-shadow: var(--app-shadow-sm);
+}
+
+.Started{
+    color: var(--app-warning);
+}
+.Finished{
+    color: var(--app-success);
+}
+
+.Error{
+    color: var(--app-error);
+}
+
+.id-cell {
+    font-weight: bold;
+}
+
+.param_header
+{
+    font-weight: 600;
+    font-size: 16px;
+    margin-top: 20px;
+    color: var(--app-slate-700);
+    border-left: 3px solid var(--app-accent);
+    padding-left: 10px;
+}
+
+.params
+{
+    margin-top: 20px;
+    width: 400px;
+}
+
+.lower-field
+{
+    margin-top: 20px;
+    display: flex;
+    justify-content: space-around;
+    flex-direction: row;
+    width: 1200px;
+}
+
+.upper-field
+{
+    display: flex;
+    justify-content: space-around;
+    flex-direction: row;
+    width: 1200px;
+}
+
+.group_header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--app-slate-700);
+    padding: 10px 16px;
+    margin-bottom: 12px;
+    border-left: 4px solid var(--app-accent);
+    background: var(--app-slate-100);
+    border-radius: var(--app-radius-md);
+    letter-spacing: 0.3px;
+}
+
+.group_header_icon {
+    color: var(--app-accent);
+    font-size: 22px;
+    height: 22px;
+    width: 22px;
+}
+
+.outer_container
+{
+    padding-bottom: 50px;
+}
+.mat-mdc-header-cell{
+    background: var(--app-slate-300, #cbd5e1) !important;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    color: var(--app-slate-700, #334155);
+}

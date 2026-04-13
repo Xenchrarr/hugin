@@ -1,0 +1,19 @@
+<h1>Jobs</h1>
+<app-job-nav (siteSelected)="onSiteSelected($event)"></app-job-nav>
+<!--<p>-->
+<!--    <button mat-raised-button color="primary" >Add Job</button>-->
+<!--</p>-->
+
+<div *ngIf="current_page == ''; else other_pages">
+    <app-job-settings-new></app-job-settings-new>
+</div>
+
+<ng-template #other_pages>
+    <div *ngIf="current_page == 'job_runs'; else scripts_page">
+        <app-job-runs></app-job-runs>
+    </div>
+</ng-template>
+
+<ng-template #scripts_page>
+    <app-script-runner></app-script-runner>
+</ng-template>

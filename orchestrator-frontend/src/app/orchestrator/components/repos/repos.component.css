@@ -1,0 +1,24 @@
+.id-cell {
+    width: 50px;
+}
+
+.url-cell {
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.empty-state {
+    padding: 32px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+table {
+    width: 100%;
+}
+
+td.mat-mdc-cell button {
+    margin-right: 8px;
+}

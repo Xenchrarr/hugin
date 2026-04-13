@@ -1,0 +1,23 @@
+<nav class="job-nav">
+    <button
+        class="job-nav-tab"
+        [class.active]="selectedSite === ''"
+        (click)="selectSite('')">
+        <span class="tab-icon">&#9881;</span>
+        Settings
+    </button>
+    <button
+        class="job-nav-tab"
+        [class.active]="selectedSite === 'job_runs'"
+        (click)="selectSite('job_runs')">
+        <span class="tab-icon">&#9654;</span>
+        Runs
+    </button>
+    <button
+        class="job-nav-tab"
+        [class.active]="selectedSite === 'scripts'"
+        (click)="selectSite('scripts')">
+        <span class="tab-icon">&#9881;</span>
+        Scripts
+    </button>
+</nav>

@@ -1,0 +1,77 @@
+<h2 mat-dialog-title>Logs for {{data.name}}</h2>
+<mat-checkbox [(ngModel)]="autoScroll">Auto-scroll</mat-checkbox>
+<div *ngIf="reason" class="reason-display">
+    <strong>Reason: </strong>
+    <span *ngIf="reason.selected">{{ reason.selected }}</span>
+    <span *ngIf="reason.selected && reason.freeText"> — </span>
+    <span *ngIf="reason.freeText" class="reason-freetext">{{ reason.freeText }}</span>
+</div>
+<mat-dialog-content #scrollContainer class="mat-typography dialog-content content2">
+    <table mat-table [dataSource]="jobLogs" class="mat-elevation-z8">
+
+        <!--- Note that these columns can be defined in any order.
+              The actual rendered columns are set as a property on the row definition" -->
+
+        <!-- Position Column -->
+        <ng-container matColumnDef="id">
+            <th mat-header-cell *matHeaderCellDef> Id </th>
+            <td mat-cell *matCellDef="let element"> {{element.id}} </td>
+        </ng-container>
+
+        <!-- Name Column -->
+        <ng-container matColumnDef="job_run">
+            <th mat-header-cell *matHeaderCellDef> Job run </th>
+            <td mat-cell *matCellDef="let element"> {{element.job_run_id}} </td>
+        </ng-container>
+
+        <!-- Weight Column -->
+        <ng-container matColumnDef="log_level">
+            <th mat-header-cell *matHeaderCellDef> Log level </th>
+            <td mat-cell [ngClass]="element.log_level" *matCellDef="let element"> {{element.log_level}} </td>
+        </ng-container>
+
+        <!-- Symbol Column -->
+        <ng-container matColumnDef="created_at">
+            <th mat-header-cell *matHeaderCellDef> created_at </th>
+            <td mat-cell *matCellDef="let element"> {{getFormattedDate(element.created_at)}} </td>
+        </ng-container>
+
+        <ng-container matColumnDef="message">
+            <th mat-header-cell *matHeaderCellDef> message </th>
+            <td mat-cell *matCellDef="let element">
+                @if (containsLink(element.message)) {
+                    <span class="log-file-actions">
+                        <a href="{{element.message}}" target="_blank">View</a>
+                        <a href="{{element.message}}" download>Download</a>
+                    </span>
+                } @else {
+                    {{element.message}}
+                }
+            </td>
+        </ng-container>
+
+        <ng-container matColumnDef="stack_trace">
+            <th mat-header-cell *matHeaderCellDef> Stack Trace </th>
+            <td mat-cell *matCellDef="let element">
+                @if (containsLink(element.stack_trace)) {
+                    <span class="log-file-actions">
+                        <a href="{{element.stack_trace}}" target="_blank">View</a>
+                        <a href="{{element.stack_trace}}" download>Download</a>
+                    </span>
+                } @else {
+                    <pre>{{ getFormattedJson(element.stack_trace) }}</pre>
+                }
+            </td>
+
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+    </table>
+
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+    <button mat-stroked-button color="warn" (click)="cancelJob()" *ngIf="data.status === 'Started'">Cancel</button>
+    <button mat-stroked-button (click)="reload_logs()">Reload</button>
+    <button mat-button mat-dialog-close>Close</button>
+</mat-dialog-actions>

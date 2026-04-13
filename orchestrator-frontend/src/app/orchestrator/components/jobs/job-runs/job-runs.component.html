@@ -1,0 +1,152 @@
+
+<div class="mat-elevation-z8">
+    <p>
+        <button mat-stroked-button (click)="reload()">Reload</button>
+    </p>
+    <div class="checkbox-container">
+        <mat-checkbox
+                *ngFor="let task of groupingValues; let i = index"
+                class="example-margin"
+                [checked]="task.completed"
+                (change)="updateGroupingStatus(i, $event.checked)"
+        >
+            {{ task.name }}
+        </mat-checkbox>
+    </div>
+    <div class="checkbox-container status-container" >
+        <mat-checkbox
+                *ngFor="let task of statusValues; let i = index"
+                class="example-margin"
+                [(ngModel)]="task.checked"
+                [checked]="task.completed"
+                (change)="updateStatus(i, $event.checked)"
+        >
+            {{ task.name }}
+        </mat-checkbox>
+    </div>
+    <table mat-table
+           [dataSource]="jobRuns" multiTemplateDataRows
+           class="mat-elevation-z8">
+        @for (column of displayedColumns; track column) {
+            <ng-container matColumnDef="{{column}}">
+                <th mat-header-cell *matHeaderCellDef> {{column}} </th>
+<!--                <td mat-cell *matCellDef="let element"> {{element[column]}} </td>-->
+                @if (column == 'status') {
+                    <td mat-cell *matCellDef="let element" [ngClass]="element[column]" class="status" >{{getStatusText(element[column])}}</td>
+                } @else if (column == 'name'){
+                    <td mat-cell class="id-cell" *matCellDef="let element">{{getShortName(element[column])}}</td>
+
+                } @else if (column == 'start_time'){
+                    <td mat-cell *matCellDef="let element">{{getFormattedDate(element[column])}}</td>
+
+                }
+                @else if (column == 'executed_by'){
+                    <td mat-cell *matCellDef="let element">{{element['run_by_group'] + " | " + element['run_by']}}</td>
+                }
+                @else if (column == 'reason') {
+                    <td mat-cell *matCellDef="let element">
+                        <span *ngIf="element.metadata?.reason?.selected">{{element.metadata.reason.selected}}</span>
+                        <span *ngIf="element.metadata?.reason?.selected && element.metadata?.reason?.freeText"> — </span>
+                        <span *ngIf="element.metadata?.reason?.freeText">{{element.metadata.reason.freeText}}</span>
+                    </td>
+                }
+                @else {
+                    <td mat-cell *matCellDef="let element">{{element[column]}}</td>
+
+                }
+            </ng-container>
+        }
+        <ng-container matColumnDef="expand">
+            <th mat-header-cell *matHeaderCellDef aria-label="row actions">&nbsp;</th>
+            <td mat-cell *matCellDef="let element">
+                <button mat-icon-button aria-label="expand row" (click)="(expandedElement = expandedElement === element ? null : element); $event.stopPropagation()">
+                    @if (expandedElement === element) {
+                        <mat-icon>keyboard_arrow_up</mat-icon>
+                    } @else {
+                        <mat-icon>keyboard_arrow_down</mat-icon>
+                    }
+                </button>
+            </td>
+        </ng-container>
+
+        <!-- Expanded Content Column - The detail row is made up of this one column that spans across all columns -->
+        <ng-container matColumnDef="expandedDetail">
+            <td mat-cell *matCellDef="let element" [attr.colspan]="columnsToDisplayWithExpand.length">
+                <div class="example-element-detail"
+                     [@detailExpand]="element == expandedElement ? 'expanded' : 'collapsed'">
+                    <div class="example-element-description">
+
+                            <table class="info-table">
+                                <tr class="info-row">
+                                    <th class="job-info">Job ID</th>
+                                    <td>{{element.job_id}}</td>
+                                </tr>
+
+                                <tr class="info-row">
+                                    <th class="job-info">Job type</th>
+                                    <td>{{element.job_type}}</td>
+                                </tr>
+
+                                <tr class="info-row">
+                                    <th class="job-info">End time</th>
+                                    <td>{{getFormattedDate(element.end_time)}}</td>
+
+                                </tr>
+
+                                <tr class="info-row">
+                                    <th class="job-info">Param</th>
+                                    <td>{{element.parameter}}</td>
+
+                                </tr>
+
+                                <tr class="info-row">
+                                    <th class="job-info">Run by</th>
+                                    <td>{{element.run_by}}</td>
+                                </tr>
+
+                                <tr class="info-row">
+                                    <th class="job-info">ID</th>
+                                    <td>{{element.id}}</td>
+                                </tr>
+
+<!--                                <tr class="info-row" *ngIf="element.metadata?.reason">-->
+<!--                                    <th class="job-info">Reason</th>-->
+<!--                                    <td>-->
+<!--                                        <span *ngIf="element.metadata.reason.selected">{{element.metadata.reason.selected}}</span>-->
+<!--                                        <span *ngIf="element.metadata.reason.selected && element.metadata.reason.freeText"> — </span>-->
+<!--                                        <span *ngIf="element.metadata.reason.freeText" class="reason-freetext">{{element.metadata.reason.freeText}}</span>-->
+<!--                                    </td>-->
+<!--                                </tr>-->
+                            </table>
+
+
+
+                        {{element.description}}
+                        <span class="example-element-description-attribution">
+                            <button mat-stroked-button color="warn" (click)="cancelJobRun(element); $event.stopPropagation()" *ngIf="element.status === 'Started'">Cancel</button>
+                            <button mat-stroked-button (click)="openLogs(element)">Logs</button>
+                            <button mat-stroked-button (click)="openRequests(element)">Requests</button>
+                            <button mat-stroked-button color="warn" class="delete-btn" (click)="confirmDeleteJobRun(element); $event.stopPropagation()">Delete</button>
+
+                        </span>
+                    </div>
+                </div>
+            </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="columnsToDisplayWithExpand"></tr>
+        <tr mat-row *matRowDef="let element; let i = dataIndex; columns: columnsToDisplayWithExpand;"
+            class="example-element-row"
+            [class.example-expanded-row]="expandedElement === element"
+            [class.row-even]="i % 2 === 0"
+            [class.row-odd]="i % 2 !== 0"
+            (click)="expandedElement = expandedElement === element ? null : element">
+        </tr>
+        <tr mat-row *matRowDef="let row; let i = dataIndex; columns: ['expandedDetail']" class="example-detail-row"
+            [class.row-even]="i % 2 === 0"
+            [class.row-odd]="i % 2 !== 0"></tr>
+    </table>
+
+
+<mat-paginator [length]="totalItems" [pageSize]="pageSize" [pageIndex]="currentPage" (page)="pageChanged($event)"></mat-paginator>
+</div>

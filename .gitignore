@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Node / Angular
+node_modules/
+dist/
+.angular/
+
+# Environment
+*.env
+!stack.env.example
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+data/
+powershell-runner/logs/
+powershell-runner/scripts/

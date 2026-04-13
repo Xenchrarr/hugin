@@ -1,0 +1,221 @@
+services:
+  # ── Databases ──────────────────────────────────────────────
+
+  energy-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    container_name: energy-postgres
+    environment:
+      POSTGRES_DB: ${ENERGY_DB:-energy}
+      POSTGRES_USER: ${ENERGY_DB_USER:-energy}
+      POSTGRES_PASSWORD: ${ENERGY_DB_PASSWORD:?ENERGY_DB_PASSWORD must be set}
+    volumes:
+      - energy_pgdata:/var/lib/postgresql/data
+      - ./ecoflow-monitor/db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U energy"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  orchestrator-postgres:
+    image: postgres:17
+    restart: unless-stopped
+    container_name: orchestrator-postgres
+    environment:
+      POSTGRES_USER: ${JOB_DB_USER_NAME}
+      POSTGRES_PASSWORD: ${JOB_DB_PASSWORD}
+      POSTGRES_DB: ${JOB_DB:-orchestrator}
+    volumes:
+      - orchestrator_pgdata:/var/lib/postgresql/data
+      - ./orchestrator/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ── Core Services ──────────────────────────────────────────
+
+  hugin-core:
+    image: xenchrarr/hugin-core:latest
+    restart: unless-stopped
+    container_name: hugin-core
+    depends_on:
+      energy-postgres:
+        condition: service_healthy
+    ports:
+      - "5100:5100"
+    env_file:
+      - stack.env
+    environment:
+      ENERGY_DATABASE_URL: postgresql://${ENERGY_DB_USER:-energy}:${ENERGY_DB_PASSWORD:?ENERGY_DB_PASSWORD must be set}@energy-postgres:5432/${ENERGY_DB:-energy}
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  ecoflow-monitor:
+    image: xenchrarr/ecoflow-monitor:latest
+    restart: unless-stopped
+    container_name: ecoflow-monitor
+    depends_on:
+      energy-postgres:
+        condition: service_healthy
+    env_file:
+      - stack.env
+    environment:
+      DATABASE_URL: postgresql://${ENERGY_DB_USER:-energy}:${ENERGY_DB_PASSWORD:?ENERGY_DB_PASSWORD must be set}@energy-postgres:5432/${ENERGY_DB:-energy}
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ── Bots ───────────────────────────────────────────────────
+
+  overlia-power-bot:
+    image: xenchrarr/overlia-power-bot:latest
+    restart: unless-stopped
+    container_name: overlia-power-bot
+    env_file:
+      - stack.env
+    environment:
+      CORE_API_URL: http://hugin-core:5100
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  sms-hub:
+    image: xenchrarr/sms-hub:latest
+    restart: unless-stopped
+    container_name: sms-hub
+    env_file:
+      - stack.env
+    environment:
+      CORE_API_URL: http://hugin-core:5100
+    devices:
+      - /dev/ttyUSB_SIM800:/dev/ttyUSB0
+    group_add:
+      - dialout
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # ── Orchestrator ───────────────────────────────────────────
+
+  orchestrator:
+    image: xenchrarr/orchestrator:latest
+    restart: unless-stopped
+    container_name: orchestrator
+    depends_on:
+      orchestrator-postgres:
+        condition: service_healthy
+    volumes:
+      - shared_logs:/data/logs
+    env_file:
+      - stack.env
+    environment:
+      JOB_DB_HOST: orchestrator-postgres
+      JOB_DB_PORT: 5432
+      JOB_DB_USER_NAME: ${JOB_DB_USER_NAME}
+      JOB_DB_PASSWORD: ${JOB_DB_PASSWORD}
+      JOB_DB: ${JOB_DB:-orchestrator}
+      JOB_SCHEDULER_RUNNING: ${JOB_SCHEDULER_RUNNING:-True}
+      POWERSHELL_API_ENDPOINT: http://powershell-runner:6001/api
+      POWERSHELL_SCRIPT_TIMEOUT: ${POWERSHELL_SCRIPT_TIMEOUT:-900}
+      POWERSHELL_LIST_TIMEOUT: ${POWERSHELL_LIST_TIMEOUT:-30}
+      STALE_JOB_THRESHOLD_MINUTES: ${STALE_JOB_THRESHOLD_MINUTES:-20}
+      FILE_STORAGE_PATH: /data/logs
+      FILE_STORAGE_URL: /logs
+      TEAMS_WEBHOOK_URL: ${TEAMS_WEBHOOK_URL:-}
+      CORE_API_URL: http://hugin-core:5100
+    networks:
+      - backend
+      - frontend
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  orchestrator-frontend:
+    image: xenchrarr/orchestrator-frontend:latest
+    restart: unless-stopped
+    container_name: orchestrator-frontend
+    ports:
+      - "80:80"
+    volumes:
+      - /srv/orchestrator/logs/frontend:/var/log/nginx
+    networks:
+      - frontend
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  powershell-runner:
+    image: xenchrarr/powershell-runner:latest
+    restart: unless-stopped
+    container_name: powershell-runner
+    volumes:
+      - powershell_scripts:/app/scripts
+    environment:
+      ORCHESTRATOR_BASE_URL: http://orchestrator:6000/api
+      SHOULD_LOG: ${SHOULD_LOG:-True}
+      SCRIPT_PROCESS_TIMEOUT: ${SCRIPT_PROCESS_TIMEOUT:-840}
+      GIT_USERNAME: ${GIT_USERNAME:-}
+      GIT_PASSWORD: ${GIT_PASSWORD:-}
+      GIT_BRANCH: ${GIT_BRANCH:-main}
+      GIT_REPO_URLS: ${GIT_REPO_URLS:-}
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  file-server:
+    image: nginx:alpine
+    restart: unless-stopped
+    container_name: file-server
+    volumes:
+      - shared_logs:/usr/share/nginx/html:ro
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+networks:
+  backend:
+    driver: bridge
+  frontend:
+    driver: bridge
+
+volumes:
+  energy_pgdata:
+  orchestrator_pgdata:
+  shared_logs:
+  powershell_scripts:

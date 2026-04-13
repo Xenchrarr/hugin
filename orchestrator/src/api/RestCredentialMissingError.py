@@ -1,0 +1,2 @@
+class RestCredentialMissingError(Exception):
+    pass

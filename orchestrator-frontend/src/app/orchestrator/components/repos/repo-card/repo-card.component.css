@@ -1,0 +1,15 @@
+th {
+    padding-right: 16px;
+    text-align: left;
+    vertical-align: top;
+    padding-top: 16px;
+}
+
+.wide-field {
+    width: 100%;
+    min-width: 350px;
+}
+
+table {
+    width: 100%;
+}

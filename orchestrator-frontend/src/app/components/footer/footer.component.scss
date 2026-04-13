@@ -1,0 +1,26 @@
+.app-footer {
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+
+    border-top: 1px solid var(--app-border);
+    background: var(--app-slate-100);
+    color: var(--app-slate-600);
+
+    a {
+        margin-left: 16px;
+        text-decoration: none;
+        color: var(--app-accent);
+        font-weight: 500;
+        transition: color 0.2s ease;
+
+        &:hover {
+            color: var(--app-slate-800);
+        }
+    }
+
+    .spacer {
+        flex: 1;
+    }
+}

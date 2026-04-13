@@ -1,0 +1,53 @@
+<h1>Git Repositories</h1>
+
+<p>
+    <button mat-stroked-button (click)="loadRepos()">Reload</button>
+    <button mat-flat-button color="primary" (click)="addRepo()">Add repo</button>
+</p>
+
+<div class="mat-elevation-z8">
+    <table mat-table [dataSource]="repos" class="mat-elevation-z8">
+
+        <ng-container matColumnDef="id">
+            <th mat-header-cell *matHeaderCellDef>ID</th>
+            <td mat-cell *matCellDef="let row" class="id-cell">{{ row.id }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef>Name</th>
+            <td mat-cell *matCellDef="let row">{{ row.name }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="url">
+            <th mat-header-cell *matHeaderCellDef>URL</th>
+            <td mat-cell *matCellDef="let row" class="url-cell">{{ row.url }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="branch">
+            <th mat-header-cell *matHeaderCellDef>Branch</th>
+            <td mat-cell *matCellDef="let row">{{ row.branch }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="enabled">
+            <th mat-header-cell *matHeaderCellDef>Enabled</th>
+            <td mat-cell *matCellDef="let row">
+                <mat-checkbox [disabled]="true" [checked]="row.enabled"></mat-checkbox>
+            </td>
+        </ng-container>
+
+        <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef></th>
+            <td mat-cell *matCellDef="let row">
+                <button mat-stroked-button (click)="editRepo(row); $event.stopPropagation()">Edit</button>
+                <button mat-stroked-button color="warn" (click)="confirmDeleteRepo(row); $event.stopPropagation()">Delete</button>
+            </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+    </table>
+</div>
+
+<div *ngIf="repos.length === 0" class="empty-state">
+    <p>No repositories configured yet. Click "Add repo" to get started.</p>
+</div>

@@ -1,0 +1,135 @@
+.delete-btn {
+    margin-left: 8px;
+    border-color: #d32f2f !important;
+    color: #fff !important;
+    background: #d32f2f !important;
+}
+table {
+    width: 100%;
+}
+
+tr.example-detail-row {
+    height: 0;
+}
+
+tr.example-element-row:not(.example-expanded-row):hover {
+    background: var(--app-slate-300, #cbd5e1);
+}
+
+tr.example-element-row:not(.example-expanded-row):active {
+    background: #efefef;
+}
+
+.example-element-row td {
+    border-bottom-width: 0;
+}
+
+.example-element-detail {
+    overflow: hidden;
+    display: flex;
+}
+
+.example-element-diagram {
+    min-width: 80px;
+    /*border: 2px solid black;*/
+    padding: 8px;
+    font-weight: lighter;
+    margin: 8px 0;
+    height: 104px;
+}
+
+.example-element-symbol {
+    font-weight: bold;
+    font-size: 40px;
+    line-height: normal;
+}
+
+.example-element-description {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.example-element-description-attribution {
+    opacity: 0.5;
+}
+
+tr.example-element-row.row-odd {
+    background: var(--app-slate-200, #e2e8f0);
+}
+
+.example-detail-row.row-odd td {
+    background: var(--app-slate-200, #e2e8f0);
+}
+
+.example-detail-row.row-even td {
+    background: white;
+}
+
+.mat-mdc-header-cell {
+    background: var(--app-slate-300, #cbd5e1) !important;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    color: var(--app-slate-700, #334155);
+}
+
+
+th {
+    /*margin-right: 20px;*/
+    width: 150px;
+}
+
+.info-row {
+    border-bottom: 1px solid var(--app-border);
+}
+
+.info-table {
+    margin-bottom: 20px;
+}
+
+.Started{
+    color: var(--app-warning);
+}
+.Finished{
+    color: var(--app-success);
+}
+
+.Error{
+    color: var(--app-error);
+}
+
+.Nothing {
+    color: var(--app-info);
+}
+
+.Partial{
+    color: #956c06;
+}
+
+.id-cell {
+    font-weight: bold;
+}
+
+.checkbox-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px; /* Add spacing between checkboxes */
+}
+
+.example-margin {
+    margin: 4px; /* Adjust margin for consistent spacing */
+}
+
+.status-container {
+    margin-top: 10px;
+    background-color: var(--app-slate-100);
+    padding: 10px;
+    border-radius: var(--app-radius-md);
+}
+
+.reason-freetext {
+    font-style: italic;
+}

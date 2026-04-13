@@ -1,0 +1,2 @@
+ALTER TABLE job_runs
+ADD COLUMN IF NOT EXISTS run_by_group VARCHAR(50) NOT NULL DEFAULT 'system';
