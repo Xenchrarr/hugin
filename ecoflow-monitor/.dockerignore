@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+.git/
+.venv/
+*.md
+mqtt_listener.py
+db/

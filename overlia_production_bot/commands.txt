@@ -1,0 +1,5 @@
+data - Current production ++
+weather - Weather forecast
+chart - Chart of todays production
+chartdays - Chart of today and the last n days production (usage - /chartdays 7)
+chartmonth - Chart of one month usage - (/chartdays 2 2024) or (/chartdays 2 )for current year
