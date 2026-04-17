@@ -3,13 +3,16 @@ import logging
 from flask import Blueprint, make_response, request
 
 from src.api.powershell_runner.health_check import check_if_powershell_script_engine_is_up
+from src.api.sms_bot.health_check import check_sms_bot_health
+from src.api.telegram_bot.health_check import check_telegram_bot_health
+from src.api.hugin_core.health_check import check_hugin_core_health
 from src.services.core.connection_status_service import check_if_connection_to_job_db_is_valid
 
 log = logging.getLogger(__name__)
 
 connection_status_blueprint = Blueprint('connection_status', __name__)
 
-status_items = ['database', "script_runner"]
+status_items = ['database', 'script_runner', 'sms_bot', 'telegram_bot', 'hugin_core']
 status_items_simple = ['database',]
 
 @connection_status_blueprint.route('/status', methods=['GET'])
@@ -63,6 +66,12 @@ def get_string_response(status_item) -> dict:
             result = check_if_connection_to_job_db_is_valid()
         elif status_item == 'script_runner':
             result = check_if_powershell_script_engine_is_up()
+        elif status_item == 'sms_bot':
+            result = check_sms_bot_health()
+        elif status_item == 'telegram_bot':
+            result = check_telegram_bot_health()
+        elif status_item == 'hugin_core':
+            result = check_hugin_core_health()
         else:
             log.warning("Unknown status item %s", status_item)
             result = False

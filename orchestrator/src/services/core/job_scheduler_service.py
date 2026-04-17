@@ -111,6 +111,13 @@ class JobSchedulerService:
         self.remove_all_jobs()
         self.start_all_jobs()
 
+        # Restore reminder jobs that were removed by remove_all_jobs()
+        from src.services.core.reminder_scheduler_service import ReminderSchedulerService
+        try:
+            ReminderSchedulerService.instance().load_active_reminders()
+        except Exception:
+            log.exception("Failed to reload reminder jobs after job reload")
+
     def _register_stale_job_reaper(self):
         from src.services.core.stale_job_reaper import reap_stale_job_runs
 

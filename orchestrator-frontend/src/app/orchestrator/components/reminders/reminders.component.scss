@@ -1,0 +1,56 @@
+.empty-state {
+    padding: 32px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+table {
+    width: 100%;
+}
+
+td.mat-mdc-cell button {
+    margin-right: 8px;
+}
+
+.actions-cell {
+    white-space: nowrap;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.status-active {
+    background: rgba(76, 175, 80, 0.2);
+    color: #81c784;
+}
+
+.status-snoozed {
+    background: rgba(255, 193, 7, 0.2);
+    color: #ffd54f;
+}
+
+.status-completed {
+    background: rgba(158, 158, 158, 0.2);
+    color: #bdbdbd;
+}
+
+.status-dismissed {
+    background: rgba(244, 67, 54, 0.2);
+    color: #ef9a9a;
+}
+
+.default-label {
+    color: rgba(255, 255, 255, 0.4);
+    font-style: italic;
+    font-size: 13px;
+}
+
+mat-button-toggle-group {
+    margin-bottom: 8px;
+}

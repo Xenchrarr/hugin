@@ -9,6 +9,7 @@ from src.config.logging import setup_logging
 from src.sms_handler import SMSHandler
 from src.command_processor import CommandProcessor
 from src.config.config import ALLOWED_SENDERS
+from src.api.sms_api import start_api_server
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,9 @@ def main():
 
     sms = SMSHandler()
     processor = CommandProcessor()
+
+    # Start the outbound SMS REST API in a background thread
+    start_api_server(sms)
 
     try:
         while True:

@@ -97,6 +97,7 @@ services:
       - stack.env
     environment:
       CORE_API_URL: http://hugin-core:5100
+      ORCHESTRATOR_API_URL: http://orchestrator:6000
     networks:
       - backend
     deploy:
@@ -112,6 +113,7 @@ services:
       - stack.env
     environment:
       CORE_API_URL: http://hugin-core:5100
+      ORCHESTRATOR_API_URL: http://orchestrator:6000
     devices:
       - /dev/ttyUSB_SIM800:/dev/ttyUSB0
     group_add:
@@ -151,6 +153,8 @@ services:
       FILE_STORAGE_URL: /logs
       TEAMS_WEBHOOK_URL: ${TEAMS_WEBHOOK_URL:-}
       CORE_API_URL: http://hugin-core:5100
+      SMS_BOT_URL: http://sms-hub:5050
+      TELEGRAM_BOT_URL: http://overlia-power-bot:5060
     networks:
       - backend
       - frontend

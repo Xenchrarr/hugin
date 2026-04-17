@@ -8,6 +8,9 @@ from src.commands.get_shoppinglist import GetShoppingListCommand
 from src.commands.list_add import ListAddCommand
 from src.commands.list_rm import ListRmCommand
 from src.commands.remind_command import RemindCommand
+from src.commands.remind_list_command import RemindListCommand
+from src.commands.snooze_command import SnoozeCommand
+from src.commands.dismiss_command import DismissCommand
 from src.commands.trigger_automation import TriggerAutomation
 from src.models.errors import (
     ERR_AUTH,
@@ -32,6 +35,9 @@ class CommandProcessor:
             ListAddCommand(),
             ListRmCommand(),
             RemindCommand(),
+            RemindListCommand(),
+            SnoozeCommand(),
+            DismissCommand(),
             TriggerAutomation(),
         ]
 

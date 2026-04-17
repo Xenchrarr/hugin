@@ -8,6 +8,7 @@ from flask_cors import CORS
 from .config.config import Config
 from .routes import api
 from src.services.core.job_scheduler_service import JobSchedulerService
+from src.services.core.reminder_scheduler_service import ReminderSchedulerService
 from src.persistence.JobDb import JobDb
 from src.persistence.Database import run_init_sql, run_migrations
 
@@ -46,5 +47,9 @@ except Exception as exc:
 try:
     if job_service_running:
         JobSchedulerService.instance().start_all_jobs()
+        # Share the scheduler instance and load active reminders
+        reminder_svc = ReminderSchedulerService.instance()
+        reminder_svc.init_scheduler(JobSchedulerService.instance().scheduler)
+        reminder_svc.load_active_reminders()
 except Exception as exc:
     log.warning("Scheduler startup skipped: %s", exc)

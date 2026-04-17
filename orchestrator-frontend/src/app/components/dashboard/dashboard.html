@@ -47,17 +47,6 @@
       </mat-card-content>
     </mat-card>
 
-    <mat-card class="stat-card">
-      <mat-card-content>
-        @if (topControlRoom) {
-          <span class="stat-number stat-number-sm">{{ topControlRoom.name }}</span>
-          <span class="stat-label">Top Control Room ({{ topControlRoom.count }} runs)</span>
-        } @else {
-          <span class="stat-number">—</span>
-          <span class="stat-label">Top Control Room</span>
-        }
-      </mat-card-content>
-    </mat-card>
   </div>
 
   <!-- Row 2: Charts -->
@@ -78,21 +67,7 @@
       </mat-card-content>
     </mat-card>
 
-    <mat-card class="chart-card">
-      <mat-card-title class="card-title">Control Rooms</mat-card-title>
-      <mat-card-content class="chart-container">
-        @if (controlRoomChartData.labels && controlRoomChartData.labels.length > 0) {
-          <canvas
-            baseChart
-            type="bar"
-            [data]="controlRoomChartData"
-            [options]="controlRoomChartOptions"
-          ></canvas>
-        } @else {
-          <div class="empty-chart">No control room data</div>
-        }
-      </mat-card-content>
-    </mat-card>
+
   </div>
 
   <!-- Row 3: Job types chart + Run reasons chart -->

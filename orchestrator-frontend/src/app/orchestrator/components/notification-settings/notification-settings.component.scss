@@ -1,0 +1,35 @@
+.subtitle {
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 24px;
+}
+
+.table-container {
+    margin-bottom: 32px;
+}
+
+.actions-cell {
+    text-align: right;
+}
+
+.empty-state {
+    padding: 24px 0;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+h2 {
+    margin-top: 32px;
+}
+
+.add-card {
+    max-width: 600px;
+}
+
+.add-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.config-field {
+    width: 100%;
+}

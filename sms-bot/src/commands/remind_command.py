@@ -1,13 +1,16 @@
 import dateparser
 
+from src.api.orchestrator import OrchestratorClient
 from src.commands.base_command import BaseCommand
 from src.models.parsed_command import ParsedCommand
+
+_orchestrator = OrchestratorClient()
 
 
 class RemindCommand(BaseCommand):
     path = "rem/in"
     aliases = ["remind"]
-    description = "Set a reminder (stub)"
+    description = "Set a reminder"
     usage = "rem in <duration> <message>"
 
     def execute(self, cmd: ParsedCommand) -> str:
@@ -21,4 +24,17 @@ class RemindCommand(BaseCommand):
         if not parsed_time:
             return f"ERR_BAD_ARG: Could not parse time '{time_string}'. Hint: rem in 45m check oven"
 
-        return f"OK rem set for {parsed_time.strftime('%Y-%m-%d %H:%M')}: {message}"
+        recurrence = cmd.named.get("repeat") or cmd.named.get("recurrence")
+
+        result = _orchestrator.create_reminder(
+            title=message,
+            due_at=parsed_time.isoformat(),
+            recurrence=recurrence,
+            created_by="sms",
+        )
+
+        if result is None:
+            return "ERR_INTERNAL: Failed to create reminder"
+
+        rid = result.get("id", "?")
+        return f"OK reminder #{rid} set for {parsed_time.strftime('%Y-%m-%d %H:%M')}: {message}"

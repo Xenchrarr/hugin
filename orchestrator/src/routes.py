@@ -11,6 +11,7 @@ from src.controllers.scripts_controller import scripts_blueprint
 from src.controllers.script_permission_controller import script_permission_blueprint
 from src.controllers.script_reason_controller import script_reason_blueprint
 from src.controllers.dashboard_controller import dashboard_blueprint
+from src.controllers.reminder_controller import reminder_blueprint
 
 api = Blueprint('api', __name__)
 
@@ -33,3 +34,5 @@ api.register_blueprint(script_permission_blueprint, url_prefix="/script_permissi
 api.register_blueprint(script_reason_blueprint, url_prefix="/script_reasons")
 
 api.register_blueprint(dashboard_blueprint, url_prefix="/dashboard")
+
+api.register_blueprint(reminder_blueprint, url_prefix="/reminders")

@@ -1,0 +1,35 @@
+th {
+    padding-right: 16px;
+    text-align: left;
+    vertical-align: top;
+    padding-top: 16px;
+}
+
+.wide-field {
+    width: 100%;
+    min-width: 350px;
+}
+
+table {
+    width: 100%;
+}
+
+.datetime-row {
+    display: flex;
+    gap: 12px;
+}
+
+.channels-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+    padding-top: 12px;
+}
+
+.hint {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 12px;
+    font-style: italic;
+    width: 100%;
+}

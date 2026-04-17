@@ -1,0 +1,12 @@
+help - Show help
+data - Show inverter data
+weather - Show weather forecast
+chart - Show daily production chart
+chartdays - Show multi-day production chart
+chartmonth - Show monthly production chart
+nikolai_power - Show current power readings
+nikolai_powerhistory - Show power history chart
+nikolai_energytoday - Show today's energy summary
+nikolai_energyhour - Show last hour energy summary
+nikolai_energydaily - Show daily energy chart
+nikolai_weather - Show Nikolai weather forecast

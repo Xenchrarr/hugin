@@ -10,7 +10,7 @@ def run_power_aggregation(param: str = ""):
     core_url = os.environ.get("CORE_API_URL", "http://hugin-core:5100")
     logger.log_info(f"Triggering power aggregation at {core_url}")
 
-    resp = requests.post(f"{core_url}/api/aggregation/run", timeout=120)
+    resp = requests.post(f"{core_url}/api/energy/aggregation/run", timeout=120)
     if resp.status_code == 200:
         result = resp.json()
         logger.log_info(f"Aggregation completed: {result}")

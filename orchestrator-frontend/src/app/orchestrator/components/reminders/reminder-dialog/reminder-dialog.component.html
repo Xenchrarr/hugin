@@ -1,0 +1,86 @@
+<h2 mat-dialog-title>{{ isNew ? 'New Reminder' : 'Edit Reminder' }}</h2>
+<mat-dialog-content class="mat-typography">
+    <mat-card appearance="outlined">
+        <mat-card-content>
+            <table>
+                <tr>
+                    <th>Title</th>
+                    <td>
+                        <mat-form-field class="wide-field">
+                            <mat-label>Title</mat-label>
+                            <input matInput [(ngModel)]="reminder.title">
+                        </mat-form-field>
+                    </td>
+                </tr>
+
+                <tr>
+                    <th>Message</th>
+                    <td>
+                        <mat-form-field class="wide-field">
+                            <mat-label>Message</mat-label>
+                            <textarea matInput [(ngModel)]="reminder.message" rows="3"></textarea>
+                        </mat-form-field>
+                    </td>
+                </tr>
+
+                <tr>
+                    <th>Due date</th>
+                    <td class="datetime-row">
+                        <mat-form-field>
+                            <mat-label>Date</mat-label>
+                            <input matInput type="date" [(ngModel)]="dueDate">
+                        </mat-form-field>
+                        <mat-form-field>
+                            <mat-label>Time</mat-label>
+                            <input matInput type="time" [(ngModel)]="dueTime">
+                        </mat-form-field>
+                    </td>
+                </tr>
+
+                <tr>
+                    <th>Recurrence</th>
+                    <td>
+                        <mat-form-field class="wide-field">
+                            <mat-label>Recurrence</mat-label>
+                            <mat-select [(ngModel)]="reminder.recurrence">
+                                <mat-option *ngIf="true" [value]="null">One-time</mat-option>
+                                <mat-option value="daily">Daily</mat-option>
+                                <mat-option value="weekly:mon">Weekly (Monday)</mat-option>
+                                <mat-option value="weekly:tue">Weekly (Tuesday)</mat-option>
+                                <mat-option value="weekly:wed">Weekly (Wednesday)</mat-option>
+                                <mat-option value="weekly:thu">Weekly (Thursday)</mat-option>
+                                <mat-option value="weekly:fri">Weekly (Friday)</mat-option>
+                                <mat-option value="weekly:sat">Weekly (Saturday)</mat-option>
+                                <mat-option value="weekly:sun">Weekly (Sunday)</mat-option>
+                                <mat-option value="interval:1h">Every hour</mat-option>
+                                <mat-option value="interval:30m">Every 30 minutes</mat-option>
+                            </mat-select>
+                        </mat-form-field>
+                    </td>
+                </tr>
+
+                <tr>
+                    <th>Recipients</th>
+                    <td>
+                        <mat-form-field class="wide-field">
+                            <mat-label>Recipients</mat-label>
+                            <mat-select [(ngModel)]="selectedRecipientIds" multiple>
+                                <mat-option *ngFor="let s of notificationSettings" [value]="s.id">
+                                    {{ recipientLabel(s) }}
+                                </mat-option>
+                            </mat-select>
+                        </mat-form-field>
+                        <div class="hint" *ngIf="selectedRecipientIds.length === 0">
+                            Sends to all enabled notification settings
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </mat-card-content>
+    </mat-card>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+    <button mat-button mat-dialog-close>Cancel</button>
+    <button mat-flat-button color="primary" (click)="save()"
+            [disabled]="!reminder.title || !dueDate || !dueTime">Save</button>
+</mat-dialog-actions>
