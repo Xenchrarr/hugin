@@ -115,7 +115,7 @@ services:
       CORE_API_URL: http://hugin-core:5100
       ORCHESTRATOR_API_URL: http://orchestrator:6000
     devices:
-      - /dev/ttyUSB_SIM800:/dev/ttyUSB0
+      - /dev/serial/by-id/usb-Quectel_EC25-EUX_0123456789ABCDEF-if03-port0:/dev/ttyUSB0
     group_add:
       - dialout
     networks:

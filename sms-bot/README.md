@@ -1,6 +1,6 @@
 # SMS Bot
 
-SMS command bot that listens for incoming messages on a SIM800 USB modem and executes commands via Home Assistant, Simplenote, etc.
+SMS command bot that listens for incoming messages on a Quectel EC25 USB modem and executes commands via Home Assistant, Simplenote, etc.
 
 ## Project Structure
 
@@ -37,59 +37,57 @@ src/
 ## Prerequisites
 
 - Docker & Docker Compose
-- A SIM800 USB modem with a SIM card inserted
+- A Quectel EC25 USB modem with a SIM card inserted
 - Home Assistant instance with a long-lived access token
 - Simplenote account
 
 ## Host Setup (x64)
 
-### 1. Find the SIM800 USB device
+### 1. Find the EC25 USB device
 
-Plug in the SIM800 USB adapter and find its vendor/product ID:
-
-```bash
-lsusb
-```
-
-Look for a line like `1a86:7523` (CH340) or `10c4:ea60` (CP2102) — these are common USB-to-serial chips used by SIM800 boards.
-
-### 2. Create a udev rule
-
-This gives the modem a stable device name (`/dev/ttyUSB_SIM800`) so it doesn't change if you plug in other USB devices:
+Plug in the EC25 and confirm it is detected:
 
 ```bash
-sudo tee /etc/udev/rules.d/99-sim800.rules <<'EOF'
-SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="ttyUSB_SIM800", MODE="0666"
-EOF
+lsusb | grep -i 2c7c
+# Expected: ID 2c7c:0125 Quectel Wireless Solutions Co., Ltd. EC25 LTE modem
 ```
 
-Reload the rules:
+The EC25 exposes four serial ports (`ttyUSB0`–`ttyUSB3`). Interface `03` is the AT command port.
+
+### 2. Identify the AT port
+
+Check which `/dev/ttyUSBx` ports were assigned:
 
 ```bash
-sudo udevadm control --reload-rules && sudo udevadm trigger
+dmesg | grep tty | tail -20
 ```
 
-### 3. Add your user to the dialout group
+Test the AT port (typically `ttyUSB3`):
+
+```bash
+screen /dev/ttyUSB3 115200
+```
+
+Type `AT` and press Enter — you should see `OK`. Exit with `Ctrl-A` then `K`.
+
+### 3. Use the stable by-id symlink
+
+udev automatically creates a stable, persistent symlink for the AT port — no custom rule needed:
+
+```bash
+ls /dev/serial/by-id/ | grep Quectel
+# usb-Quectel_EC25-EUX_0123456789ABCDEF-if03-port0
+```
+
+This symlink is what the `docker-compose.yml` device mapping uses.
+
+### 4. Add your user to the dialout group
 
 ```bash
 sudo usermod -aG dialout $USER
 ```
 
 Log out and back in for the group change to take effect.
-
-### 4. Verify
-
-```bash
-ls -la /dev/ttyUSB_SIM800
-```
-
-Quick AT command test (exit with `Ctrl-A` then `K`):
-
-```bash
-screen /dev/ttyUSB_SIM800 9600
-```
-
-Type `AT` and press Enter — you should see `OK`.
 
 ## Configuration
 

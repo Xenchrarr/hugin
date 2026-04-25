@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class SMSHandler:
-    def __init__(self, port="/dev/ttyUSB0", baudrate=9600):
+    def __init__(self, port="/dev/ttyUSB0", baudrate=115200):
         self.ser = serial.Serial(port, baudrate, timeout=2)
         logger.info("Initializing modem")
         self.init_modem()
