@@ -63,16 +63,45 @@ class SMSHandler:
         else:
             logger.error("Modem failed to respond after 3 attempts")
 
+        # Wait for SIM to be ready before any SIM-dependent commands
+        logger.info("Waiting for SIM ready")
+        for attempt in range(10):
+            resp = self.send_at("AT+CPIN?", timeout=3)
+            if "+CPIN: READY" in resp:
+                logger.info("SIM ready (attempt %d)", attempt + 1)
+                break
+            logger.warning("SIM not ready (attempt %d): %s", attempt + 1, resp.strip())
+            time.sleep(2)
+        else:
+            logger.error("SIM not ready after 10 attempts — storage commands may fail")
+
         logger.info("Setting text mode")
         self.send_at("AT+CMGF=1")
         logger.info("Setting SIM storage")
-        self.send_at('AT+CPMS="SM"')
+        resp = self.send_at('AT+CPMS="SM","SM","SM"')
+        if "ERROR" in resp:
+            logger.error("Failed to set SIM storage: %s", resp.strip())
+        else:
+            logger.info("SIM storage set: %s", resp.strip())
         logger.info("Disabling notifications")
         self.send_at("AT+CNMI=0,0,0,0,0")
 
         # Purge all messages — SIM may be full from previous failed runs
         logger.info("Deleting all stored messages")
         self.send_at("AT+CMGD=1,4", timeout=5)
+
+        # Wait for network registration before completing init
+        logger.info("Waiting for network registration")
+        for attempt in range(30):
+            resp = self.send_at("AT+CREG?", timeout=3)
+            # stat=1 (home) or stat=5 (roaming)
+            if "+CREG: 1" in resp or "+CREG: 5" in resp or ",1" in resp or ",5" in resp:
+                logger.info("Network registered (attempt %d): %s", attempt + 1, resp.strip())
+                break
+            logger.debug("Network not registered yet (attempt %d): %s", attempt + 1, resp.strip())
+            time.sleep(2)
+        else:
+            logger.warning("Network not registered after 60s — continuing anyway")
 
         # Diagnostics
         logger.info("Signal: %s", self.send_at("AT+CSQ", timeout=2).strip())
@@ -83,6 +112,9 @@ class SMSHandler:
 
     def read_messages(self) -> list[SmsMessage]:
         response = self.send_at('AT+CMGL="ALL"', timeout=5)
+        if "ERROR" in response:
+            logger.error("CMGL failed: %s", response.strip())
+            return []
         if response.strip():
             logger.debug("CMGL raw: %s", repr(response))
         return self.parse_messages(response)
