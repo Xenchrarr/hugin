@@ -87,6 +87,7 @@ class JobSchedulerService:
 
     def start_all_jobs(self):
         log.info("Starting all jobs")
+        self.start_scheduler()
         try:
             job_storage = JobStorage()
             jobs = job_storage.get_enabled_jobs()
@@ -95,8 +96,6 @@ class JobSchedulerService:
                 self.add_job(job)
 
             self._register_stale_job_reaper()
-
-            self.start_scheduler()
         except Exception as e:
             log.exception("Error starting all jobs")
         finally:

@@ -44,6 +44,13 @@ class HuginCoreClient:
             payload["variables"] = variables
         return self._post("/api/home/trigger", json=payload)
 
+    # --- Energy / Power ---
+    def get_today_energy(self) -> dict | None:
+        return self._get("/api/energy/today")
+
+    def get_growatt_data(self) -> dict | None:
+        return self._get("/api/power/growatt")
+
     # --- Shopping List ---
     def get_shopping_list(self) -> str | None:
         data = self._get("/api/shopping/list")

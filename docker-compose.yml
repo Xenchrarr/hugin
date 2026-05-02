@@ -9,6 +9,8 @@ services:
       POSTGRES_DB: ${ENERGY_DB:-energy}
       POSTGRES_USER: ${ENERGY_DB_USER:-energy}
       POSTGRES_PASSWORD: ${ENERGY_DB_PASSWORD:?ENERGY_DB_PASSWORD must be set}
+    ports:
+      - "5432:5432"
     volumes:
       - energy_pgdata:/var/lib/postgresql/data
       - ./ecoflow-monitor/db:/docker-entrypoint-initdb.d:ro
@@ -32,6 +34,8 @@ services:
       POSTGRES_USER: ${JOB_DB_USER_NAME}
       POSTGRES_PASSWORD: ${JOB_DB_PASSWORD}
       POSTGRES_DB: ${JOB_DB:-orchestrator}
+    ports:
+      - "5433:5432"
     volumes:
       - orchestrator_pgdata:/var/lib/postgresql/data
       - ./orchestrator/init:/docker-entrypoint-initdb.d:ro
@@ -62,6 +66,9 @@ services:
       - stack.env
     environment:
       ENERGY_DATABASE_URL: postgresql://${ENERGY_DB_USER:-energy}:${ENERGY_DB_PASSWORD:?ENERGY_DB_PASSWORD must be set}@energy-postgres:5432/${ENERGY_DB:-energy}
+      ORCHESTRATOR_API_URL: http://orchestrator:6000
+      SERVICE_KEY: ${SERVICE_KEY}
+      PRIMARY_USER_ID: ${PRIMARY_USER_ID:-1}
     networks:
       - backend
     deploy:
@@ -115,7 +122,7 @@ services:
       CORE_API_URL: http://hugin-core:5100
       ORCHESTRATOR_API_URL: http://orchestrator:6000
     devices:
-      - /dev/serial/by-id/usb-Quectel_EC25-EUX_0123456789ABCDEF-if03-port0:/dev/ttyUSB0
+      - /dev/serial/by-id/usb-Quectel_EC25-EUX_0123456789ABCDEF-if02-port0:/dev/ttyUSB0
     group_add:
       - dialout
     networks:
@@ -155,6 +162,7 @@ services:
       CORE_API_URL: http://hugin-core:5100
       SMS_BOT_URL: http://sms-hub:5050
       TELEGRAM_BOT_URL: http://overlia-power-bot:5060
+      TELEGRAM_RELAY_URL: http://telegram-relay:8080
     networks:
       - backend
       - frontend
@@ -171,6 +179,7 @@ services:
       - "80:80"
     volumes:
       - /srv/orchestrator/logs/frontend:/var/log/nginx
+      - shared_logs:/data/logs:ro
     networks:
       - frontend
     deploy:
@@ -212,6 +221,31 @@ services:
         limits:
           memory: 64M
 
+  # ── Telegram Relay ─────────────────────────────────────────
+
+  telegram-relay:
+    image: xenchrarr/telegram-relay:latest
+    restart: unless-stopped
+    container_name: telegram-relay
+    depends_on:
+      - orchestrator
+    ports:
+      - "8080:8080"
+    volumes:
+      - telegram_tdlib:/app/data/tdlib
+    env_file:
+      - stack.env
+    environment:
+      ORCHESTRATOR_API_URL: http://orchestrator:6000
+      SERVICE_KEY: ${SERVICE_KEY}
+      SMS_BOT_URL: http://sms-hub:5050
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
 networks:
   backend:
     driver: bridge
@@ -223,3 +257,4 @@ volumes:
   orchestrator_pgdata:
   shared_logs:
   powershell_scripts:
+  telegram_tdlib:

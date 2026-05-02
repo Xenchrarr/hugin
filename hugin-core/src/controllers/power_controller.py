@@ -7,10 +7,9 @@ from flask import Blueprint, jsonify, request
 from src.clients.growatt import GrowattClient
 from src.database import get_session
 from src.models.power import PowerReading
+from src.services.user_config_service import get_primary_user_config
 
 power_blueprint = Blueprint("power", __name__)
-
-growatt_client = GrowattClient()
 
 
 @power_blueprint.route("/current")
@@ -82,7 +81,17 @@ def power_history():
 
 @power_blueprint.route("/growatt")
 def growatt_data():
-    data = growatt_client.get_inverter_data()
+    try:
+        config = get_primary_user_config()
+    except RuntimeError as e:
+        return jsonify({"error": f"Could not fetch user config: {e}"}), 503
+
+    username = config.get("growatt_username", "")
+    password = config.get("growatt_password", "")
+    if not username or not password:
+        return jsonify({"error": "Growatt credentials not configured in user settings"}), 503
+
+    data = GrowattClient(username, password).get_inverter_data()
     if data is None:
         return jsonify({"error": "Could not fetch Growatt data"}), 502
     return jsonify(data)

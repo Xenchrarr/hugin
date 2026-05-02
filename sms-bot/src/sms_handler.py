@@ -77,6 +77,8 @@ class SMSHandler:
 
         logger.info("Setting text mode")
         self.send_at("AT+CMGF=1")
+        logger.info("Setting character set to 8859-1")
+        self.send_at('AT+CSCS="8859-1"')
         logger.info("Setting SIM storage")
         resp = self.send_at('AT+CPMS="SM","SM","SM"')
         if "ERROR" in resp:
@@ -161,7 +163,7 @@ class SMSHandler:
 
         # Send message body + Ctrl-Z, wait for modem to transmit (up to 60s)
         self.flush_serial()
-        self.ser.write((message + '\x1A').encode())
+        self.ser.write((message + '\x1A').encode('latin-1', errors='replace'))
         response = self._read_until(['\nOK', '\nERROR', '+CMGS:'], timeout=60)
         if '\nOK' in response or '+CMGS:' in response:
             logger.info("Message sent successfully")

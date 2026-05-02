@@ -17,7 +17,9 @@ _storage = ReminderStorage()
 def list_reminders():
     try:
         status = request.args.get('status')
-        reminders = _storage.get_reminders(status_filter=status)
+        user_id_param = request.args.get('user_id')
+        user_id = int(user_id_param) if user_id_param else None
+        reminders = _storage.get_reminders(status_filter=status, user_id=user_id)
         return [r.to_dict() for r in reminders]
     except Exception as e:
         return {'message': f"Something went wrong: {e}", 'status': 500, 'error': str(e)}, 500
@@ -91,6 +93,8 @@ def update_reminder(reminder_id: int):
         existing.due_at = due_at
         existing.recurrence = data.get('recurrence', existing.recurrence)
         existing.recipient_ids = data.get('recipient_ids', existing.recipient_ids)
+        if 'user_id' in data:
+            existing.user_id = data['user_id']
 
         updated = _storage.update_reminder(existing)
 

@@ -6,7 +6,7 @@ import {ReposComponent} from "./components/repos/repos.component";
 import {ScriptsPageComponent} from "./components/scripts-page/scripts-page.component";
 import {RunsPageComponent} from "./components/runs-page/runs-page.component";
 import {RemindersComponent} from "./components/reminders/reminders.component";
-import {NotificationSettingsComponent} from "./components/notification-settings/notification-settings.component";
+import {TelegramRelayComponent} from "./components/telegram-relay/telegram-relay.component";
 
 export const routes: Routes = [
     {
@@ -43,7 +43,7 @@ export const routes: Routes = [
         component: RemindersComponent,
     },
     {
-        path: 'notification-settings',
-        component: NotificationSettingsComponent,
+        path: 'telegram-relay',
+        component: TelegramRelayComponent,
     },
 ];

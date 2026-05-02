@@ -1,0 +1,47 @@
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+
+  h2 { margin: 0; }
+}
+
+.form-card {
+  margin-bottom: 24px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px 16px;
+}
+
+.channel-section {
+  margin-top: 12px;
+}
+
+.channel-label {
+  display: block;
+  font-size: 0.75rem;
+  color: rgba(0, 0, 0, .6);
+  margin-bottom: 6px;
+}
+
+.channel-chips {
+  display: flex;
+  gap: 8px;
+}
+
+.admin-toggle {
+  margin-top: 16px;
+}
+
+.users-table {
+  width: 100%;
+}
+
+.error-msg {
+  color: #c62828;
+  margin-bottom: 12px;
+}

@@ -10,11 +10,72 @@ from src.clients.growatt import GrowattClient
 from src.database import get_session
 from src.models.power import PowerReading, DailyEnergy
 from src.services.chart_service import ChartService
+from src.services.user_config_service import get_primary_user_config
 
 charts_blueprint = Blueprint("charts", __name__)
 
-growatt_client = GrowattClient()
-chart_service = ChartService(growatt_client)
+_LOCAL_TZ = datetime.datetime.now().astimezone().tzinfo
+
+
+def _get_ecoflow_hourly_for_date(date: datetime.date) -> dict[str, float]:
+    """Return {HH:00 label: avg_combined_pv_watts} for a given local date."""
+    day_start = datetime.datetime(date.year, date.month, date.day, tzinfo=_LOCAL_TZ).astimezone(pytz.UTC)
+    day_end = day_start + timedelta(days=1)
+    buckets: dict[str, list] = defaultdict(list)
+    with get_session() as session:
+        readings = (
+            session.query(PowerReading)
+            .filter(PowerReading.recorded_at >= day_start, PowerReading.recorded_at < day_end)
+            .order_by(PowerReading.recorded_at.asc())
+            .all()
+        )
+        for r in readings:
+            local_ts = r.recorded_at.astimezone(_LOCAL_TZ)
+            hour_label = local_ts.strftime("%H:00")
+            buckets[hour_label].append((r.pv1_power or 0) + (r.pv2_power or 0))
+    return {hour: round(sum(vals) / len(vals), 1) for hour, vals in buckets.items()}
+
+
+def _get_ecoflow_kwh_for_dates(dates: list[datetime.date]) -> dict[datetime.date, float]:
+    """Return {date: total_kwh} for the given list of dates."""
+    with get_session() as session:
+        records = (
+            session.query(DailyEnergy)
+            .filter(DailyEnergy.date.in_(dates))
+            .all()
+        )
+        return {r.date: round(r.total_energy_wh / 1000.0, 2) for r in records}
+
+
+def _get_ecoflow_monthly_kwh(month: int, year: int) -> dict[str, float]:
+    """Return {DD day string: total_kwh} for the given month/year."""
+    month_start = datetime.date(year, month, 1)
+    month_end = datetime.date(year + 1, 1, 1) if month == 12 else datetime.date(year, month + 1, 1)
+    with get_session() as session:
+        records = (
+            session.query(DailyEnergy)
+            .filter(DailyEnergy.date >= month_start, DailyEnergy.date < month_end)
+            .all()
+        )
+        return {f"{r.date.day:02d}": round(r.total_energy_wh / 1000.0, 2) for r in records}
+
+
+def _get_chart_service() -> tuple[ChartService, tuple[dict, int] | None]:
+    """Build a ChartService backed by per-request Growatt credentials.
+
+    Returns (chart_service, None) on success, or (None, error_response_tuple) on failure.
+    """
+    try:
+        config = get_primary_user_config()
+    except RuntimeError as e:
+        return None, ({"error": f"Could not fetch user config: {e}"}, 503)
+
+    username = config.get("growatt_username", "")
+    password = config.get("growatt_password", "")
+    if not username or not password:
+        return None, ({"error": "Growatt credentials not configured in user settings"}, 503)
+
+    return ChartService(GrowattClient(username, password)), None
 
 
 def _png_response(image_buf):
@@ -72,24 +133,37 @@ def _get_daily_energy_data(days: int) -> dict | None:
 
 @charts_blueprint.route("/daily")
 def daily_chart():
-    image = chart_service.generate_daily_chart()
+    chart_service, err = _get_chart_service()
+    if err:
+        return jsonify(err[0]), err[1]
+    ecoflow_hourly = _get_ecoflow_hourly_for_date(datetime.date.today())
+    image = chart_service.generate_daily_chart(ecoflow_hourly=ecoflow_hourly or None)
     return _png_response(image)
 
 
 @charts_blueprint.route("/multiday")
 def multiday_chart():
-    days = request.args.get("days", 7, type=int)
-    days = min(days, 7)
-    image = chart_service.generate_multi_day_chart(days)
+    chart_service, err = _get_chart_service()
+    if err:
+        return jsonify(err[0]), err[1]
+    days = min(request.args.get("days", 7, type=int), 7)
+    today = datetime.date.today()
+    dates = [today - timedelta(days=i) for i in range(days)]
+    ecoflow_daily = _get_ecoflow_kwh_for_dates(dates)
+    image = chart_service.generate_multi_day_chart(days, ecoflow_daily=ecoflow_daily)
     return _png_response(image)
 
 
 @charts_blueprint.route("/monthly")
 def monthly_chart():
+    chart_service, err = _get_chart_service()
+    if err:
+        return jsonify(err[0]), err[1]
     now = datetime.datetime.now()
     month = request.args.get("month", now.month, type=int)
     year = request.args.get("year", now.year, type=int)
-    image = chart_service.generate_monthly_chart(month, year)
+    ecoflow_monthly = _get_ecoflow_monthly_kwh(month, year)
+    image = chart_service.generate_monthly_chart(month, year, ecoflow_monthly=ecoflow_monthly)
     return _png_response(image)
 
 

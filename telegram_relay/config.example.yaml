@@ -1,0 +1,112 @@
+# Telegram Forwarder — example configuration
+# Copy this to config.yaml and fill in your values.
+# Secrets should be kept in .env and referenced as ${VAR_NAME}.
+
+telegram:
+  api_id: ${TELEGRAM_API_ID}
+  api_hash: ${TELEGRAM_API_HASH}
+  phone_number: ${TELEGRAM_PHONE_NUMBER}
+  db_encryption_key: ${DB_ENCRYPTION_KEY}
+
+# ─── Destinations ──────────────────────────────────────────────────────────────
+destinations:
+  - id: main_webhook
+    type: webhook
+    url: ${FORWARD_WEBHOOK_URL}
+    headers:
+      Authorization: "Bearer ${WEBHOOK_TOKEN}"
+    timeout: 10
+    retry:
+      max_attempts: 3
+      backoff_seconds: 2
+
+# ─── Rules ─────────────────────────────────────────────────────────────────────
+# Rules are evaluated in ascending priority order (lower number = higher priority).
+# The first matching rule wins unless "continue: true" is set on it.
+# Empty or absent "conditions" acts as a catch-all.
+#
+# Condition tree operators:
+#   all / any / not   — boolean combinators (can be nested)
+#   Leaf fields       — any field of NormalizedMessage:
+#     message_id, chat_id, chat_title, chat_type, sender_id,
+#     sender_name, text, media_type, caption, timestamp
+#   Operators:
+#     eq / neq / in / not_in / contains / regex / exists / gt / lt
+#
+# Action types:
+#   forward   — send to a destination (with optional redaction / field filtering)
+#   skip      — drop the message silently
+#   log       — emit a log line (level: debug/info/warning/error)
+
+rules:
+
+  # ── Example 1: keyword alert from a specific supergroup ─────────────────────
+  - name: "Critical alerts from ops group"
+    priority: 10
+    conditions:
+      all:
+        - field: chat_id
+          op: in
+          value: [-1001234567890]
+        - field: text
+          op: regex
+          value: "(?i)(alert|critical|error|down)"
+    actions:
+      - type: forward
+        destination: main_webhook
+        redact:
+          - field: text
+            pattern: "\\+?[0-9]{8,15}"
+            replace: "[PHONE]"
+
+  # ── Example 2: all DMs from a specific person ────────────────────────────────
+  - name: "VIP direct messages"
+    priority: 20
+    conditions:
+      all:
+        - field: sender_id
+          op: eq
+          value: 123456789
+        - field: chat_type
+          op: eq
+          value: "private"
+    actions:
+      - type: forward
+        destination: main_webhook
+
+  # ── Example 3: forward from multiple chats, but strip sender info ────────────
+  - name: "Team channels — anonymised"
+    priority: 30
+    conditions:
+      any:
+        - field: chat_id
+          op: eq
+          value: -1009876543210
+        - field: chat_id
+          op: eq
+          value: -1001112223334
+    actions:
+      - type: forward
+        destination: main_webhook
+        exclude_fields:
+          - sender_id
+          - sender_name
+
+  # ── Example 4: log-only rule (continue so lower rules still run) ─────────────
+  - name: "Audit log — all matched messages"
+    priority: 5
+    continue: true
+    conditions:
+      all:
+        - field: chat_id
+          op: in
+          value: [-1001234567890, -1009876543210]
+    actions:
+      - type: log
+        level: info
+
+  # ── Catch-all: drop everything not matched above ─────────────────────────────
+  - name: "default-skip"
+    priority: 999
+    actions:
+      - type: skip

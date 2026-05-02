@@ -13,69 +13,24 @@ class ChartService:
     def __init__(self, growatt_client: GrowattClient) -> None:
         self._growatt = growatt_client
 
-    def generate_daily_chart(self) -> io.BytesIO:
+    def generate_daily_chart(self, ecoflow_hourly: dict | None = None) -> io.BytesIO:
         data = self._growatt.get_daily_chart_data(datetime.datetime.today())
-        sorted_data = dict(sorted(data.items()))
-        x_values = list(sorted_data.keys())
-        y_values = [float(v) for v in sorted_data.values()]
+        sorted_g = dict(sorted(data.items()))
+        x_g = list(sorted_g.keys())
+        y_g = [float(v) for v in sorted_g.values()]
 
         fig, ax = plt.subplots(figsize=(20, 12), dpi=300)
-        ax.plot(x_values, y_values, marker="o", linestyle="-")
-        ax.set_xlabel("Time")
-        ax.set_ylabel("Wattage (W)")
-        ax.set_title("Power production over the day")
-        ax.grid(True)
-        plt.xticks(rotation=45)
-        plt.locator_params(axis="y", nbins=10)
+        ax.plot(x_g, y_g, marker="o", linestyle="-", label="Growatt Solar")
 
-        image = io.BytesIO()
-        plt.savefig(image, format="png", bbox_inches="tight")
-        plt.close(fig)
-        image.seek(0)
-        return image
-
-    def generate_multi_day_chart(self, days: int) -> io.BytesIO:
-        fig, ax = plt.subplots(figsize=(20, 12), dpi=300)
-        today = datetime.datetime.today()
-
-        monthly_data = self._growatt.get_monthly_chart_data(today.year, today.month)
-        sorted_monthly = dict(sorted(monthly_data.items()))
-
-        extra_monthly: dict = {}
-        first_day = today - datetime.timedelta(days=days)
-        if first_day.month != today.month:
-            extra_data = self._growatt.get_monthly_chart_data(first_day.year, first_day.month)
-            extra_monthly = dict(sorted(extra_data.items()))
-
-        for i in reversed(range(days)):
-            target_date = today - datetime.timedelta(days=i)
-
-            if i == 0:
-                name = "Today"
-            elif i == 1:
-                name = "Yesterday"
-            else:
-                name = target_date.strftime("%A")
-
-            day_str = f"{target_date.day:02d}"
-
-            if extra_monthly and target_date.month != today.month:
-                daily_kwh = extra_monthly.get(day_str, 0)
-            else:
-                daily_kwh = sorted_monthly.get(day_str, 0)
-
-            name = f"{name}  {daily_kwh} KwH"
-
-            hourly_data = self._growatt.get_daily_chart_data(target_date)
-            sorted_hourly = dict(sorted(hourly_data.items()))
-            x_values = list(sorted_hourly.keys())
-            y_values = [float(v) for v in sorted_hourly.values()]
-
-            ax.plot(x_values, y_values, marker="o", linestyle="-", label=name)
+        if ecoflow_hourly:
+            sorted_e = dict(sorted(ecoflow_hourly.items()))
+            x_e = list(sorted_e.keys())
+            y_e = list(sorted_e.values())
+            ax.plot(x_e, y_e, marker="s", linestyle="--", label="EcoFlow Solar")
 
         ax.set_xlabel("Time")
         ax.set_ylabel("Wattage (W)")
-        ax.set_title("Power production over the day")
+        ax.set_title("Solar production over the day")
         ax.grid(True)
         ax.legend()
         plt.xticks(rotation=45)
@@ -87,22 +42,88 @@ class ChartService:
         image.seek(0)
         return image
 
-    def generate_monthly_chart(self, month: int, year: int) -> io.BytesIO:
-        data = self._growatt.get_monthly_chart_data(year, month)
-        sorted_data = dict(sorted(data.items()))
-        x_values = list(sorted_data.keys())
-        y_values = [float(v) for v in sorted_data.values()]
+    def generate_multi_day_chart(self, days: int, ecoflow_daily: dict | None = None) -> io.BytesIO:
+        today = datetime.datetime.today()
 
-        fig = plt.figure(figsize=(10, 5))
-        plt.bar(x_values, y_values, width=0.4)
+        monthly_data = self._growatt.get_monthly_chart_data(today.year, today.month)
+        sorted_monthly = dict(sorted(monthly_data.items()))
+
+        extra_monthly: dict = {}
+        first_day = today - datetime.timedelta(days=days - 1)
+        if first_day.month != today.month:
+            extra_data = self._growatt.get_monthly_chart_data(first_day.year, first_day.month)
+            extra_monthly = dict(sorted(extra_data.items()))
+
+        labels: list[str] = []
+        growatt_vals: list[float] = []
+        ecoflow_vals: list[float] = []
+
+        for i in reversed(range(days)):
+            target_date = today - datetime.timedelta(days=i)
+
+            if i == 0:
+                label = "Today"
+            elif i == 1:
+                label = "Yesterday"
+            else:
+                label = target_date.strftime("%A")
+
+            day_str = f"{target_date.day:02d}"
+            if extra_monthly and target_date.month != today.month:
+                g_kwh = float(extra_monthly.get(day_str, 0))
+            else:
+                g_kwh = float(sorted_monthly.get(day_str, 0))
+
+            e_kwh = float((ecoflow_daily or {}).get(target_date.date(), 0))
+
+            labels.append(label)
+            growatt_vals.append(g_kwh)
+            ecoflow_vals.append(e_kwh)
+
+        x = list(range(len(labels)))
+        width = 0.35
+
+        fig, ax = plt.subplots(figsize=(14, 8), dpi=300)
+        ax.bar([i - width / 2 for i in x], growatt_vals, width, label="Growatt")
+        ax.bar([i + width / 2 for i in x], ecoflow_vals, width, label="EcoFlow")
+
+        ax.set_xlabel("Day")
+        ax.set_ylabel("Energy (kWh)")
+        ax.set_title("Daily solar production")
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, rotation=45)
+        ax.grid(axis="y")
+        ax.legend()
+
+        image = io.BytesIO()
+        plt.savefig(image, format="png", bbox_inches="tight")
+        plt.close(fig)
+        image.seek(0)
+        return image
+
+    def generate_monthly_chart(self, month: int, year: int, ecoflow_monthly: dict | None = None) -> io.BytesIO:
+        data = self._growatt.get_monthly_chart_data(year, month)
+        sorted_g = dict(sorted(data.items()))
+
+        all_days = sorted(set(sorted_g.keys()) | set((ecoflow_monthly or {}).keys()))
+        growatt_vals = [float(sorted_g.get(d, 0)) for d in all_days]
+        ecoflow_vals = [float((ecoflow_monthly or {}).get(d, 0)) for d in all_days]
+
+        x = list(range(len(all_days)))
+        width = 0.35
+
+        fig, ax = plt.subplots(figsize=(14, 7), dpi=300)
+        ax.bar([i - width / 2 for i in x], growatt_vals, width, label="Growatt")
+        ax.bar([i + width / 2 for i in x], ecoflow_vals, width, label="EcoFlow")
 
         date = datetime.date(year, month, 1)
-        plt.xlabel("Date")
-        plt.ylabel("KWH")
-        plt.title(f"Power production {date.strftime('%B %Y')} over the month")
-        plt.xticks(rotation=45)
-        plt.locator_params(axis="y", nbins=10)
-        plt.grid(axis="y")
+        ax.set_xlabel("Date")
+        ax.set_ylabel("kWh")
+        ax.set_title(f"Solar production {date.strftime('%B %Y')}")
+        ax.set_xticks(x)
+        ax.set_xticklabels(all_days, rotation=45)
+        ax.grid(axis="y")
+        ax.legend()
 
         image = io.BytesIO()
         plt.savefig(image, format="png", bbox_inches="tight")

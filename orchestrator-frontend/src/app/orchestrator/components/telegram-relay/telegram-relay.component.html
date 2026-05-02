@@ -1,0 +1,105 @@
+<h1>Telegram Relay</h1>
+
+<!-- ── Destinations ──────────────────────────────────── -->
+<h2>Destinations</h2>
+<p>
+    <button mat-stroked-button (click)="load()">Reload</button>
+    <button mat-flat-button color="primary" (click)="addDestination()">Add destination</button>
+</p>
+
+<div class="mat-elevation-z2">
+    <table mat-table [dataSource]="destinations">
+
+        <ng-container matColumnDef="id">
+            <th mat-header-cell *matHeaderCellDef>ID</th>
+            <td mat-cell *matCellDef="let row">{{ row.id }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef>Name</th>
+            <td mat-cell *matCellDef="let row">{{ row.name }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="type">
+            <th mat-header-cell *matHeaderCellDef>Type</th>
+            <td mat-cell *matCellDef="let row">{{ row.type }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="enabled">
+            <th mat-header-cell *matHeaderCellDef>Enabled</th>
+            <td mat-cell *matCellDef="let row">
+                <mat-checkbox [disabled]="true" [checked]="row.enabled"></mat-checkbox>
+            </td>
+        </ng-container>
+
+        <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef></th>
+            <td mat-cell *matCellDef="let row">
+                <button mat-stroked-button (click)="editDestination(row); $event.stopPropagation()">Edit</button>
+                <button mat-stroked-button color="warn" (click)="confirmDeleteDestination(row); $event.stopPropagation()">Delete</button>
+            </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="destinationColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: destinationColumns;"></tr>
+    </table>
+</div>
+
+<div *ngIf="destinations.length === 0" class="empty-state">
+    <p>No destinations configured yet.</p>
+</div>
+
+<!-- ── Rules ─────────────────────────────────────────── -->
+<h2>Rules</h2>
+<p>
+    <button mat-flat-button color="primary" (click)="addRule()">Add rule</button>
+</p>
+
+<div class="mat-elevation-z2">
+    <table mat-table [dataSource]="rules">
+
+        <ng-container matColumnDef="id">
+            <th mat-header-cell *matHeaderCellDef>ID</th>
+            <td mat-cell *matCellDef="let row">{{ row.id }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef>Name</th>
+            <td mat-cell *matCellDef="let row">{{ row.name }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="priority">
+            <th mat-header-cell *matHeaderCellDef>Priority</th>
+            <td mat-cell *matCellDef="let row">{{ row.priority }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="enabled">
+            <th mat-header-cell *matHeaderCellDef>Enabled</th>
+            <td mat-cell *matCellDef="let row">
+                <mat-checkbox [disabled]="true" [checked]="row.enabled"></mat-checkbox>
+            </td>
+        </ng-container>
+
+        <ng-container matColumnDef="continue_on_match">
+            <th mat-header-cell *matHeaderCellDef>Continue</th>
+            <td mat-cell *matCellDef="let row">
+                <mat-checkbox [disabled]="true" [checked]="row.continue_on_match"></mat-checkbox>
+            </td>
+        </ng-container>
+
+        <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef></th>
+            <td mat-cell *matCellDef="let row">
+                <button mat-stroked-button (click)="editRule(row); $event.stopPropagation()">Edit</button>
+                <button mat-stroked-button color="warn" (click)="confirmDeleteRule(row); $event.stopPropagation()">Delete</button>
+            </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="ruleColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: ruleColumns;"></tr>
+    </table>
+</div>
+
+<div *ngIf="rules.length === 0" class="empty-state">
+    <p>No rules configured yet.</p>
+</div>

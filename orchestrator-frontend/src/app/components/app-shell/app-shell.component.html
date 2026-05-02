@@ -8,6 +8,11 @@
         [style.width.px]="collapsed ? 72 : 240"
     >
         <div class="sidenav-header">
+            @if (!collapsed) {
+            <span class="env-badge" [class.env-prod]="isProd" [class.env-test]="!isProd">
+                {{ isProd ? 'PRODUCTION' : 'TESTING' }}
+            </span>
+            }
             <button mat-icon-button (click)="toggleCollapsed()" aria-label="Toggle sidenav">
                 <mat-icon>{{ collapsed ? 'chevron_right' : 'chevron_left' }}</mat-icon>
             </button>
@@ -48,7 +53,51 @@
                 <span>Repos</span>
                 }
             </a>
+
+            <a mat-list-item routerLink="/reminders" routerLinkActive="active">
+                <mat-icon matListItemIcon>alarm</mat-icon>
+                @if(!collapsed) {
+                <span>Reminders</span>
+                }
+            </a>
+
+            <a mat-list-item routerLink="/telegram-relay" routerLinkActive="active">
+                <mat-icon matListItemIcon>send</mat-icon>
+                @if(!collapsed) {
+                <span>Telegram Relay</span>
+                }
+            </a>
+
+            <mat-divider></mat-divider>
+
+            @if ((auth.user$ | async)?.is_admin) {
+            <a mat-list-item routerLink="/users/list" routerLinkActive="active">
+                <mat-icon matListItemIcon>admin_panel_settings</mat-icon>
+                @if(!collapsed) {
+                <span>Admin</span>
+                }
+            </a>
+            <a mat-list-item routerLink="/users/notification-settings" routerLinkActive="active">
+                <mat-icon matListItemIcon>notifications_active</mat-icon>
+                @if(!collapsed) {
+                <span>Notifications</span>
+                }
+            </a>
+            }
         </mat-nav-list>
+
+        <div class="sidenav-footer">
+            <mat-divider></mat-divider>
+            <div class="user-info">
+                <mat-icon>account_circle</mat-icon>
+                @if (!collapsed) {
+                <span class="username">{{ username }}</span>
+                }
+                <button mat-icon-button (click)="logout()" aria-label="Logout">
+                    <mat-icon>logout</mat-icon>
+                </button>
+            </div>
+        </div>
     </mat-sidenav>
 
     <mat-sidenav-content class="main" [style.margin-left.px]="collapsed ? 72 : 240" [class.collapsed]="collapsed">

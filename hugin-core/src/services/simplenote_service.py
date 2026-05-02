@@ -1,10 +1,21 @@
 import logging
+import re
 
 from simplenote import Simplenote
 
 from src.config import settings
 
+# Simplenote stores checklist items as the Unicode marker (Ä Ñ/Ä Ò) followed by a
+# markdown-style checkbox "[ ] " or "[x] ". Strip both so only the item text remains.
+# The trailing space is optional (absent when item text is empty / end of line)
+_CHECKLIST_MARKER_RE = re.compile(r'\u00c4[\u00d1\u00d2]\u0020?|\[[ x]\]\u0020?')
+
+
 logger = logging.getLogger(__name__)
+
+
+def _strip_checklist_markers(text: str) -> str:
+    return _CHECKLIST_MARKER_RE.sub('', text)
 
 
 def _get_client() -> Simplenote:
@@ -18,7 +29,7 @@ def add_to_shopping_list(text_to_append: str):
 
 def get_shopping_list() -> str:
     note = _get_note(settings.SIMPLENOTE_SHOPPING_LIST_KEY)
-    return note["content"]
+    return _strip_checklist_markers(note["content"])
 
 
 def remove_from_shopping_list(item: str) -> bool:
@@ -26,7 +37,7 @@ def remove_from_shopping_list(item: str) -> bool:
     note = _get_note(key)
     lines = note["content"].split("\n")
     item_lower = item.lower().strip()
-    new_lines = [l for l in lines if l.strip().lower() != item_lower]
+    new_lines = [l for l in lines if _strip_checklist_markers(l).strip().lower() != item_lower]
     if len(new_lines) == len(lines):
         return False
     note["content"] = "\n".join(new_lines)

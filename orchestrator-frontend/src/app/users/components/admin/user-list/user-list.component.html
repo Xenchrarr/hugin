@@ -1,0 +1,186 @@
+<div class="page-header">
+  <h2>Users</h2>
+  <button mat-raised-button color="primary" (click)="startCreate()">
+    <mat-icon>person_add</mat-icon> New User
+  </button>
+</div>
+
+@if (error()) {
+  <p class="error-msg">{{ error() }}</p>
+}
+
+<!-- User form (create / edit) -->
+@if (creating() || editing()) {
+  <mat-card class="form-card">
+    <mat-card-header>
+      <mat-card-title>{{ creating() ? 'Create User' : 'Edit User' }}</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="form-grid">
+        <mat-form-field appearance="outline">
+          <mat-label>Username</mat-label>
+          <input matInput [(ngModel)]="form.username" [disabled]="!!editing()" required />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Display Name</mat-label>
+          <input matInput [(ngModel)]="form.display_name" />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>{{ creating() ? 'Password' : 'New Password (leave blank to keep)' }}</mat-label>
+          <input matInput type="password" [(ngModel)]="form.password"
+                 autocomplete="new-password" [required]="creating()" />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Phone Number</mat-label>
+          <input matInput [(ngModel)]="form.phone_number" placeholder="+4712345678" />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Telegram Chat ID</mat-label>
+          <input matInput type="number" [(ngModel)]="form.telegram_user_id" />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Weather Location ID</mat-label>
+          <input matInput [(ngModel)]="form.config!.weather_location_id"
+                 placeholder="YR.no location ID" />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Inverter Type</mat-label>
+          <mat-select [(ngModel)]="form.config!.inverter_type">
+            <mat-option [value]="null">— None —</mat-option>
+            <mat-option value="growatt">Growatt</mat-option>
+            <mat-option value="ecoflow">EcoFlow</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Inverter ID</mat-label>
+          <input matInput [(ngModel)]="form.config!.inverter_id" />
+        </mat-form-field>
+
+        @if (form.config!.inverter_type === 'growatt') {
+          <mat-form-field appearance="outline">
+            <mat-label>Growatt Username</mat-label>
+            <input matInput [(ngModel)]="form.config!.growatt_username" autocomplete="off" />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Growatt Password</mat-label>
+            <input matInput type="password" [(ngModel)]="form.config!.growatt_password" autocomplete="new-password" />
+          </mat-form-field>
+        }
+
+        <mat-form-field appearance="outline">
+          <mat-label>PIN (for SMS auth)</mat-label>
+          <input matInput [(ngModel)]="form.config!.pin" />
+        </mat-form-field>
+      </div>
+
+      <div class="channel-section">
+        <label class="channel-label">Default notification channels</label>
+        <div class="channel-chips">
+          <button *ngFor="let ch of channelOptions" mat-stroked-button
+                  [color]="hasChannel(ch) ? 'primary' : ''"
+                  (click)="toggleChannel(ch)" type="button">
+            {{ ch }}
+          </button>
+        </div>
+      </div>
+
+      <div class="admin-toggle">
+        <mat-slide-toggle [(ngModel)]="form.is_admin">Admin user</mat-slide-toggle>
+      </div>
+    </mat-card-content>
+    <mat-card-actions>
+      <button mat-raised-button color="primary" (click)="save()">Save</button>
+      <button mat-button (click)="cancel()">Cancel</button>
+    </mat-card-actions>
+  </mat-card>
+}
+
+<!-- Users table -->
+<table mat-table [dataSource]="users()" class="users-table mat-elevation-z2">
+  <ng-container matColumnDef="username">
+    <th mat-header-cell *matHeaderCellDef>Username</th>
+    <td mat-cell *matCellDef="let u">{{ u.username }}</td>
+  </ng-container>
+
+  <ng-container matColumnDef="display_name">
+    <th mat-header-cell *matHeaderCellDef>Display Name</th>
+    <td mat-cell *matCellDef="let u">{{ u.display_name }}</td>
+  </ng-container>
+
+  <ng-container matColumnDef="phone_number">
+    <th mat-header-cell *matHeaderCellDef>Phone</th>
+    <td mat-cell *matCellDef="let u">{{ u.phone_number }}</td>
+  </ng-container>
+
+  <ng-container matColumnDef="telegram_user_id">
+    <th mat-header-cell *matHeaderCellDef>Telegram ID</th>
+    <td mat-cell *matCellDef="let u">{{ u.telegram_user_id }}</td>
+  </ng-container>
+
+  <ng-container matColumnDef="is_admin">
+    <th mat-header-cell *matHeaderCellDef>Admin</th>
+    <td mat-cell *matCellDef="let u">
+      <mat-icon *ngIf="u.is_admin" color="primary" title="Admin">admin_panel_settings</mat-icon>
+    </td>
+  </ng-container>
+
+  <ng-container matColumnDef="actions">
+    <th mat-header-cell *matHeaderCellDef></th>
+    <td mat-cell *matCellDef="let u">
+      <button mat-icon-button (click)="startEdit(u)" title="Edit">
+        <mat-icon>edit</mat-icon>
+      </button>
+      <button mat-icon-button (click)="openPermissions(u)" title="Command Permissions">
+        <mat-icon>key</mat-icon>
+      </button>
+      <button mat-icon-button color="warn" (click)="delete(u)" title="Delete">
+        <mat-icon>delete</mat-icon>
+      </button>
+    </td>
+  </ng-container>
+
+  <tr mat-header-row *matHeaderRowDef="columns"></tr>
+  <tr mat-row *matRowDef="let row; columns: columns;"></tr>
+</table>
+
+<!-- Command Permissions panel -->
+@if (editingPermissionsUserId() !== null) {
+  <mat-card class="form-card">
+    <mat-card-header>
+      <mat-card-title>Command Permissions</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="permission-chips">
+        <mat-chip-set>
+          <mat-chip *ngFor="let cmd of editingPermissions()" (removed)="removePermission(cmd)">
+            {{ cmd }}
+            <button matChipRemove aria-label="Remove {{ cmd }}">
+              <mat-icon>cancel</mat-icon>
+            </button>
+          </mat-chip>
+        </mat-chip-set>
+      </div>
+      <div class="permission-add-row">
+        <mat-form-field appearance="outline" class="permission-input">
+          <mat-label>Add command paths</mat-label>
+          <mat-select [(ngModel)]="selectedCommandPaths" multiple>
+            <mat-option *ngFor="let cmd of knownCommands" [value]="cmd"
+                        [disabled]="editingPermissions().includes(cmd)">{{ cmd }}</mat-option>
+          </mat-select>
+        </mat-form-field>
+        <button mat-raised-button color="primary" (click)="addPermission()" type="button">Add</button>
+      </div>
+    </mat-card-content>
+    <mat-card-actions>
+      <button mat-button (click)="closePermissions()">Close</button>
+    </mat-card-actions>
+  </mat-card>
+}

@@ -6,6 +6,7 @@ SET title = %s,
     status = %s,
     recipient_ids = %s,
     scheduler_job_id = %s,
+    user_id = %s,
     updated_at = NOW()
 WHERE id = %s
-RETURNING id, title, message, due_at, recurrence, status, recipient_ids, created_by, scheduler_job_id, created_at, updated_at;
+RETURNING id, title, message, due_at, recurrence, status, recipient_ids, created_by, scheduler_job_id, created_at, updated_at, user_id;

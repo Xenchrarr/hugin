@@ -13,7 +13,7 @@ class RemindListCommand(BaseCommand):
 
     def execute(self, cmd: ParsedCommand) -> str:
         status = cmd.positional[0] if cmd.positional else "active"
-        reminders = _orchestrator.list_reminders(status=status)
+        reminders = _orchestrator.list_reminders(status=status, user_id=cmd.user_id)
 
         if reminders is None:
             return "ERR_INTERNAL: Failed to fetch reminders"

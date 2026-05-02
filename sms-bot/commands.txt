@@ -1,12 +1,93 @@
-help - Show help
-data - Show inverter data
-weather - Show weather forecast
-chart - Show daily production chart
-chartdays - Show multi-day production chart
-chartmonth - Show monthly production chart
-nikolai_power - Show current power readings
-nikolai_powerhistory - Show power history chart
-nikolai_energytoday - Show today's energy summary
-nikolai_energyhour - Show last hour energy summary
-nikolai_energydaily - Show daily energy chart
-nikolai_weather - Show Nikolai weather forecast
+SMS-BOT COMMAND REFERENCE
+=========================
+Syntax: <command> [args] [key=value] [+flag] [-flag] [#PIN]
+PIN (4–8 digits) required where marked with [PIN].
+
+GENERAL
+-------
+help                          Show all available commands
+help <command>                Show detailed help for a command (e.g. help rem)
+? <command>                   Alias for help
+
+SHOPPING LIST
+-------------
+list show                     Display the current shopping list
+list add <item>               Add an item to the shopping list
+list rm <item>                Remove an item from the shopping list
+
+REMINDERS
+---------
+rem in <duration> <message>   Create a reminder (e.g. rem in 45m check oven)
+  Options:
+    repeat=<recurrence>       daily | weekly:MON | interval:30m
+  Example: rem in 1h take pills repeat=daily
+
+rem list [status]             List reminders (default: active)
+  status: active | snoozed | dismissed | completed
+
+rem snooze <id> [duration]    Snooze a reminder (default 10m)
+  Example: rem snooze 7 30m
+
+rem dismiss <id>              Dismiss a reminder permanently
+
+ENERGY & SOLAR
+--------------
+chart                         Today's solar production (Growatt + EcoFlow combined)
+
+HOME AUTOMATION  [PIN required]
+---------------------------------
+home/dev <entity_id>          Trigger a Home Assistant automation
+  Example: home/dev switch.living_room_lights #1234
+
+TELEGRAM CONVERSATIONS
+----------------------
+tg/list                       List recent Telegram conversations (numbered)
+  Example output:
+    1. Work Group (Emil: are you free?)
+    2. Support Chat (Bot: ticket closed)
+
+tg/send <num> <message>       Send a message to conversation #<num> from tg/list  [PIN]
+  Also accepts raw Telegram chat_id instead of a number.
+  Sets the sticky reply target so tg/reply works afterwards.
+  Example: tg/send 1 on my way #1234
+
+tg/reply <message>            Reply to the last active Telegram conversation  [PIN]
+  Requires a prior tg/send or an incoming relayed message to set context.
+  Example: tg/reply sounds good #1234
+
+RELAY RULES
+-----------
+relay/list                    List all Telegram relay rules with [ON]/[OFF] status
+  Example output:
+    1. [ON ] Critical alerts (prio 10)
+    2. [OFF] Debug all (prio 50)
+    3. [ON ] default-skip (prio 999)
+
+relay/start <num|name>        Enable a relay rule  [PIN]
+  Resolves by 1-based index (from relay/list) or (partial) rule name.
+  Example: relay/start 2 #1234
+  Example: relay/start "Debug all" #1234
+
+relay/stop <num|name>         Disable a relay rule  [PIN]
+  Example: relay/stop critical #1234
+
+AI ASSISTANT
+------------
+ai <message>                  Chat with the AI assistant, or describe what you want to do.
+  The AI will try to match your intent to an available command first.
+  If no command matches it will respond conversationally.
+  Keeps last 5 turns of context per session.
+  Example: ai remind me in 30 minutes to check the oven
+    → interprets as: rem in 30m check the oven
+  Example: ai what's the weather like?
+    → conversational response
+  Example: ai turn off the living room lights #1234
+    → interprets as: home/dev switch.living_room_lights #1234
+
+NOTES
+-----
+- Commands are case-insensitive.
+- Typos of up to 1 character are auto-corrected.
+- Named params use = or : separator (e.g. repeat=daily or repeat:daily).
+- Flags use + to enable and - to disable (e.g. +verbose).
+- PIN must appear at the end of the message as #<digits> (4–8 digits).

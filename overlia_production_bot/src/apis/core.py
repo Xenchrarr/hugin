@@ -64,12 +64,6 @@ class HuginCoreClient:
     def get_monthly_chart(self, month: int, year: int) -> BytesIO | None:
         return self._get_image("/api/charts/monthly", month=month, year=year)
 
-    def get_power_history_chart(self, hours: float = 1) -> BytesIO | None:
-        return self._get_image("/api/charts/power-history", hours=hours)
-
-    def get_daily_energy_chart(self, days: int = 30) -> BytesIO | None:
-        return self._get_image("/api/charts/daily-energy", days=days)
-
     # --- Camera ---
     def get_camera_snapshot(self) -> BytesIO | None:
         return self._get_image("/api/camera/snapshot")

@@ -1,0 +1,56 @@
+# Telegram Forwarder — example configuration
+# Copy this to config.yaml and fill in your values.
+# Secrets should be kept in .env and referenced as ${VAR_NAME}.
+
+telegram:
+  api_id: ${TELEGRAM_API_ID}
+  api_hash: ${TELEGRAM_API_HASH}
+  phone_number: ${TELEGRAM_PHONE_NUMBER}
+  db_encryption_key: ${DB_ENCRYPTION_KEY}
+
+# ─── Destinations ──────────────────────────────────────────────────────────────
+destinations:
+  - id: main_webhook
+    type: webhook
+    url: ${FORWARD_WEBHOOK_URL}
+    headers:
+      Authorization: "Bearer ${WEBHOOK_TOKEN}"
+    timeout: 10
+    retry:
+      max_attempts: 3
+      backoff_seconds: 2
+
+# ─── Rules ─────────────────────────────────────────────────────────────────────
+# Rules are evaluated in ascending priority order (lower number = higher priority).
+# The first matching rule wins unless "continue: true" is set on it.
+# Empty or absent "conditions" acts as a catch-all.
+#
+# Condition tree operators:
+#   all / any / not   — boolean combinators (can be nested)
+#   Leaf fields       — any field of NormalizedMessage:
+#     message_id, chat_id, chat_title, chat_type, sender_id,
+#     sender_name, text, media_type, caption, timestamp
+#   Operators:
+#     eq / neq / in / not_in / contains / regex / exists / gt / lt
+#
+# Action types:
+#   forward   — send to a destination (with optional redaction / field filtering)
+#   skip      — drop the message silently
+#   log       — emit a log line (level: debug/info/warning/error)
+
+rules:
+
+  # ── Debug: log chat_id/chat_type for every message (remove once IDs are known)
+  - name: "debug-log-all"
+    priority: 1
+    continue: true
+    actions:
+      - type: log
+        level: info
+
+  # ── Catch-all: forward every message ─────────────────────────────────────────
+  - name: "forward-all"
+    priority: 999
+    actions:
+      - type: forward
+        destination: main_webhook

@@ -3,7 +3,7 @@ import threading
 
 from flask import Flask, request, jsonify
 
-from src.config.config import ALLOWED_SENDERS
+from src.api.orchestrator import OrchestratorClient
 from src.sms_handler import SMSHandler
 
 log = logging.getLogger(__name__)
@@ -29,8 +29,9 @@ def send_sms():
     if not phone or not message:
         return jsonify({'error': 'Missing phone or message'}), 400
 
-    if phone not in ALLOWED_SENDERS:
-        return jsonify({'error': 'Phone number not in allowed list'}), 403
+    _orchestrator = OrchestratorClient()
+    if _orchestrator.lookup_user('sms', phone) is None:
+        return jsonify({'error': 'Phone number not registered'}), 403
 
     if _sms_handler is None:
         return jsonify({'error': 'SMS handler not initialized'}), 503

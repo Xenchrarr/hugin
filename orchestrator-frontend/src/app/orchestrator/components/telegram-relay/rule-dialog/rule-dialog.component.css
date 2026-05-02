@@ -1,0 +1,19 @@
+.form-table th {
+    text-align: right;
+    padding-right: 1rem;
+    vertical-align: top;
+    padding-top: 0.8rem;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.json-field {
+    width: 100%;
+    min-width: 420px;
+}
+
+.json-error {
+    color: #f44336;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+}

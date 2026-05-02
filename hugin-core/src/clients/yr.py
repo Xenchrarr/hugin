@@ -4,20 +4,15 @@ import re
 import cairosvg
 import requests
 
-from src.config import settings
-
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://www.yr.no/en/content/{yr_id}/meteogram.svg?mode=dark"
 
 
 class YrClient:
-    def __init__(self) -> None:
-        self._yr_id = settings.YR_ID
-
-    def get_weather_image(self, yr_id: str | None = None) -> bytes | None:
+    def get_weather_image(self, yr_id: str) -> bytes | None:
         try:
-            url = BASE_URL.format(yr_id=yr_id or self._yr_id)
+            url = BASE_URL.format(yr_id=yr_id)
             response = requests.get(url, timeout=(5, 15))
 
             if response.status_code == 200:

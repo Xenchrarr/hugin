@@ -1,7 +1,2 @@
-ALLOWED_SENDERS = [
-    "+4740142990",
-]
-
-SENDER_PINS: dict[str, str] = {
-    "+4740142990": "1234",
-}
+# User authentication is managed via the orchestrator user database.
+# The SMS bot resolves callers by phone number via GET /api/users/lookup.

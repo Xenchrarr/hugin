@@ -1,0 +1,64 @@
+<h2 mat-dialog-title>{{ isNew ? 'Add rule' : 'Edit rule' }}</h2>
+<mat-dialog-content class="mat-typography">
+    <mat-card appearance="outlined">
+        <mat-card-content>
+            <table class="form-table">
+                <tr>
+                    <th>Name</th>
+                    <td>
+                        <mat-form-field>
+                            <mat-label>Name</mat-label>
+                            <input matInput [(ngModel)]="rule.name">
+                        </mat-form-field>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Priority</th>
+                    <td>
+                        <mat-form-field>
+                            <mat-label>Priority (lower = higher priority)</mat-label>
+                            <input matInput type="number" [(ngModel)]="rule.priority">
+                        </mat-form-field>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Enabled</th>
+                    <td><mat-checkbox [(ngModel)]="rule.enabled"></mat-checkbox></td>
+                </tr>
+                <tr>
+                    <th>Continue on match</th>
+                    <td>
+                        <mat-checkbox [(ngModel)]="rule.continue_on_match"></mat-checkbox>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Conditions</th>
+                    <td>
+                        <mat-form-field class="json-field">
+                            <mat-label>Conditions (JSON — leave blank for catch-all)</mat-label>
+                            <textarea matInput rows="6" [(ngModel)]="conditionsJson"
+                                placeholder='{"all": [{"field": "chat_id", "op": "eq", "value": -1001234567890}]}'></textarea>
+                            <mat-hint>Operators: eq, neq, in, not_in, contains, regex, exists, gt, lt. Combinators: all, any, not.</mat-hint>
+                        </mat-form-field>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Actions</th>
+                    <td>
+                        <mat-form-field class="json-field">
+                            <mat-label>Actions (JSON array)</mat-label>
+                            <textarea matInput rows="8" [(ngModel)]="actionsJson"
+                                placeholder='[{"type": "forward", "destination": "1"}]'></textarea>
+                            <mat-hint>Types: forward (destination: dest id), skip, log (level: info/debug/warning/error)</mat-hint>
+                        </mat-form-field>
+                    </td>
+                </tr>
+            </table>
+            <p class="json-error" *ngIf="jsonError">{{ jsonError }}</p>
+        </mat-card-content>
+    </mat-card>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+    <button mat-button mat-dialog-close>Cancel</button>
+    <button mat-flat-button color="primary" (click)="save()" [disabled]="!rule.name">Save</button>
+</mat-dialog-actions>

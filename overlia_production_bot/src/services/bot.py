@@ -2,6 +2,7 @@ import datetime
 import logging
 import re
 from functools import wraps
+from zoneinfo import ZoneInfo
 
 import dateparser
 from telegram import ForceReply, Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -13,23 +14,52 @@ from src.config import settings
 
 logger = logging.getLogger(__name__)
 
+_TZ = ZoneInfo("Europe/Oslo")
+
 core = HuginCoreClient(settings.CORE_API_URL)
 orchestrator = OrchestratorClient()
 
 
-def restricted(func):
-    """Block users not in ALLOWED_USER_IDS. Empty set = allow all."""
-    @wraps(func)
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
-        if settings.ALLOWED_USER_IDS and update.effective_user.id not in settings.ALLOWED_USER_IDS:
-            logger.warning("Unauthorized access attempt by user %s", update.effective_user.id)
-            if update.message:
-                await update.message.reply_text("Unauthorized.")
-            elif update.callback_query:
-                await update.callback_query.answer("Unauthorized.", show_alert=True)
-            return
-        return await func(update, context, *args, **kwargs)
-    return wrapper
+def restricted(command_path: str = None):
+    """Resolve the Telegram user against the orchestrator user database.
+    Rejects senders not linked to any user. Optionally checks command_path against allowed_commands.
+    Stores resolved user in context.
+
+    Usage:
+        @restricted()                        — identity check only (admin-like commands)
+        @restricted('telegram/chart')        — identity + permission check
+    """
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+            telegram_user_id = str(update.effective_user.id) if update.effective_user else None
+            if not telegram_user_id:
+                return
+
+            user = orchestrator.lookup_user(channel='telegram', identifier=telegram_user_id)
+            if user is None:
+                logger.warning("Unknown Telegram user_id %s. Rejecting.", telegram_user_id)
+                if update.message:
+                    await update.message.reply_text("Unknown user. Contact admin.")
+                elif update.callback_query:
+                    await update.callback_query.answer("Unknown user. Contact admin.", show_alert=True)
+                return
+
+            # Permission check for non-admin users
+            if command_path and not user.get('is_admin'):
+                allowed = user.get('allowed_commands')
+                if allowed is None or command_path not in allowed:
+                    logger.warning("User %s denied for command %s", telegram_user_id, command_path)
+                    if update.message:
+                        await update.message.reply_text("Permission denied.")
+                    elif update.callback_query:
+                        await update.callback_query.answer("Permission denied.", show_alert=True)
+                    return
+
+            context.user_data['resolved_user'] = user
+            return await func(update, context, *args, **kwargs)
+        return wrapper
+    return decorator
 
 
 def _get_user_label(update: Update) -> str:
@@ -38,7 +68,7 @@ def _get_user_label(update: Update) -> str:
     return user.first_name or user.username or str(user.id)
 
 
-@restricted
+@restricted()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     await update.message.reply_html(
@@ -47,12 +77,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-@restricted
+@restricted()
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Help!")
 
 
-@restricted
+@restricted('telegram/data')
 async def total_data_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     data = core.get_growatt_data()
     if not data:
@@ -68,25 +98,42 @@ async def total_data_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.message.reply_text(formatted_dict)
 
 
-@restricted
+@restricted('telegram/weather')
 async def get_weather(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    image = core.get_weather_image(settings.YR_ID)
+    user = context.user_data.get('resolved_user', {})
+    location_id = (user.get('config') or {}).get('weather_location_id', '')
+    if not location_id:
+        await update.message.reply_text("Weather location not configured. Set it in your profile settings.")
+        return
+    image = core.get_weather_image(location_id)
     if image is None:
         await update.message.reply_text("Could not fetch weather.")
         return
     await update.message.reply_photo(image)
 
 
-@restricted
+@restricted('telegram/nikolai_weather')
 async def nikolai_weather(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    image = core.get_weather_image(settings.NIKOLAI_YR_ID)
+    nikolai_telegram_id = settings.NIKOLAI_TELEGRAM_ID
+    if not nikolai_telegram_id:
+        await update.message.reply_text("NIKOLAI_TELEGRAM_ID is not configured.")
+        return
+    nikolai_user = orchestrator.lookup_user(channel='telegram', identifier=nikolai_telegram_id)
+    if nikolai_user is None:
+        await update.message.reply_text("Could not find Nikolai's user account.")
+        return
+    location_id = (nikolai_user.get('config') or {}).get('weather_location_id', '')
+    if not location_id:
+        await update.message.reply_text("Nikolai's weather location is not configured.")
+        return
+    image = core.get_weather_image(location_id)
     if image is None:
         await update.message.reply_text("Could not fetch weather.")
         return
     await update.message.reply_photo(image)
 
 
-@restricted
+@restricted('telegram/chart')
 async def get_chart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     image = core.get_daily_chart()
     if image is None:
@@ -95,7 +142,7 @@ async def get_chart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_photo(image)
 
 
-@restricted
+@restricted('telegram/chartdays')
 async def get_chart_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text.split(" ")
     if len(text) == 1:
@@ -122,7 +169,7 @@ async def get_chart_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text("Please provide a valid number")
 
 
-@restricted
+@restricted('telegram/nikolai_power')
 async def nikolai_power(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     data = core.get_current_power()
     if not data or "error" in data:
@@ -138,33 +185,8 @@ async def nikolai_power(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text(text)
 
 
-@restricted
-async def nikolai_powerhistory(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    hours = 1.0
-    text = update.message.text.split(" ")
-    if len(text) > 1:
-        try:
-            hours = float(text[1])
-            if hours < 0.1 or hours > 168:
-                await update.message.reply_text("Hours must be between 0.1 and 168.")
-                return
-        except ValueError:
-            await update.message.reply_text("Please provide a valid number of hours.")
-            return
 
-    data = core.get_power_history(hours)
-    if not data or not data.get("readings"):
-        await update.message.reply_text("No power history available.")
-        return
-
-    image = core.get_power_history_chart(hours)
-    if image is None:
-        await update.message.reply_text("Could not generate chart.")
-        return
-    await update.message.reply_photo(image)
-
-
-@restricted
+@restricted('telegram/nikolai_energytoday')
 async def nikolai_energytoday(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     data = core.get_today_energy()
     if not data:
@@ -181,7 +203,7 @@ async def nikolai_energytoday(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text(text)
 
 
-@restricted
+@restricted('telegram/nikolai_energyhour')
 async def nikolai_energyhour(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     data = core.get_last_hour_energy()
     if not data:
@@ -198,33 +220,8 @@ async def nikolai_energyhour(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.message.reply_text(text)
 
 
-@restricted
-async def nikolai_energydaily(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    days = 30
-    text = update.message.text.split(" ")
-    if len(text) > 1:
-        if text[1].isdigit():
-            days = int(text[1])
-            if days < 1 or days > 365:
-                await update.message.reply_text("Days must be between 1 and 365.")
-                return
-        else:
-            await update.message.reply_text("Please provide a valid number of days.")
-            return
 
-    data = core.get_daily_energy(days)
-    if not data or not data.get("days"):
-        await update.message.reply_text("No daily energy data available.")
-        return
-
-    image = core.get_daily_energy_chart(days)
-    if image is None:
-        await update.message.reply_text("Could not generate chart.")
-        return
-    await update.message.reply_photo(image)
-
-
-@restricted
+@restricted('telegram/chartmonth')
 async def get_chart_month(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text.split(" ")
     if len(text) == 1:
@@ -273,7 +270,7 @@ async def get_chart_month(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 # ── Reminder Commands ─────────────────────────────────────
 
 
-@restricted
+@restricted('telegram/remind')
 async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Create a reminder: /remind 45m check the oven"""
     text = update.message.text.split(None, 2)
@@ -293,6 +290,7 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         title=message,
         due_at=parsed_time.isoformat(),
         created_by="telegram",
+        user_id=(context.user_data.get('resolved_user') or {}).get('id'),
     )
 
     if result is None:
@@ -300,15 +298,19 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     rid = result.get("id", "?")
+    display_time = parsed_time.astimezone(_TZ).strftime('%Y-%m-%d %H:%M')
     await update.message.reply_text(
-        f"✅ Reminder #{rid} set for {parsed_time.strftime('%Y-%m-%d %H:%M')}: {message}"
+        f"✅ Reminder #{rid} set for {display_time}: {message}"
     )
 
 
-@restricted
+@restricted('telegram/reminders')
 async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """List active reminders: /reminders"""
-    reminders = orchestrator.list_reminders(status="active")
+    reminders = orchestrator.list_reminders(
+        status="active",
+        user_id=(context.user_data.get('resolved_user') or {}).get('id'),
+    )
     if reminders is None:
         await update.message.reply_text("Failed to fetch reminders.")
         return
@@ -327,7 +329,7 @@ async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     await update.message.reply_text("Active reminders:\n" + "\n".join(lines))
 
 
-@restricted
+@restricted('telegram/snooze')
 async def snooze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Snooze a reminder: /snooze 1 10m"""
     text = update.message.text.split()
@@ -354,7 +356,7 @@ async def snooze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_text(f"Reminder #{reminder_id} snoozed until {due}")
 
 
-@restricted
+@restricted('telegram/dismiss')
 async def dismiss_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Dismiss a reminder: /dismiss 1"""
     text = update.message.text.split()
@@ -376,16 +378,18 @@ async def dismiss_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await update.message.reply_text(f"Reminder #{reminder_id} dismissed.")
 
 
-@restricted
+@restricted('telegram/register')
 async def register_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Register this chat for Telegram notifications: /register"""
     chat_id = update.effective_chat.id
     user_label = _get_user_label(update)
+    resolved_user = context.user_data.get('resolved_user')
     result = orchestrator.update_notification_setting(
         channel="telegram",
         enabled=True,
         config={"chat_id": chat_id},
         user_label=user_label,
+        user_id=resolved_user.get('id') if resolved_user else None,
     )
 
     if result is None:
@@ -395,7 +399,7 @@ async def register_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await update.message.reply_text(f"✅ Telegram notifications registered for {user_label}")
 
 
-@restricted
+@restricted('telegram/registerphone')
 async def registerphone_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Register a phone number for SMS notifications: /registerphone +4712345678"""
     text = update.message.text.split()
@@ -423,7 +427,7 @@ async def registerphone_command(update: Update, context: ContextTypes.DEFAULT_TY
     await update.message.reply_text(f"✅ SMS notifications registered for {user_label} ({phone})")
 
 
-@restricted
+@restricted()
 async def reminder_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle inline keyboard button presses for snooze/dismiss."""
     query = update.callback_query
@@ -473,10 +477,8 @@ def main() -> None:
     application.add_handler(CommandHandler("chartdays", get_chart_days))
     application.add_handler(CommandHandler("chartmonth", get_chart_month))
     application.add_handler(CommandHandler("nikolai_power", nikolai_power))
-    application.add_handler(CommandHandler("nikolai_powerhistory", nikolai_powerhistory))
     application.add_handler(CommandHandler("nikolai_energytoday", nikolai_energytoday))
     application.add_handler(CommandHandler("nikolai_energyhour", nikolai_energyhour))
-    application.add_handler(CommandHandler("nikolai_energydaily", nikolai_energydaily))
 
     # Reminder commands
     application.add_handler(CommandHandler("remind", remind_command))

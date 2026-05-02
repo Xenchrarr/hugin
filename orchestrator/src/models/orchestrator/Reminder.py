@@ -18,6 +18,7 @@ class Reminder:
     scheduler_job_id: Optional[str]
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    user_id: Optional[int] = None
 
     def to_dict(self) -> dict:
         return {
@@ -32,6 +33,7 @@ class Reminder:
             "scheduler_job_id": self.scheduler_job_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "user_id": self.user_id,
         }
 
     @staticmethod
@@ -48,6 +50,7 @@ class Reminder:
             scheduler_job_id=row[8],
             created_at=row[9],
             updated_at=row[10],
+            user_id=row[11] if len(row) > 11 else None,
         )
 
     @staticmethod
@@ -64,6 +67,7 @@ class Reminder:
             scheduler_job_id=obj.get("scheduler_job_id"),
             created_at=obj.get("created_at"),
             updated_at=obj.get("updated_at"),
+            user_id=obj.get("user_id"),
         )
 
 
@@ -76,6 +80,7 @@ class NotificationSetting:
     user_label: str = ""
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    user_id: Optional[int] = None
 
     def to_dict(self) -> dict:
         return {
@@ -84,6 +89,7 @@ class NotificationSetting:
             "enabled": self.enabled,
             "config": self.config,
             "user_label": self.user_label,
+            "user_id": self.user_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -98,6 +104,7 @@ class NotificationSetting:
             user_label=row[4],
             created_at=row[5],
             updated_at=row[6],
+            user_id=row[7] if len(row) > 7 else None,
         )
 
     @staticmethod
@@ -108,6 +115,7 @@ class NotificationSetting:
             enabled=obj.get("enabled", True),
             config=obj.get("config", {}),
             user_label=obj.get("user_label", ""),
+            user_id=obj.get("user_id"),
         )
 
 

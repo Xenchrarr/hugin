@@ -1,7 +1,7 @@
 import logging
 import os
 from dotenv import load_dotenv
-
+load_dotenv()
 from flask import Flask
 from flask_cors import CORS
 
@@ -12,7 +12,7 @@ from src.services.core.reminder_scheduler_service import ReminderSchedulerServic
 from src.persistence.JobDb import JobDb
 from src.persistence.Database import run_init_sql, run_migrations
 
-load_dotenv()
+
 
 log = logging.getLogger(__name__)
 config = Config().active

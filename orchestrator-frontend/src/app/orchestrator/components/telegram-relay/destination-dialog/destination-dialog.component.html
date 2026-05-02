@@ -1,0 +1,75 @@
+<h2 mat-dialog-title>{{ isNew ? 'Add destination' : 'Edit destination' }}</h2>
+<mat-dialog-content class="mat-typography">
+    <mat-card appearance="outlined">
+        <mat-card-content>
+            <table>
+                <tr>
+                    <th>Name</th>
+                    <td>
+                        <mat-form-field>
+                            <mat-label>Name</mat-label>
+                            <input matInput [(ngModel)]="destination.name">
+                        </mat-form-field>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Type</th>
+                    <td>
+                        <mat-form-field>
+                            <mat-label>Type</mat-label>
+                            <mat-select [(ngModel)]="destination.type">
+                                <mat-option value="webhook">Webhook</mat-option>
+                                <mat-option value="sms">SMS</mat-option>
+                            </mat-select>
+                        </mat-form-field>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Enabled</th>
+                    <td>
+                        <mat-checkbox [(ngModel)]="destination.enabled"></mat-checkbox>
+                    </td>
+                </tr>
+
+                <!-- Webhook-specific fields -->
+                <ng-container *ngIf="destination.type === 'webhook'">
+                    <tr>
+                        <th>URL</th>
+                        <td>
+                            <mat-form-field class="wide-field">
+                                <mat-label>Webhook URL</mat-label>
+                                <input matInput [(ngModel)]="webhookUrl" placeholder="https://example.com/hook">
+                            </mat-form-field>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Bearer token</th>
+                        <td>
+                            <mat-form-field class="wide-field">
+                                <mat-label>Authorization token (optional)</mat-label>
+                                <input matInput [(ngModel)]="webhookToken" placeholder="Leave blank if not required">
+                            </mat-form-field>
+                        </td>
+                    </tr>
+                </ng-container>
+
+                <!-- SMS-specific fields -->
+                <ng-container *ngIf="destination.type === 'sms'">
+                    <tr>
+                        <th>Phone</th>
+                        <td>
+                            <mat-form-field>
+                                <mat-label>Phone number</mat-label>
+                                <input matInput [(ngModel)]="smsPhone" placeholder="+4712345678">
+                            </mat-form-field>
+                        </td>
+                    </tr>
+                </ng-container>
+            </table>
+        </mat-card-content>
+    </mat-card>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+    <button mat-button mat-dialog-close>Cancel</button>
+    <button mat-flat-button color="primary" (click)="save()" [disabled]="!destination.name">Save</button>
+</mat-dialog-actions>

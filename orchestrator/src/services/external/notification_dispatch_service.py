@@ -60,19 +60,32 @@ def dispatch_reminder(reminder: Reminder) -> bool:
 
 
 def _resolve_channels(reminder: Reminder, storage: ReminderStorage) -> list[tuple[str, dict]]:
-    """Return list of (channel_name, config_dict) for the reminder."""
-    settings = storage.get_notification_settings()
+    """Return list of (channel_name, config_dict) for the reminder.
 
+    Resolution priority:
+    1. reminder.user_id → use that user's notification settings, optionally filtered
+       by the user's config.default_channels list.
+    2. reminder.recipient_ids → use specific notification_settings by ID.
+    3. Fallback → all globally enabled settings (backwards compat only).
+    """
+    if reminder.user_id is not None:
+        settings = storage.get_notification_settings_for_user(reminder.user_id)
+        if not settings:
+            log.warning("No notification settings found for user_id %s", reminder.user_id)
+        return [(s.channel, s.config) for s in settings]
+
+    # Legacy: per-reminder explicit recipient override
     if reminder.recipient_ids:
-        # Per-reminder override: only use the specific notification settings
+        all_settings = storage.get_notification_settings()
         ids_set = set(reminder.recipient_ids)
-        result = [(s.channel, s.config) for s in settings if s.id in ids_set and s.enabled]
+        result = [(s.channel, s.config) for s in all_settings if s.id in ids_set and s.enabled]
         if not result:
             log.warning("None of the requested recipient_ids %s are configured/enabled", reminder.recipient_ids)
         return result
-    else:
-        # Use global defaults: all enabled entries (multiple users per channel)
-        return [(s.channel, s.config) for s in settings if s.enabled]
+
+    # Legacy global fallback
+    all_settings = storage.get_notification_settings()
+    return [(s.channel, s.config) for s in all_settings if s.enabled]
 
 
 def _format_message(reminder: Reminder) -> str:

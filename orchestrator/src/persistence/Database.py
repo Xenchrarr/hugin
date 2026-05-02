@@ -52,6 +52,7 @@ class DatabasePool:
             "Connection pool created for %s/%s (min=%d, max=%d)",
             host, database, min_size, max_size,
         )
+        print(f"connection pool created for host: {host}")
 
     @classmethod
     def init(cls, **kwargs) -> "DatabasePool":

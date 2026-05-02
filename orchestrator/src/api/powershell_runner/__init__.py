@@ -4,7 +4,7 @@ import requests
 
 from src.api.RestCredentialMissingError import RestCredentialMissingError
 
-POWERSHELL_API_ENDPOINT = os.environ.get("POWERSHELL_API_ENDPOINT", None)
+POWERSHELL_API_ENDPOINT = os.environ.get("POWERSHELL_API_ENDPOINT", "None")
 
 if POWERSHELL_API_ENDPOINT is None:
     raise RestCredentialMissingError("Missing POWERSHELL_API_ENDPOINT environment variable")

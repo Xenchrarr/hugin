@@ -33,21 +33,24 @@ class OrchestratorClient:
 
     def create_reminder(self, title: str, due_at: str, message: str = None,
                         recurrence: str = None, recipient_ids: list[int] = None,
-                        created_by: str = "telegram") -> dict | None:
+                        user_id: int = None, created_by: str = "telegram") -> dict | None:
         payload = {
             "title": title,
             "due_at": due_at,
             "message": message,
             "recurrence": recurrence,
             "recipient_ids": recipient_ids,
+            "user_id": user_id,
             "created_by": created_by,
         }
         return self._post("/api/reminders/", json=payload)
 
-    def list_reminders(self, status: str = None) -> list | None:
+    def list_reminders(self, status: str = None, user_id: int = None) -> list | None:
         params = {}
         if status:
             params["status"] = status
+        if user_id is not None:
+            params["user_id"] = user_id
         return self._get("/api/reminders/list", **params)
 
     def snooze_reminder(self, reminder_id: int, duration: str = "10m") -> dict | None:
@@ -57,10 +60,14 @@ class OrchestratorClient:
         return self._post(f"/api/reminders/{reminder_id}/dismiss")
 
     def update_notification_setting(self, channel: str, enabled: bool, config: dict,
-                                     user_label: str = "") -> dict | None:
+                                     user_label: str = "", user_id: int = None) -> dict | None:
         return self._post("/api/reminders/notification-settings", json={
             "channel": channel,
             "enabled": enabled,
             "config": config,
             "user_label": user_label,
+            "user_id": user_id,
         })
+
+    def lookup_user(self, channel: str, identifier: str) -> dict | None:
+        return self._get("/api/users/lookup", channel=channel, identifier=identifier)

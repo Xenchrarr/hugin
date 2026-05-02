@@ -1,0 +1,6 @@
+python-telegram
+python-dotenv
+httpx
+pydantic>=2.0
+requests
+flask>=3.0

@@ -22,6 +22,9 @@ ORCH_FRONTEND_IMAGE  = orchestrator-frontend
 POWERSHELL_DIR       = powershell-runner
 POWERSHELL_IMAGE     = powershell-runner
 
+TELEGRAM_RELAY_DIR   = telegram_relay
+TELEGRAM_RELAY_IMAGE = telegram-relay
+
 .PHONY: auth build push build-% push-%
 
 auth:
@@ -49,6 +52,9 @@ build-orchestrator-frontend:
 build-powershell-runner:
 	docker build --tag ${DOCKER_USERNAME}/${POWERSHELL_IMAGE} ${POWERSHELL_DIR}
 
+build-telegram-relay:
+	docker build --tag ${DOCKER_USERNAME}/${TELEGRAM_RELAY_IMAGE} ${TELEGRAM_RELAY_DIR}
+
 push-hugin-core:
 	docker push ${DOCKER_USERNAME}/${HUGIN_CORE_IMAGE}
 
@@ -70,7 +76,10 @@ push-orchestrator-frontend:
 push-powershell-runner:
 	docker push ${DOCKER_USERNAME}/${POWERSHELL_IMAGE}
 
-# Build and push all
-build: build-hugin-core build-ecoflow-monitor build-overlia build-sms-bot build-orchestrator build-orchestrator-frontend build-powershell-runner
+push-telegram-relay:
+	docker push ${DOCKER_USERNAME}/${TELEGRAM_RELAY_IMAGE}
 
-push: push-hugin-core push-ecoflow-monitor push-overlia push-sms-bot push-orchestrator push-orchestrator-frontend push-powershell-runner
+# Build and push all
+build: build-hugin-core build-ecoflow-monitor build-overlia build-sms-bot build-orchestrator build-orchestrator-frontend build-powershell-runner build-telegram-relay
+
+push: push-hugin-core push-ecoflow-monitor push-overlia push-sms-bot push-orchestrator push-orchestrator-frontend push-powershell-runner push-telegram-relay

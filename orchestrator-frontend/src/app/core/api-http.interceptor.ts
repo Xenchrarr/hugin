@@ -1,7 +1,9 @@
 import { HttpInterceptorFn, HttpErrorResponse, HttpResponse } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { catchError, tap, throwError } from 'rxjs';
+import { Router } from '@angular/router';
 import { NotificationService } from '../services/notification.service';
+import { AuthService } from '../auth/auth.service';
 import { SHOW_SUCCESS, SUCCESS_MESSAGE, SHOW_ERROR, ERROR_MESSAGE } from './api-context';
 
 const CORR_HEADER = 'X-Correlation-Id';
@@ -19,6 +21,8 @@ function getOrCreateCorrelationId(): string {
 
 export const apiHttpInterceptorFn: HttpInterceptorFn = (req, next) => {
     const notify = inject(NotificationService);
+    const auth = inject(AuthService);
+    const router = inject(Router);
 
     const showError = req.context.get(SHOW_ERROR);
     const showSuccess = req.context.get(SHOW_SUCCESS);
@@ -26,9 +30,18 @@ export const apiHttpInterceptorFn: HttpInterceptorFn = (req, next) => {
     const customErrorMsg = req.context.get(ERROR_MESSAGE);
 
     const corrId = getOrCreateCorrelationId();
-    const reqWithCorr = req.clone({ setHeaders: { [CORR_HEADER]: corrId } });
 
-    return next(reqWithCorr).pipe(
+    // Attach JWT token to all requests except the login endpoint
+    const token = auth.getToken();
+    const isLoginEndpoint = req.url.includes('/api/auth/login');
+    const headers: Record<string, string> = { [CORR_HEADER]: corrId };
+    if (token && !isLoginEndpoint) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const reqWithHeaders = req.clone({ setHeaders: headers });
+
+    return next(reqWithHeaders).pipe(
         tap(evt => {
             if (
                 showSuccess &&
@@ -39,6 +52,11 @@ export const apiHttpInterceptorFn: HttpInterceptorFn = (req, next) => {
             }
         }),
         catchError((err: HttpErrorResponse) => {
+            if (err.status === 401 && !isLoginEndpoint) {
+                notify.error('Sesjonen har utløpt. Vennligst logg inn igjen.');
+                auth.logout();
+                router.navigateByUrl('/login');
+            }
 
             if (showError) {
                 const msg =

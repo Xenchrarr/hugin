@@ -4,17 +4,15 @@ import logging
 import growattServer
 from growattServer import Timespan
 
-from src.config import settings
-
 logger = logging.getLogger(__name__)
 
 USER_AGENT = "ShinePhone/8.1.17 (iPhone; iOS 15.6.1; Scale/2.00)"
 
 
 class GrowattClient:
-    def __init__(self) -> None:
-        self._username = settings.GROWATT_USERNAME
-        self._password = settings.GROWATT_PASSWORD
+    def __init__(self, username: str, password: str) -> None:
+        self._username = username
+        self._password = password
 
     def _get_api(self) -> growattServer.GrowattApi:
         return growattServer.GrowattApi(agent_identifier=USER_AGENT)

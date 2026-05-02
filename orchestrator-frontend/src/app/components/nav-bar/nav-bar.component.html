@@ -2,4 +2,13 @@
     <span *ngIf="isProd" class="env-badge env-prod">PRODUCTION</span>
     <span *ngIf="!isProd" class="env-badge env-test">TESTING</span>
     <span class="spacer"></span>
+    <ng-container *ngIf="isLoggedIn">
+        <a mat-button routerLink="/scripts">Scripts</a>
+        <a mat-button routerLink="/reminders">Reminders</a>
+        <a mat-button routerLink="/users">Users</a>
+        <span class="username">{{ username }}</span>
+        <button mat-icon-button (click)="logout()" title="Log out">
+            <mat-icon>logout</mat-icon>
+        </button>
+    </ng-container>
 </mat-toolbar>

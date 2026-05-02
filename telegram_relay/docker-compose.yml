@@ -1,0 +1,9 @@
+services:
+  telegram_relay:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    user: "1000:1000"
+    volumes:
+      - ./data/tdlib:/app/data/tdlib
+      - ./config.yaml:/app/config.yaml:ro

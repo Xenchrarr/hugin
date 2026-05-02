@@ -27,17 +27,23 @@ class ReminderStorage:
 
     # ── Reminders ────────────────────────────────────────────
 
-    def get_reminders(self, status_filter: Optional[str] = None) -> list[Reminder]:
+    def get_reminders(self, status_filter: Optional[str] = None, user_id: Optional[int] = None) -> list[Reminder]:
         query = read_sql_file('orchestrator/reminder/get_reminders.sql')
 
+        conditions = []
+        params = []
         if status_filter:
-            query += "\nWHERE r.status = %s"
-            query += "\nORDER BY r.due_at ASC"
-            self.execute(query, (status_filter,))
-        else:
-            query += "\nORDER BY r.due_at ASC"
-            self.execute(query)
+            conditions.append("r.status = %s")
+            params.append(status_filter)
+        if user_id is not None:
+            conditions.append("r.user_id = %s")
+            params.append(user_id)
 
+        if conditions:
+            query += "\nWHERE " + " AND ".join(conditions)
+        query += "\nORDER BY r.due_at ASC"
+
+        self.execute(query, params if params else None)
         return [Reminder.from_db_row(row) for row in self.fetchall()]
 
     def get_reminder(self, reminder_id: int) -> Optional[Reminder]:
@@ -61,6 +67,7 @@ class ReminderStorage:
                 reminder.recipient_ids,
                 reminder.created_by,
                 reminder.scheduler_job_id,
+                reminder.user_id,
             ),
         )
         row = self.fetchone()
@@ -79,6 +86,7 @@ class ReminderStorage:
                 reminder.status,
                 reminder.recipient_ids,
                 reminder.scheduler_job_id,
+                reminder.user_id,
                 reminder.id,
             ),
         )
@@ -103,10 +111,15 @@ class ReminderStorage:
     def upsert_notification_setting(self, setting: NotificationSetting) -> NotificationSetting:
         query = read_sql_file('orchestrator/reminder/upsert_notification_setting.sql')
         config_json = json.dumps(setting.config) if isinstance(setting.config, dict) else setting.config
-        self.execute(query, (setting.channel, setting.enabled, config_json, setting.user_label))
+        self.execute(query, (setting.channel, setting.enabled, config_json, setting.user_label, setting.user_id))
         row = self.fetchone()
         self.commit()
         return NotificationSetting.from_db_row(row)
+
+    def get_notification_settings_for_user(self, user_id: int) -> list[NotificationSetting]:
+        query = read_sql_file('orchestrator/reminder/get_notification_settings_by_user.sql')
+        self.execute(query, (user_id,))
+        return [NotificationSetting.from_db_row(row) for row in self.fetchall()]
 
     def delete_notification_setting(self, setting_id: int) -> bool:
         query = read_sql_file('orchestrator/reminder/delete_notification_setting.sql')

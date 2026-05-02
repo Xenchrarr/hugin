@@ -113,7 +113,9 @@ class ReminderSchedulerService:
         job_id = self._job_id(reminder)
 
         if not reminder.recurrence:
-            # One-time reminder: fire at due_at
+            # One-time reminder: fire at due_at.
+            # misfire_grace_time=None ensures the job fires even if due_at is
+            # already in the past (e.g. after an orchestrator restart).
             self._scheduler.add_job(
                 _fire_reminder,
                 'date',
@@ -122,6 +124,7 @@ class ReminderSchedulerService:
                 replace_existing=True,
                 args=[reminder.id],
                 timezone=_SCHEDULER_TZ,
+                misfire_grace_time=None,
             )
         elif reminder.recurrence == 'daily':
             due = reminder.due_at
@@ -177,6 +180,7 @@ def _fire_reminder(reminder_id: int) -> None:
     """Callback fired by APScheduler when a reminder is due."""
     from src.services.external.notification_dispatch_service import dispatch_reminder
 
+    log.info("Firing reminder %s", reminder_id)
     try:
         storage = ReminderStorage()
         reminder = storage.get_reminder(reminder_id)
@@ -204,6 +208,15 @@ def _fire_reminder(reminder_id: int) -> None:
 
     except Exception:
         log.exception("Error firing reminder %s", reminder_id)
+        try:
+            storage = ReminderStorage()
+            reminder = storage.get_reminder(reminder_id)
+            if reminder and reminder.status in ('active', 'snoozed'):
+                reminder.status = 'failed'
+                storage.update_reminder(reminder)
+                storage.add_reminder_history(reminder_id, 'failed', detail='exception in _fire_reminder')
+        except Exception:
+            log.exception("Failed to mark reminder %s as failed", reminder_id)
     finally:
         JobDb.instance().close_connection()
 
