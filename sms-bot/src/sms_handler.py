@@ -39,6 +39,9 @@ def _mms_text(s: str) -> bytes:
     """Null-terminated ASCII text string."""
     return s.encode("ascii", errors="replace") + b"\x00"
 
+def _mms_quoted_string(s: str) -> bytes:
+    """WSP quoted-string: quote byte + ASCII + null terminator."""
+    return b"\x22" + s.encode("ascii", errors="replace") + b"\x00"
 
 def _mms_long_int(n: int) -> bytes:
     """WAP long-integer: one length byte followed by big-endian value bytes."""
@@ -54,12 +57,13 @@ def _mms_long_int(n: int) -> bytes:
     return bytes([len(value)] + value)
 
 
-# WAP-230-WSP well-known content-type short integers
+# WAP-230-WSP well-known content-type short integers.
+# application/smil has no standard WAP short code — always encoded as text-string.
 _MMS_MIME_CODE: dict[str, int] = {
     "text/plain": 0x83,
     "image/gif": 0x9D,
     "image/jpeg": 0x9E,
-    "image/png": 0x9F,
+    "image/png": 0xA0,
 }
 
 # Image MIME type → file extension used in SMIL src attribute
@@ -76,18 +80,20 @@ def _mms_from_address(number: str) -> bytes:
 
     Structure: field-code 0x89 + value-length + Address-Present-Token (0x80)
                + null-terminated address string.
-    For Insert-Address-Token the modem/MMSC fills in the sender; use that
-    only as a fallback because some MMSCs cannot resolve the MSISDN from a
-    data PDP context and will leave the From field empty.
+
+    Normally we prefer Insert-Address-Token instead, so the MMSC inserts the
+    sender. Explicit From is only used when MMS_FROM_NUMBER is configured.
     """
     addr_bytes = (number + "/TYPE=PLMN\x00").encode("ascii", errors="replace")
     value = bytes([0x80]) + addr_bytes  # 0x80 = Address-Present-Token
     n = len(value)
-    # WAP value-length: 0-30 => single byte; 31+ => 0x1F (length-quote) + uintvar
+
+    # WAP value-length: 0-30 => single byte; 31+ => 0x1F + uintvar
     if n <= 30:
         length_bytes = bytes([n])
     else:
         length_bytes = bytes([0x1F]) + _mms_uintvar(n)
+
     return b"\x89" + length_bytes + value
 
 
@@ -103,9 +109,14 @@ def _wap_content_id(cid: str) -> bytes:
     Encode a Content-ID part-header in WAP binary format.
 
     WSP header field code for Content-ID is 0x40 → short-form 0xC0.
-    Value is a quoted-string: 0x22 + ASCII text + null.
+    Value is a proper WSP quoted-string: 0x22 + ASCII text + 0x22 + null.
+
+    FIX: Added closing 0x22 before the null terminator. Without it the MMSC
+    receives a malformed quoted-string (open quote, no close quote) and may
+    fail to match the Content-ID against the multipart/related start param,
+    causing silent delivery failure even when the MMSC returns HTTP 200.
     """
-    return b"\xc0\x22" + cid.encode("ascii") + b"\x00"
+    return b"\xc0\x22" + cid.encode("ascii", errors="replace") + b"\x22\x00"
 
 
 def _wap_content_location(location: str) -> bytes:
@@ -113,12 +124,12 @@ def _wap_content_location(location: str) -> bytes:
     Encode a Content-Location part-header in WAP binary format.
 
     WSP header field code 0x0E → short-form 0x8E.
-    Value is a text-string (null-terminated).
-    SMIL src attributes reference parts by Content-Location filename so the
-    MMSC can resolve each src to its corresponding part when building the
-    WAP Push m-notification-ind.
+    Value is a text-string, null-terminated.
+
+    The SMIL src attributes reference these filenames, for example img.jpg
+    and txt.txt.
     """
-    return b"\x8e" + location.encode("ascii") + b"\x00"
+    return b"\x8e" + location.encode("ascii", errors="replace") + b"\x00"
 
 
 def _build_smil(has_text: bool, has_image: bool, img_src: str = "img.jpg") -> bytes:
@@ -142,6 +153,7 @@ def _build_smil(has_text: bool, has_image: bool, img_src: str = "img.jpg") -> by
     par_block = "\n    ".join(par_elements)
 
     smil = (
+        "<?xml version=\"1.0\"?>\n"
         "<smil>\n"
         " <head>\n"
         "  <layout>\n"
@@ -176,41 +188,65 @@ def _build_mms_pdu(
       0x85 Date
       0x97 To
       0x89 From
-      0x84 Content-Type (multipart/related with SMIL start part)
+      0x84 Content-Type
 
-    Each multipart part carries a Content-Type and Content-ID header encoded
-    in WAP binary (WSP) format. SMIL is included as the first (start) part so
-    the MMSC and recipient handset know how to lay out the message.
+    The message body is application/vnd.wap.multipart.related with SMIL as the
+    start part. Each part has Content-Type, Content-Location and Content-ID.
     """
     img_src = _MMS_IMG_EXT.get(mime_type.lower(), "img.jpg")
 
-    # Build content parts: (WAP content-type, Content-ID, Content-Location filename, data)
+    # Build content parts:
+    # (WAP content-type, Content-ID, Content-Location filename, data)
     content_parts: list[tuple[bytes, str, str, bytes]] = []
 
     if message:
-        content_parts.append((_mms_mime("text/plain"), "<txt>", "txt.txt", message.encode("utf-8")))
+        content_parts.append(
+            (
+                _mms_mime("text/plain"),
+                "<txt>",
+                "txt.txt",
+                message.encode("utf-8"),
+            )
+        )
 
     if media_bytes:
-        content_parts.append((_mms_mime(mime_type), "<img>", img_src, media_bytes))
+        content_parts.append(
+            (
+                _mms_mime(mime_type),
+                "<img>",
+                img_src,
+                media_bytes,
+            )
+        )
 
-    # SMIL goes first (it is the multipart/related "start" part).
+    # SMIL goes first. It is the multipart/related start part.
     smil_bytes = _build_smil(
         has_text=bool(message),
         has_image=bool(media_bytes),
         img_src=img_src,
     )
+
     all_parts: list[tuple[bytes, str, str, bytes]] = [
-        (b"application/smil\x00", "<smil>", "smil.smil", smil_bytes),
+        (
+            _mms_mime("application/smil"),
+            "<smil>",
+            "smil.smil",
+            smil_bytes,
+        ),
         *content_parts,
     ]
 
-    # Encode WAP multipart body: nEntries + (HeadersLen + DataLen + Headers + Data)*
-    # Each part header is: ContentType + Content-Location + Content-ID.
-    # Content-Location must match the SMIL src= attribute so the MMSC can
-    # resolve part references when building the WAP Push m-notification-ind.
+    # Encode WAP multipart body:
+    # nEntries + (HeadersLen + DataLen + Headers + Data)*
     body = _mms_uintvar(len(all_parts))
+
     for content_type, cid, cloc, data in all_parts:
-        headers = content_type + _wap_content_location(cloc) + _wap_content_id(cid)
+        headers = (
+            content_type
+            + _wap_content_location(cloc)
+            + _wap_content_id(cid)
+        )
+
         body += _mms_uintvar(len(headers))
         body += _mms_uintvar(len(data))
         body += headers
@@ -218,38 +254,60 @@ def _build_mms_pdu(
 
     tx_id = uuid.uuid4().hex[:12]
 
-    # Content-Type: application/vnd.wap.multipart.related; type="application/smil"; start="<smil>"
-    # 0xB3 = application/vnd.wap.multipart.related (short-integer 0x33 | 0x80)
-    # type param: well-known code 0x09 → 0x89 + text-value
-    # start param: well-known code 0x0A → 0x8A + text-value
-    _mt_params = b"\x89application/smil\x00\x8a<smil>\x00"
-    _mt_value = bytes([0xB3]) + _mt_params
-    _mt_vlen = len(_mt_value)
-    if _mt_vlen <= 30:
-        content_type_field = b"\x84" + bytes([_mt_vlen]) + _mt_value
+    # Content-Type: application/vnd.wap.multipart.related
+    #   type  param (code 0x09 → short 0x89): "application/smil" as text-string
+    #   start param (code 0x0A → short 0x8A): "<smil>" as plain null-terminated
+    #                                          text-string (no WSP quoted-string
+    #                                          wrapper) so it matches the bare
+    #                                          Content-ID value exactly.
+    #
+    # FIX: Previously the start value was encoded via _mms_quoted_string which
+    # added a leading 0x22 WSP quote byte, making the param value "<smil>"
+    # while the Content-ID field stored the value as a quoted-string whose
+    # logical value is also <smil>. Some MMSCs compare these bytewise rather
+    # than logically, so the extra 0x22 caused a mismatch. Using a plain
+    # null-terminated text-string for both the start param and the CID value
+    # (after stripping the WSP quoted-string wrapper) gives consistent matching.
+    #
+    # 0xB3 = application/vnd.wap.multipart.related
+    mt_params = (
+        b"\x89" + b"application/smil\x00"   # type  param: text-string
+        + b"\x8a" + b"<smil>\x00"           # start param: plain text-string
+    )
+    mt_value = bytes([0xB3]) + mt_params
+    mt_vlen = len(mt_value)
+
+    if mt_vlen <= 30:
+        content_type_field = b"\x84" + bytes([mt_vlen]) + mt_value
     else:
-        content_type_field = b"\x84\x1f" + _mms_uintvar(_mt_vlen) + _mt_value
+        content_type_field = b"\x84\x1f" + _mms_uintvar(mt_vlen) + mt_value
 
     pdu = b"\x8c\x80"                                      # Message-Type: m-send-req
     pdu += b"\x98" + _mms_text(tx_id)                       # Transaction-Id
     pdu += b"\x8d\x92"                                      # MMS-Version: 1.2
     pdu += b"\x85" + _mms_long_int(int(time.time()))        # Date
     pdu += b"\x97" + _mms_text(to_number + "/TYPE=PLMN")    # To
+
     if from_number:
         pdu += _mms_from_address(from_number)                # From: explicit MSISDN
     else:
         pdu += b"\x89\x01\x81"                              # From: Insert-Address-Token
-    pdu += b"\x8a\x80"                                      # X-Mms-Message-Class: Personal
-    pdu += b"\x86\x81"                                      # X-Mms-Delivery-Report: No
+
+    pdu += b"\x8a\x80"                                      # Message-Class: Personal
+    pdu += b"\x8f\x81"                                      # Priority: Normal
+    pdu += b"\x86\x81"                                      # Delivery-Report: No
+    pdu += b"\x90\x81"                                      # Read-Reply: No
 
     # X-Mms-Expiry: relative 7 days.
-    # Field code 0x88, value-length byte, 0x81 (relative token), uintvar seconds.
-    _exp_val = b"\x81" + _mms_uintvar(7 * 24 * 3600)
-    pdu += b"\x88" + bytes([len(_exp_val)]) + _exp_val      # X-Mms-Expiry: 7 days
+    # Field code 0x88, value-length byte, 0x81 = relative token, then Long-integer seconds.
+    # Must use Long-integer (not uintvar): WSP Integer-value encoding requires it.
+    exp_val = b"\x81" + _mms_long_int(7 * 24 * 3600)
+    pdu += b"\x88" + bytes([len(exp_val)]) + exp_val
 
-    pdu += content_type_field                               # Content-Type: multipart/related
+    pdu += content_type_field
 
     logger.debug("send_mms: PDU headers+body hex: %s", (pdu + body).hex())
+    logger.debug("send_mms: top-level content-type field hex: %s", content_type_field.hex())
 
     return pdu + body
 
@@ -270,8 +328,8 @@ class SMSHandler:
         """
         Read modem response until one of the marker strings appears, or timeout.
 
-        latin-1 is used intentionally so bytes are preserved 1:1 when QIRD returns
-        binary-ish data. Normal AT responses are ASCII-compatible anyway.
+        latin-1 is used intentionally so bytes are preserved 1:1 when QIRD
+        returns binary-ish data. Normal AT responses are ASCII-compatible.
         """
         end_time = time.time() + timeout
         data = ""
@@ -346,7 +404,12 @@ class SMSHandler:
             if "OK" in response:
                 logger.info("Modem ready (attempt %d)", attempt + 1)
                 break
-            logger.warning("Modem not responding (attempt %d): %s", attempt + 1, response.strip())
+
+            logger.warning(
+                "Modem not responding (attempt %d): %s",
+                attempt + 1,
+                response.strip(),
+            )
         else:
             logger.error("Modem failed to respond after 3 attempts")
 
@@ -357,6 +420,7 @@ class SMSHandler:
             if "+CPIN: READY" in resp:
                 logger.info("SIM ready (attempt %d)", attempt + 1)
                 break
+
             logger.warning("SIM not ready (attempt %d): %s", attempt + 1, resp.strip())
             time.sleep(2)
         else:
@@ -368,7 +432,10 @@ class SMSHandler:
         logger.info("Setting character set to UCS2")
         resp = self.send_at('AT+CSCS="UCS2"')
         if "OK" not in resp:
-            logger.error("AT+CSCS=UCS2 failed — Norwegian characters may not work: %s", resp.strip())
+            logger.error(
+                "AT+CSCS=UCS2 failed — Norwegian characters may not work: %s",
+                resp.strip(),
+            )
 
         logger.info("Setting SIM storage")
         resp = self.send_at('AT+CPMS="SM","SM","SM"')
@@ -389,6 +456,7 @@ class SMSHandler:
             if "+CREG: 1" in resp or "+CREG: 5" in resp or ",1" in resp or ",5" in resp:
                 logger.info("Network registered (attempt %d): %s", attempt + 1, resp.strip())
                 break
+
             logger.debug("Network not registered yet (attempt %d): %s", attempt + 1, resp.strip())
             time.sleep(2)
         else:
@@ -398,14 +466,20 @@ class SMSHandler:
         logger.info("Network: %s", self.send_at("AT+CREG?", timeout=2).strip())
         logger.info("Storage: %s", self.send_at('AT+CPMS?', timeout=2).strip())
 
-        # Query own MSISDN for use as explicit MMS From address.
+        # Query own MSISDN for diagnostics only.
+        # We do not auto-use it as MMS From because some MMSCs prefer
+        # Insert-Address-Token.
         cnum_resp = self.send_at("AT+CNUM", timeout=3)
         m_cnum = re.search(r'\+CNUM:\s*"[^"]*","([^"]+)"', cnum_resp)
+
         if m_cnum:
             self._own_number = m_cnum.group(1)
             logger.info("Own MSISDN: %s", self._own_number)
         else:
-            logger.warning("AT+CNUM did not return a number — MMS will use Insert-Address-Token: %s", cnum_resp.strip())
+            logger.warning(
+                "AT+CNUM did not return a number — MMS will use Insert-Address-Token: %s",
+                cnum_resp.strip(),
+            )
 
         logger.info("Modem initialization complete")
 
@@ -443,6 +517,7 @@ class SMSHandler:
 
         while i < len(lines):
             line = lines[i].strip()
+
             if line.startswith("+CMGL:"):
                 parts = line.split(",")
                 index = parts[0].split(":")[1].strip()
@@ -527,6 +602,7 @@ class SMSHandler:
             logger.info("Sending part %d/%d", idx + 1, len(chunks))
             if not self._send_sms_chunk(ucs2_number, chunk):
                 return False
+
             if idx < len(chunks) - 1:
                 time.sleep(1)
 
@@ -558,6 +634,7 @@ class SMSHandler:
             while quality >= 30:
                 buf = io.BytesIO()
                 img.save(buf, format="JPEG", quality=quality, optimize=True)
+
                 if buf.tell() <= max_bytes:
                     compressed = buf.getvalue()
                     logger.debug(
@@ -566,11 +643,15 @@ class SMSHandler:
                         quality,
                     )
                     return compressed
+
                 quality -= 10
 
             width, height = img.size
             scale = (max_bytes / len(media_bytes)) ** 0.5
-            new_size = (max(1, int(width * scale)), max(1, int(height * scale)))
+            new_size = (
+                max(1, int(width * scale)),
+                max(1, int(height * scale)),
+            )
 
             img = img.resize(new_size, Image.LANCZOS)
             buf = io.BytesIO()
@@ -629,7 +710,10 @@ class SMSHandler:
 
             time.sleep(0.5)
 
-        logger.warning("send_mms: TCP drain timeout; unacked bytes stayed above %d", max_unacked)
+        logger.warning(
+            "send_mms: TCP drain timeout; unacked bytes stayed above %d",
+            max_unacked,
+        )
         return False
 
     def _log_pdp_diagnostics(self, context_id: int) -> None:
@@ -709,6 +793,7 @@ class SMSHandler:
             if n == 0:
                 if "\r\n\r\n" in http_resp_text:
                     break
+
                 time.sleep(0.5)
                 continue
 
@@ -716,6 +801,7 @@ class SMSHandler:
             if data_start < 0:
                 logger.debug("send_mms: QIRD data start not found: %s", rd.strip())
                 break
+
             data_start += 2
 
             ok_pos = rd.rfind("\r\nOK")
@@ -723,8 +809,6 @@ class SMSHandler:
                 http_resp_text += rd[data_start:ok_pos]
             else:
                 http_resp_text += rd[data_start:]
-
-        return http_resp_text
 
         return http_resp_text
 
@@ -763,14 +847,23 @@ class SMSHandler:
           MMS_MAX_UNACKED      Default: 4096
           MMS_PROXY_HOST       Optional MMS proxy host
           MMS_PROXY_PORT       Optional MMS proxy port
+          MMS_FROM_NUMBER      Optional explicit From number
         """
         mmsc_url = os.environ.get("MMS_MMSC_URL", "").strip()
         mms_apn = os.environ.get("MMS_APN", "mms").strip()
         mms_context = int(os.environ.get("MMS_CONTEXT_ID", "3"))
+
         mms_proxy_host = os.environ.get("MMS_PROXY_HOST", "").strip()
         mms_proxy_port_raw = os.environ.get("MMS_PROXY_PORT", "").strip()
         mms_proxy_port = int(mms_proxy_port_raw) if mms_proxy_port_raw else None
-        mms_from_number = os.environ.get("MMS_FROM_NUMBER", "").strip() or self._own_number or None
+
+        # Prefer explicit From address so the MMSC can identify the sender and
+        # generate a WAP Push notification to the recipient.
+        # Priority: MMS_FROM_NUMBER env var > SIM's own MSISDN > Insert-Address-Token.
+        mms_from_number = os.environ.get("MMS_FROM_NUMBER", "").strip() or None
+        if mms_from_number is None and self._own_number:
+            mms_from_number = self._own_number
+            logger.debug("send_mms: using SIM MSISDN as From: %s", mms_from_number)
 
         max_mms_bytes = int(os.environ.get("MMS_MAX_BYTES", str(300 * 1024)))
         tcp_chunk = int(os.environ.get("MMS_TCP_CHUNK", "1024"))
@@ -797,12 +890,19 @@ class SMSHandler:
             media_mime_type,
         )
 
-        pdu = _build_mms_pdu(number, message, media_bytes, media_mime_type, from_number=mms_from_number)
+        pdu = _build_mms_pdu(
+            to_number=number,
+            message=message,
+            media_bytes=media_bytes,
+            mime_type=media_mime_type,
+            from_number=mms_from_number,
+        )
 
         parsed = urlparse(mmsc_url)
         host = parsed.hostname or mmsc_url
         port = parsed.port or 80
         path = parsed.path or "/"
+
         if parsed.query:
             path += "?" + parsed.query
 
@@ -813,18 +913,27 @@ class SMSHandler:
         connect_port = mms_proxy_port or port
         request_target = mmsc_url if mms_proxy_host else path
 
-        http_req = (
-            f"POST {request_target} HTTP/1.1\r\n"
-            f"Host: {host}\r\n"
-            f"Content-Type: application/vnd.wap.mms-message\r\n"
-            f"Content-Length: {len(pdu)}\r\n"
-            f"Accept: application/vnd.wap.mms-message\r\n"
-            f"Connection: close\r\n"
-            f"\r\n"
-        ).encode("ascii") + pdu
+        mms_user_agent = os.environ.get("MMS_USER_AGENT", "Android-Mms/2.0").strip()
+        mms_wap_profile = os.environ.get("MMS_WAP_PROFILE", "").strip()             
+
+        http_headers = [
+            f"POST {request_target} HTTP/1.1",
+            f"Host: {host}",
+            "Content-Type: application/vnd.wap.mms-message",
+            f"Content-Length: {len(pdu)}",
+            "Accept: application/vnd.wap.mms-message",
+            f"User-Agent: {mms_user_agent}",
+            "Connection: close",
+        ]
+
+        if mms_wap_profile:
+            http_headers.append(f"X-WAP-Profile: {mms_wap_profile}")
+
+        http_req = ("\r\n".join(http_headers) + "\r\n\r\n").encode("ascii") + pdu
 
         logger.debug(
-            "send_mms: MMSC host=%s port=%d path=%s connect_host=%s connect_port=%d proxy=%s pdu=%d bytes http_req=%d bytes chunk=%d max_unacked=%d",
+            "send_mms: MMSC host=%s port=%d path=%s connect_host=%s connect_port=%d "
+            "proxy=%s pdu=%d bytes http_req=%d bytes chunk=%d max_unacked=%d",
             host,
             port,
             path,
@@ -844,8 +953,7 @@ class SMSHandler:
             # Use IRA while doing internet/socket commands. Restore UCS2 in finally.
             self.send_at('AT+CSCS="IRA"', timeout=3)
 
-            # Start from a clean MMS PDP/socket state. A stale or half-open context
-            # can cause immediate +QIURC: "pdpdeact" / QIOPEN failures.
+            # Start from a clean MMS PDP/socket state.
             self.send_at(f"AT+QICLOSE={conn_id}", timeout=10)
             self.send_at(f"AT+QIDEACT={mms_context}", timeout=45)
             time.sleep(1)
@@ -856,7 +964,11 @@ class SMSHandler:
                 timeout=5,
             )
             if "ERROR" in resp:
-                logger.warning("send_mms: QICSGP context %d: %s", mms_context, resp.strip())
+                logger.warning(
+                    "send_mms: QICSGP context %d: %s",
+                    mms_context,
+                    resp.strip(),
+                )
 
             resp = self.send_at(f"AT+QIACT={mms_context}", timeout=160)
             logger.debug("send_mms: QIACT %d: %s", mms_context, resp.strip())
@@ -869,8 +981,12 @@ class SMSHandler:
 
             self.flush_serial()
             self.ser.write(
-                f'AT+QIOPEN={mms_context},{conn_id},"TCP","{connect_host}",{connect_port},0,0\r'.encode("ascii")
+                (
+                    f'AT+QIOPEN={mms_context},{conn_id},"TCP",'
+                    f'"{connect_host}",{connect_port},0,0\r'
+                ).encode("ascii")
             )
+
             resp = self._read_until(["+QIOPEN:", "ERROR", "ERROR"], timeout=160)
             logger.debug("send_mms: QIOPEN response: %s", resp.strip())
 
@@ -889,7 +1005,6 @@ class SMSHandler:
                 self._log_socket_diagnostics(conn_id)
                 return False
 
-            # Send raw HTTP request in chunks.
             logger.info(
                 "send_mms: socket open, starting upload to %s:%d, request size=%d",
                 connect_host,
@@ -902,7 +1017,6 @@ class SMSHandler:
             while offset < len(http_req):
                 chunk = http_req[offset:offset + tcp_chunk]
 
-                # Do not flush here; we want to see recv/closed URCs.
                 logger.debug(
                     "send_mms: requesting QISEND prompt offset=%d chunk=%d",
                     offset,
@@ -927,16 +1041,17 @@ class SMSHandler:
 
                 self.ser.write(chunk)
 
-                # Most Quectel docs say fixed-length QISEND should return SEND OK,
-                # but some firmware/modes can return plain OK while still advancing
-                # the QISEND byte counters. Treat plain OK as success only when the
-                # counters prove the whole chunk was accepted and acknowledged.
-                sr = self._read_until(["SEND OK", "OK", "SEND FAIL", "ERROR", "+QIURC:"], timeout=90)
+                sr = self._read_until(
+                    ["SEND OK", "OK", "SEND FAIL", "ERROR", "+QIURC:"],
+                    timeout=90,
+                )
                 logger.debug("send_mms: QISEND send response: %r", sr)
+
                 if not sr.strip():
-                    # Some modems deliver SEND OK / +QIURC just after our first
-                    # timeout. Take a short extra read before deciding.
-                    sr = self._read_until(["SEND OK", "OK", "SEND FAIL", "ERROR", "+QIURC:"], timeout=5)
+                    sr = self._read_until(
+                        ["SEND OK", "OK", "SEND FAIL", "ERROR", "+QIURC:"],
+                        timeout=5,
+                    )
                     logger.debug("send_mms: QISEND late send response: %r", sr)
 
                 if "+QIURC:" in sr:
@@ -947,10 +1062,10 @@ class SMSHandler:
                         sr.strip(),
                     )
 
-                    # The server may have responded or closed early. Try to read before failing.
                     early_resp = self._read_http_response(conn_id, timeout_rounds=5)
                     if early_resp:
                         logger.error("send_mms: early HTTP response: %r", early_resp[:500])
+
                     self._log_socket_diagnostics(conn_id)
                     return False
 
@@ -963,7 +1078,8 @@ class SMSHandler:
                         total, acked, unacked = state
                         if total >= chunk_end and acked >= chunk_end:
                             logger.debug(
-                                "send_mms: QISEND returned plain OK, but counters confirm chunk accepted: total=%d acked=%d unacked=%d",
+                                "send_mms: QISEND returned plain OK, but counters confirm "
+                                "chunk accepted: total=%d acked=%d unacked=%d",
                                 total,
                                 acked,
                                 unacked,
@@ -982,14 +1098,12 @@ class SMSHandler:
 
                 offset += len(chunk)
 
-                # Back-pressure: wait if the modem has too many unacked bytes.
                 self._wait_for_tcp_drain(
                     conn_id=conn_id,
                     max_unacked=max_unacked,
                     timeout=30,
                 )
 
-                # Small pacing delay helps avoid starving the modem's serial parser.
                 time.sleep(0.05)
 
             logger.info("send_mms: finished uploading HTTP request, %d bytes", len(http_req))
@@ -1023,13 +1137,18 @@ class SMSHandler:
                         body_bytes.hex(),
                     )
 
-                    # --- Parse m-send-conf binary PDU (OMA MMS 1.2) ---
                     # Response-Status field code 0x92.
-                    # Values: 0x80=OK, 0x81=Error-unspecified, 0x82=Error-service-denied,
-                    # 0x83=Error-message-format-corrupt, 0x84=Error-sending-address-unresolved,
-                    # 0x85=Error-message-not-found, 0x86=Error-network-problem,
-                    # 0x87=Error-content-not-accepted, 0x88=Error-unsupported-message
-                    _RS_NAMES = {
+                    # Values:
+                    # 0x80 = OK
+                    # 0x81 = Error-unspecified
+                    # 0x82 = Error-service-denied
+                    # 0x83 = Error-message-format-corrupt
+                    # 0x84 = Error-sending-address-unresolved
+                    # 0x85 = Error-message-not-found
+                    # 0x86 = Error-network-problem
+                    # 0x87 = Error-content-not-accepted
+                    # 0x88 = Error-unsupported-message
+                    rs_names = {
                         0x80: "OK",
                         0x81: "Error-unspecified",
                         0x82: "Error-service-denied",
@@ -1040,33 +1159,45 @@ class SMSHandler:
                         0x87: "Error-content-not-accepted",
                         0x88: "Error-unsupported-message",
                     }
+
                     for i in range(len(body_bytes) - 1):
-                        # Skip 0x92 that follows 0x8D (MMS-Version value, not field code)
+                        # Skip 0x92 that follows 0x8D because that is MMS-Version 1.2,
+                        # not the Response-Status field.
                         if body_bytes[i] == 0x92 and (i == 0 or body_bytes[i - 1] != 0x8D):
                             rs_val = body_bytes[i + 1]
-                            rs_name = _RS_NAMES.get(rs_val, f"Unknown-0x{rs_val:02x}")
+                            rs_name = rs_names.get(rs_val, f"Unknown-0x{rs_val:02x}")
+
                             if rs_val == 0x80:
                                 logger.info("send_mms: m-send-conf Response-Status: %s", rs_name)
                             else:
                                 logger.error(
-                                    "send_mms: m-send-conf Response-Status: %s (0x%02x) — MMS may not be delivered to %s",
-                                    rs_name, rs_val, number,
+                                    "send_mms: m-send-conf Response-Status: %s (0x%02x) — "
+                                    "MMS may not be delivered to %s",
+                                    rs_name,
+                                    rs_val,
+                                    number,
                                 )
                             break
 
                     # Message-Id field code 0x8B — null-terminated ASCII string.
-                    # Log it so it can be used for carrier-side delivery trace queries.
                     mid_pos = body_bytes.find(b"\x8b")
                     if mid_pos >= 0 and mid_pos + 1 < len(body_bytes):
                         nul = body_bytes.find(b"\x00", mid_pos + 1)
                         if nul > mid_pos + 1:
-                            message_id = body_bytes[mid_pos + 1:nul].decode("ascii", errors="replace")
+                            message_id = body_bytes[mid_pos + 1:nul].decode(
+                                "ascii",
+                                errors="replace",
+                            )
                             logger.info(
                                 "send_mms: MMSC Message-Id: %s (use for carrier delivery trace)",
                                 message_id,
                             )
 
-                logger.info("send_mms: MMS sent to %s — HTTP %d", number, http_status)
+                logger.info(
+                    "send_mms: MMS accepted by MMSC for %s — HTTP %d",
+                    number,
+                    http_status,
+                )
                 success = True
                 return True
 
