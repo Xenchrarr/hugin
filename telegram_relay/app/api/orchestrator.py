@@ -18,12 +18,12 @@ def _headers() -> dict[str, str]:
 
 
 def fetch_config() -> dict[str, Any]:
-    """Returns {'destinations': [...], 'rules': [...]} from the orchestrator."""
+    """Returns {'destinations': [...], 'rules': [...]} from the orchestrator.
+
+    Raises on any network or HTTP error so callers can decide whether to apply
+    the result — preventing a failed fetch from wiping the live rule engine.
+    """
     url = f"{_ORCHESTRATOR_URL}/api/telegram_relay/config"
-    try:
-        resp = requests.get(url, headers=_headers(), timeout=10)
-        resp.raise_for_status()
-        return resp.json()
-    except Exception as exc:
-        _logger.error("Failed to fetch telegram-relay config: %s", exc)
-        return {"destinations": [], "rules": []}
+    resp = requests.get(url, headers=_headers(), timeout=10)
+    resp.raise_for_status()
+    return resp.json()

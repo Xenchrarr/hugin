@@ -77,8 +77,12 @@ def _create_reload_server(forwarder: TelegramForwarder) -> threading.Thread:
                 return jsonify({"message": "Unauthorized"}), 401
 
         logger.info("Reload triggered via /internal/reload")
-        raw = fetch_config()
-        destinations, rules = _build_rules_and_destinations(raw)
+        try:
+            raw = fetch_config()
+            destinations, rules = _build_rules_and_destinations(raw)
+        except Exception as exc:
+            logger.error("Reload aborted — failed to fetch or parse config: %s", exc)
+            return jsonify({"status": "error", "message": str(exc)}), 500
         forwarder.reload_config(destinations, rules)
         return jsonify({"status": "ok", "destinations": len(destinations), "rules": len(rules)})
 

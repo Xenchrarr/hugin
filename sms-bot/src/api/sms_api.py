@@ -1,3 +1,4 @@
+import base64
 import logging
 import threading
 
@@ -48,6 +49,39 @@ def send_sms():
 def health():
     return jsonify({'status': 'ok'})
 
+
+@_app.route('/api/sms/mms/send', methods=['POST'])
+def send_mms():
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'Missing JSON body'}), 400
+
+    phone = data.get('phone')
+    message = data.get('message', '')
+    media_data_b64 = data.get('media_data')
+    media_mime_type = data.get('media_mime_type', 'image/jpeg')
+
+    if not phone or not media_data_b64:
+        return jsonify({'error': 'Missing phone or media_data'}), 400
+
+    _orchestrator = OrchestratorClient()
+    if _orchestrator.lookup_user('sms', phone) is None:
+        return jsonify({'error': 'Phone number not registered'}), 403
+
+    if _sms_handler is None:
+        return jsonify({'error': 'SMS handler not initialized'}), 503
+
+    try:
+        media_bytes = base64.b64decode(media_data_b64)
+    except Exception:
+        return jsonify({'error': 'Invalid base64 media_data'}), 400
+
+    try:
+        _sms_handler.send_mms(phone, message, media_bytes, media_mime_type)
+        return jsonify({'ok': True})
+    except Exception as e:
+        log.exception("Failed to send MMS to %s", phone)
+        return jsonify({'error': str(e)}), 500
 
 def start_api_server(handler: SMSHandler, port: int = 5050) -> None:
     """Start the Flask SMS API in a daemon thread."""

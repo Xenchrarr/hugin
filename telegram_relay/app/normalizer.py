@@ -12,6 +12,7 @@ class NormalizedMessage:
     sender_name: Optional[str]
     text: Optional[str]
     media_type: Optional[str]  # None | "photo" | "document"
+    media_file_id: Optional[int]  # TDLib file id for downloading (photo/document)
     caption: Optional[str]
     timestamp: int
     raw: dict = field(default_factory=dict)
@@ -51,7 +52,7 @@ class MessageNormalizer:
 
         content = message.get("content", {})
         content_type = content.get("@type")
-        text, media_type, caption = self._extract_content(content, content_type)
+        text, media_type, media_file_id, caption = self._extract_content(content, content_type)
 
         if text is None and media_type is None:
             return None
@@ -67,6 +68,7 @@ class MessageNormalizer:
             sender_name=sender_name,
             text=text,
             media_type=media_type,
+            media_file_id=media_file_id,
             caption=caption,
             timestamp=message.get("date", 0),
             raw=message,
@@ -74,16 +76,19 @@ class MessageNormalizer:
 
     def _extract_content(
         self, content: dict, content_type: Optional[str]
-    ) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    ) -> tuple[Optional[str], Optional[str], Optional[int], Optional[str]]:
         if content_type == "messageText":
-            return content.get("text", {}).get("text"), None, None
+            return content.get("text", {}).get("text"), None, None, None
         if content_type == "messagePhoto":
             cap = content.get("caption", {}).get("text") or None
-            return None, "photo", cap
+            sizes = content.get("photo", {}).get("sizes", [])
+            file_id = sizes[-1].get("photo", {}).get("id") if sizes else None
+            return None, "photo", file_id, cap
         if content_type == "messageDocument":
             cap = content.get("caption", {}).get("text") or None
-            return None, "document", cap
-        return None, None, None
+            file_id = content.get("document", {}).get("document", {}).get("id")
+            return None, "document", file_id, cap
+        return None, None, None, None
 
     def _extract_sender(
         self, sender: dict

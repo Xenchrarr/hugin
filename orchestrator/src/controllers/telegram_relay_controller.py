@@ -6,7 +6,7 @@ import os
 import requests
 from flask import Blueprint, request
 
-from src.auth import require_auth, require_admin, require_service_key
+from src.auth import require_auth, require_admin, require_service_key, require_auth_or_service_key
 from src.models.orchestrator.TelegramRelay import TelegramRelayDestination, TelegramRelayRule
 from src.persistence.TelegramRelayStorage import TelegramRelayStorage
 from src.services.core.auth_service import SERVICE_KEY
@@ -35,7 +35,7 @@ def _notify_relay() -> None:
 # ── Destinations ──────────────────────────────────────────────────────────────
 
 @telegram_relay_blueprint.route('/destinations', methods=['GET'])
-@require_auth
+@require_auth_or_service_key
 def list_destinations():
     try:
         destinations = _storage.get_destinations()
@@ -88,7 +88,7 @@ def delete_destination(destination_id: int):
 # ── Rules ─────────────────────────────────────────────────────────────────────
 
 @telegram_relay_blueprint.route('/rules', methods=['GET'])
-@require_auth
+@require_auth_or_service_key
 def list_rules():
     try:
         rules = _storage.get_rules()

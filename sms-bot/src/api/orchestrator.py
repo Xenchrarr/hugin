@@ -7,15 +7,19 @@ import requests
 logger = logging.getLogger(__name__)
 
 ORCHESTRATOR_API_URL = os.environ.get("ORCHESTRATOR_API_URL", "http://orchestrator:6000")
+_SERVICE_KEY = os.environ.get("SERVICE_KEY", "")
 
 
 class OrchestratorClient:
     def __init__(self, base_url: str = ORCHESTRATOR_API_URL) -> None:
         self._base_url = base_url.rstrip("/")
 
+    def _headers(self) -> dict:
+        return {"X-Service-Key": _SERVICE_KEY} if _SERVICE_KEY else {}
+
     def _get(self, path: str, **params) -> dict | list | None:
         try:
-            resp = requests.get(f"{self._base_url}{path}", params=params, timeout=(5, 15))
+            resp = requests.get(f"{self._base_url}{path}", params=params, headers=self._headers(), timeout=(5, 15))
             resp.raise_for_status()
             return resp.json()
         except Exception:
@@ -24,7 +28,7 @@ class OrchestratorClient:
 
     def _post(self, path: str, json: dict | None = None) -> dict | None:
         try:
-            resp = requests.post(f"{self._base_url}{path}", json=json or {}, timeout=(5, 15))
+            resp = requests.post(f"{self._base_url}{path}", json=json or {}, headers=self._headers(), timeout=(5, 15))
             resp.raise_for_status()
             return resp.json()
         except Exception:
@@ -74,6 +78,7 @@ class OrchestratorClient:
             resp = requests.patch(
                 f"{self._base_url}/api/telegram_relay/rules/{rule_id}/enabled",
                 json={"enabled": enabled},
+                headers=self._headers(),
                 timeout=(5, 15),
             )
             resp.raise_for_status()
