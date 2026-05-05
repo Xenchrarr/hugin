@@ -29,7 +29,8 @@ def main():
                 logger.info("Received SMS from %s: %s", msg.sender, msg.text)
 
                 response = processor.process(msg.text, sender=msg.sender)
-                sms.send_sms(msg.sender, response)
+                if not response.startswith("OK"):
+                    sms.send_sms(msg.sender, response)
                 sms.delete_message(msg.index)
 
             time.sleep(5)

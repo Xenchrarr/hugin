@@ -144,23 +144,9 @@ class CommandProcessor:
             if allowed is None or handler.path not in allowed:
                 return error_response(ERR_AUTH, "Permission denied", handler.path)
 
-        if handler.requires_pin and not _check_pin(user, cmd.pin):
-            return error_response(ERR_AUTH, "PIN required", f"{handler.usage} #PIN")
-
         try:
             return handler.execute(cmd)
         except Exception as e:
             logger.exception("Command %s failed: %s", cmd.path, e)
             return error_response(ERR_INTERNAL, "Command failed")
 
-
-def _check_pin(user: dict, pin: str | None) -> bool:
-    """Verify PIN against the user's config."""
-    import hmac
-    expected = (user.get('config') or {}).get('pin')
-    if not expected:
-        logger.warning("No PIN configured for user %s", user.get('username'))
-        return False
-    if pin is None:
-        return False
-    return hmac.compare_digest(pin, expected)

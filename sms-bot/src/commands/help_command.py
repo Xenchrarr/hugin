@@ -23,7 +23,7 @@ class HelpCommand(BaseCommand):
 
     def execute(self, cmd: ParsedCommand) -> str:
         if not self._resolver:
-            return "OK commands: (help unavailable)"
+            return "commands: (help unavailable)"
 
         commands = self._resolver.commands
         # Deduplicate: only show primary paths (skip aliases)
@@ -40,13 +40,18 @@ class HelpCommand(BaseCommand):
             # Exact path help
             if query in commands:
                 h = commands[query]
-                return f"OK {h.path}: {h.usage} — {h.description}"
-            # Show all subcommands of a domain
-            matches = [h for h in primary if h.path.startswith(query + "/") or h.path == query]
+                aliases = f" (aliases: {', '.join(h.aliases)})" if h.aliases else ""
+                return f"{h.path}: {h.usage} — {h.description}{aliases}"
+            # Show all subcommands of a namespace
+            matches = sorted(
+                [h for h in primary if h.path.startswith(query + "/") or h.path == query],
+                key=lambda h: h.path,
+            )
             if matches:
-                lines = [f"{h.path}: {h.usage}" for h in matches]
-                return "OK " + "; ".join(lines)
+                lines = [f"{h.path}: {h.usage} — {h.description}" for h in matches]
+                return "; ".join(lines)
             return f"No help for '{query}'. Try: help"
 
-        paths = sorted(h.path for h in primary)
-        return "OK commands: " + ", ".join(paths) + ". Try: help <cmd>"
+        standalone = sorted(h.path for h in primary if "/" not in h.path)
+        namespaces = sorted({h.path.split("/")[0] for h in primary if "/" in h.path})
+        return f"cmds: {', '.join(standalone)} | groups: {', '.join(namespaces)} | try: help <group>"

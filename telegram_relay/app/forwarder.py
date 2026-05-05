@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 import logging
 import os
@@ -99,20 +100,91 @@ class TelegramForwarder:
             destinations = self._destinations
         msg = self._normalizer.normalize(update)
         if msg is None:
+            raw_msg = update.get("message", {})
+            content_type = raw_msg.get("content", {}).get("@type", "?")
+            chat_id = raw_msg.get("chat_id", "?")
+            logger.info(
+                "Message dropped by normalizer: update_type=%s content_type=%s chat_id=%s",
+                update.get("@type", "?"), content_type, chat_id,
+            )
             return
 
+        msg = self._enrich_message(msg)
         self._update_recent_chat(msg)
 
         rules = engine.match(msg)
         if not rules:
-            logger.debug(
-                "No rules matched message %d in chat %d", msg.message_id, msg.chat_id
+            logger.warning(
+                "No rules matched message %d in chat %d (chat_id type=%s, chat_type=%s, chat_title=%r)",
+                msg.message_id, msg.chat_id, type(msg.chat_id).__name__, msg.chat_type, msg.chat_title,
             )
             return
 
         for rule in rules:
             for action in rule.actions:
                 await self._dispatch(action, msg, rule.name, destinations)
+
+    def _enrich_message(self, msg: NormalizedMessage) -> NormalizedMessage:
+        """Resolve chat_title and sender_name from cache / TDLib for forwarding context."""
+        from dataclasses import replace as dc_replace
+
+        # Resolve chat title
+        chat_title = msg.chat_title
+        if not chat_title:
+            with self._lock:
+                cached = self._recent_chats.get(msg.chat_id, {})
+                chat_title = cached.get("title") if cached.get("title") and not str(cached.get("title", "")).lstrip("-").isdigit() else None
+        if not chat_title:
+            try:
+                gc = self._client.call_method("getChat", params={"chat_id": msg.chat_id})
+                gc.wait()
+                if not gc.error:
+                    chat_title = gc.update.get("title") or None
+            except Exception:
+                logger.debug("_enrich_message: getChat(%d) failed", msg.chat_id)
+
+        # Resolve sender name
+        sender_name = msg.sender_name
+        if not sender_name and msg.sender_id:
+            try:
+                gu = self._client.call_method("getUser", params={"user_id": msg.sender_id})
+                gu.wait()
+                if not gu.error:
+                    u = gu.update
+                    sender_name = " ".join(filter(None, [u.get("first_name"), u.get("last_name")])) or None
+            except Exception:
+                logger.debug("_enrich_message: getUser(%s) failed", msg.sender_id)
+
+        if chat_title == msg.chat_title and sender_name == msg.sender_name:
+            return msg
+        return dc_replace(msg, chat_title=chat_title, sender_name=sender_name)
+
+    def _download_media(self, file_id: int, media_type: Optional[str]) -> tuple[Optional[bytes], str]:
+        """Download a TDLib file synchronously and return (bytes, mime_type).
+
+        Returns (None, '') on any error.
+        """
+        mime_type = "image/jpeg" if media_type == "photo" else "application/octet-stream"
+        try:
+            result = self._client.call_method(
+                "downloadFile",
+                params={"file_id": file_id, "priority": 1, "synchronous": True},
+            )
+            result.wait()
+            if result.error:
+                logger.warning("_download_media: downloadFile(%s) failed: %s", file_id, result.error_info)
+                return None, ""
+            local = result.update.get("local", {})
+            path = local.get("path", "")
+            if not path or not local.get("is_downloading_completed"):
+                logger.warning("_download_media: file %s not fully downloaded (path=%r)", file_id, path)
+                return None, ""
+            with open(path, "rb") as f:
+                data = f.read()
+            return data, mime_type
+        except Exception:
+            logger.exception("_download_media: error downloading file %s", file_id)
+            return None, ""
 
     async def _dispatch(
         self, action, msg: NormalizedMessage, rule_name: str, destinations: dict[str, AbstractDestination]
@@ -154,10 +226,19 @@ class TelegramForwarder:
                 exclude_fields=action.exclude_fields,
             )
             # For SMS destinations, always include context fields for message formatting
-            # regardless of include_fields/exclude_fields on the action
+            # regardless of include_fields/exclude_fields on the action.
+            # Use direct assignment (not setdefault) because to_payload() already sets
+            # these keys to None, making setdefault a no-op.
             if isinstance(destination, SmsAdapter):
-                payload.setdefault("chat_title", msg.chat_title)
-                payload.setdefault("sender_name", msg.sender_name)
+                payload["chat_title"] = msg.chat_title
+                payload["sender_name"] = msg.sender_name
+                payload["chat_type"] = msg.chat_type
+                # Attach media bytes for MMS if available
+                if msg.media_file_id is not None:
+                    media_bytes, mime_type = self._download_media(msg.media_file_id, msg.media_type)
+                    if media_bytes:
+                        payload["media_data"] = base64.b64encode(media_bytes).decode("ascii")
+                        payload["media_mime_type"] = mime_type
             logger.info(
                 "Rule '%s': forwarding message %d → '%s'",
                 rule_name, msg.message_id, action.destination,
@@ -194,9 +275,14 @@ class TelegramForwarder:
         if msg.chat_id in self._channel_ids:
             return
         snippet = msg.text or msg.caption or (f"<{msg.media_type}>" if msg.media_type else "")
+        with self._lock:
+            existing = self._recent_chats.get(msg.chat_id, {})
+            # Preserve an existing resolved title; don't overwrite with a bare numeric ID
+            existing_title = existing.get("title", "")
+            title = msg.chat_title or (existing_title if existing_title and not str(existing_title).lstrip("-").isdigit() else None) or str(msg.chat_id)
         entry = {
             "chat_id": msg.chat_id,
-            "title": msg.chat_title or str(msg.chat_id),
+            "title": title,
             "last_sender": msg.sender_name,
             "last_text": snippet[:80] if snippet else "",
             "timestamp": msg.timestamp,

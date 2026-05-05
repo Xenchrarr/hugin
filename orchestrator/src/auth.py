@@ -56,3 +56,29 @@ def require_service_key(f):
             return jsonify({"message": "Invalid or missing service key", "status": 401}), 401
         return f(*args, **kwargs)
     return decorated
+
+
+def require_auth_or_service_key(f):
+    """Flask decorator that accepts either a valid Bearer JWT or a valid X-Service-Key."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        # Try service key first (used by internal services / SMS bot)
+        key = request.headers.get("X-Service-Key", "")
+        if key:
+            if not SERVICE_KEY:
+                return jsonify({"message": "Service authentication not configured", "status": 503}), 503
+            if key == SERVICE_KEY:
+                return f(*args, **kwargs)
+            return jsonify({"message": "Invalid or missing service key", "status": 401}), 401
+
+        # Fall back to Bearer JWT (used by the frontend)
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"message": "Authorization required", "status": 401}), 401
+        token = auth_header[len("Bearer "):]
+        payload = decode_token(token)
+        if payload is None:
+            return jsonify({"message": "Invalid or expired token", "status": 401}), 401
+        g.jwt_payload = payload
+        return f(*args, **kwargs)
+    return decorated
