@@ -64,6 +64,9 @@ export class ReminderDialogComponent implements OnInit {
         {value: 'weekly:sun', label: 'Weekly (Sunday)'},
         {value: 'interval:1h', label: 'Every hour'},
         {value: 'interval:30m', label: 'Every 30 minutes'},
+        {value: 'interval:2d', label: 'Every 2 days'},
+        {value: 'interval:3d', label: 'Every 3 days'},
+        {value: 'interval:7d', label: 'Every 7 days'},
     ];
 
     constructor(

@@ -64,12 +64,10 @@ def _toggle(cmd: ParsedCommand, enabled: bool) -> str:
 
     current = rule.get("enabled", False)
     if current == enabled:
-        state = "already enabled" if enabled else "already disabled"
-        return f"OK rule '{rule['name']}' is {state}"
+        return f"'{rule['name']}' already {'on' if enabled else 'off'}"
 
     result = _orchestrator.set_relay_rule_enabled(rule["id"], enabled)
     if result is None:
         return error_response(ERR_INTERNAL, "Failed to update relay rule")
 
-    state = "enabled" if enabled else "disabled"
-    return f"OK rule '{rule['name']}' {state}"
+    return f"'{rule['name']}' {'on' if enabled else 'off'}"

@@ -206,6 +206,23 @@ def lookup_user():
         return {'message': f'Something went wrong: {e}', 'status': 500}, 500
 
 
+@user_blueprint.route('/lookup_by_name', methods=['GET'])
+def lookup_user_by_name():
+    """Resolve a user by username or display_name. Used internally by bots — no auth required."""
+    name = request.args.get('name', '').strip()
+
+    if not name:
+        return {'message': 'name query param is required', 'status': 400}, 400
+
+    try:
+        user = _storage.get_user_by_name(name)
+        if user is None:
+            return {'message': 'User not found', 'status': 404}, 404
+        return user.to_dict()
+    except Exception as e:
+        return {'message': f'Something went wrong: {e}', 'status': 500}, 500
+
+
 @user_blueprint.route('/<int:user_id>/service-config', methods=['GET'])
 @require_service_key
 def get_service_config(user_id: int):

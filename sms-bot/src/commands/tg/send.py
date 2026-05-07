@@ -20,11 +20,12 @@ class TgSendCommand(BaseCommand):
         target = cmd.positional[0]
         text = " ".join(cmd.positional[1:])
 
-        chat_id = self._resolve_chat(target)
-        if chat_id is None:
+        resolved = self._resolve_chat(target)
+        if resolved is None:
             return error_response(ERR_BAD_ARG, f"Could not resolve conversation '{target}'",
                                   "Use tg/list to see available conversations")
 
+        chat_id, title = resolved
         ok = _relay.send_message(chat_id, text)
         if not ok:
             return error_response(ERR_INTERNAL, "Failed to send Telegram message")
@@ -33,10 +34,10 @@ class TgSendCommand(BaseCommand):
         if cmd.sender_phone:
             _relay.set_context(cmd.sender_phone, chat_id)
 
-        return f"OK sent to chat {chat_id}"
+        return f"Sent: {title}"
 
     @staticmethod
-    def _resolve_chat(target: str) -> int | None:
+    def _resolve_chat(target: str) -> tuple[int, str] | None:
         """Resolve conversation by 1-based index (from tg/list) or raw chat_id."""
         convos = _relay.get_conversations()
         # Try numeric index first
@@ -44,7 +45,8 @@ class TgSendCommand(BaseCommand):
             num = int(target)
             # 1-based index into the current conversation list
             if 1 <= num <= len(convos):
-                return convos[num - 1]["chat_id"]
+                c = convos[num - 1]
+                return c["chat_id"], c.get("title") or str(c["chat_id"])
             # Otherwise treat as a raw chat_id
-            return num
+            return int(target), target
         return None

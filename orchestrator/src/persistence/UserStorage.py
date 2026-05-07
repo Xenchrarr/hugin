@@ -43,6 +43,13 @@ class UserStorage:
         row = self.fetchone()
         return User.from_db_row_auth(row) if row else None
 
+    def get_user_by_name(self, name: str) -> Optional[User]:
+        """Finds a user by username or display_name (case-insensitive)."""
+        query = read_sql_file('orchestrator/user/get_user_by_name.sql')
+        self.execute(query, (name, name))
+        row = self.fetchone()
+        return User.from_db_row(row) if row else None
+
     def create_user(self, user: User, password_hash: str) -> User:
         query = read_sql_file('orchestrator/user/create_user.sql')
         config_json = json.dumps(user.config) if isinstance(user.config, dict) else user.config

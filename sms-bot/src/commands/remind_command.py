@@ -58,4 +58,4 @@ class RemindCommand(BaseCommand):
 
         rid = result.get("id", "?")
         display_time = parsed_time.astimezone(_TZ).strftime('%Y-%m-%d %H:%M')
-        return f"OK reminder #{rid} set for {display_time}: {message}"
+        return f"Reminder #{rid}: {display_time}"

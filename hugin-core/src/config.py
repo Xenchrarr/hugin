@@ -17,6 +17,12 @@ class Settings:
     ORCHESTRATOR_API_URL: str = os.environ.get("ORCHESTRATOR_API_URL", "http://orchestrator:6000")
     SERVICE_KEY: str = os.environ.get("SERVICE_KEY", "")
     PRIMARY_USER_ID: int = int(os.environ.get("PRIMARY_USER_ID", "1"))
+    GOOGLE_SERVICE_ACCOUNT_JSON: str = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+    GOOGLE_CALENDAR_IDS: list[str] = [
+        cid.strip()
+        for cid in os.environ.get("GOOGLE_CALENDAR_IDS", "").split(",")
+        if cid.strip()
+    ]
 
 
 settings = Settings()

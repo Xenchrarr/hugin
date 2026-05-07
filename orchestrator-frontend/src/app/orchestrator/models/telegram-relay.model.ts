@@ -14,6 +14,7 @@ export interface TelegramRelayRule {
   priority: number;
   enabled: boolean;
   continue_on_match: boolean;
+  is_preset: boolean;
   conditions: Record<string, any> | null;
   actions: Record<string, any>[];
   created_at?: string;

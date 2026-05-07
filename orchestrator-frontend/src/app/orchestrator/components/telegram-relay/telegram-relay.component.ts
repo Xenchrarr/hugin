@@ -48,7 +48,7 @@ export class TelegramRelayComponent implements OnInit {
     readonly dialog = inject(MatDialog);
 
     destinationColumns: string[] = ['id', 'name', 'type', 'enabled', 'actions'];
-    ruleColumns: string[] = ['id', 'name', 'priority', 'enabled', 'continue_on_match', 'actions'];
+    ruleColumns: string[] = ['id', 'name', 'priority', 'enabled', 'continue_on_match', 'is_preset', 'actions'];
 
     constructor(private relayService: TelegramRelayService) {}
 
@@ -64,19 +64,20 @@ export class TelegramRelayComponent implements OnInit {
     // ── Destinations ────────────────────────────────────────
 
     addDestination() {
-        const ref = this.dialog.open(DestinationDialogComponent, {data: null, width: '600px'});
+        const ref = this.dialog.open(DestinationDialogComponent, {data: null, width: '1000px', maxWidth: '90vw'});
         ref.afterClosed().subscribe(result => { if (result) this.load(); });
     }
 
     editDestination(dest: TelegramRelayDestination) {
-        const ref = this.dialog.open(DestinationDialogComponent, {data: dest, width: '600px'});
+        const ref = this.dialog.open(DestinationDialogComponent, {data: dest, width: '1000px', maxWidth: '90vw'});
         ref.afterClosed().subscribe(result => { if (result) this.load(); });
     }
 
     confirmDeleteDestination(dest: TelegramRelayDestination) {
         const ref = this.dialog.open(ConfirmDialogComponent, {
             data: {message: `Delete destination "${dest.name}"?`},
-            width: '400px',
+            width: '500px',
+            maxWidth: '90vw',
         });
         ref.afterClosed().subscribe(confirmed => {
             if (confirmed) {
@@ -88,24 +89,29 @@ export class TelegramRelayComponent implements OnInit {
     // ── Rules ────────────────────────────────────────────────
 
     addRule() {
-        const ref = this.dialog.open(RuleDialogComponent, {data: null, width: '700px'});
+        const ref = this.dialog.open(RuleDialogComponent, {data: null, width: '1000px', maxWidth: '90vw'});
         ref.afterClosed().subscribe(result => { if (result) this.load(); });
     }
 
     editRule(rule: TelegramRelayRule) {
-        const ref = this.dialog.open(RuleDialogComponent, {data: rule, width: '700px'});
+        const ref = this.dialog.open(RuleDialogComponent, {data: rule, width: '1000px', maxWidth: '90vw'});
         ref.afterClosed().subscribe(result => { if (result) this.load(); });
     }
 
     confirmDeleteRule(rule: TelegramRelayRule) {
         const ref = this.dialog.open(ConfirmDialogComponent, {
             data: {message: `Delete rule "${rule.name}"?`},
-            width: '400px',
+            width: '500px',
+            maxWidth: '90vw',
         });
         ref.afterClosed().subscribe(confirmed => {
             if (confirmed) {
                 this.relayService.deleteRule(rule.id).subscribe(() => this.load());
             }
         });
+    }
+
+    setPreset(enabled: boolean) {
+        this.relayService.setPresetEnabled(enabled).subscribe(() => this.load());
     }
 }

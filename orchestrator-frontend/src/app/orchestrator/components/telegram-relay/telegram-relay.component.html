@@ -53,6 +53,8 @@
 <h2>Rules</h2>
 <p>
     <button mat-flat-button color="primary" (click)="addRule()">Add rule</button>
+    <button mat-stroked-button color="primary" (click)="setPreset(true)">Preset ON</button>
+    <button mat-stroked-button (click)="setPreset(false)">Preset OFF</button>
 </p>
 
 <div class="mat-elevation-z2">
@@ -84,6 +86,13 @@
             <th mat-header-cell *matHeaderCellDef>Continue</th>
             <td mat-cell *matCellDef="let row">
                 <mat-checkbox [disabled]="true" [checked]="row.continue_on_match"></mat-checkbox>
+            </td>
+        </ng-container>
+
+        <ng-container matColumnDef="is_preset">
+            <th mat-header-cell *matHeaderCellDef>Preset</th>
+            <td mat-cell *matCellDef="let row">
+                <mat-checkbox [disabled]="true" [checked]="row.is_preset"></mat-checkbox>
             </td>
         </ng-container>
 

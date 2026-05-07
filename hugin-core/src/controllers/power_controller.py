@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import pytz
 from flask import Blueprint, jsonify, request
 
+from src.clients.deye import DeyeClient
 from src.clients.growatt import GrowattClient
 from src.database import get_session
 from src.models.power import PowerReading
@@ -94,4 +95,25 @@ def growatt_data():
     data = GrowattClient(username, password).get_inverter_data()
     if data is None:
         return jsonify({"error": "Could not fetch Growatt data"}), 502
+    return jsonify(data)
+
+
+@power_blueprint.route("/deye")
+def deye_data():
+    try:
+        config = get_primary_user_config()
+    except RuntimeError as e:
+        return jsonify({"error": f"Could not fetch user config: {e}"}), 503
+
+    app_id = config.get("deye_app_id", "")
+    app_secret = config.get("deye_app_secret", "")
+    email = config.get("deye_email", "")
+    password = config.get("deye_password", "")
+    device_sn = config.get("deye_device_sn", "")
+    if not all([app_id, app_secret, email, password, device_sn]):
+        return jsonify({"error": "Deye credentials not configured in user settings"}), 503
+
+    data = DeyeClient(app_id, app_secret, email, password, device_sn).get_inverter_data()
+    if data is None:
+        return jsonify({"error": "Could not fetch Deye data"}), 502
     return jsonify(data)

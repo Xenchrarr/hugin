@@ -141,7 +141,8 @@ export class NotificationSettingsComponent implements OnInit {
                 message: `Delete ${this.getChannelLabel(setting.channel)} for "${label}"?`,
                 confirmLabel: 'Delete',
             },
-            width: '400px',
+            width: '500px',
+            maxWidth: '90vw',
         });
         dialogRef.afterClosed().subscribe(result => {
             if (result) {

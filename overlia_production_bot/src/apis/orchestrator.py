@@ -71,3 +71,6 @@ class OrchestratorClient:
 
     def lookup_user(self, channel: str, identifier: str) -> dict | None:
         return self._get("/api/users/lookup", channel=channel, identifier=identifier)
+
+    def get_user_by_name(self, name: str) -> dict | None:
+        return self._get("/api/users/lookup_by_name", name=name)

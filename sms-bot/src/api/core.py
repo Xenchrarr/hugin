@@ -64,3 +64,10 @@ class HuginCoreClient:
     def remove_from_shopping_list(self, item: str) -> bool:
         result = self._delete("/api/shopping/remove", json={"item": item})
         return result is not None and result.get("ok", False)
+
+    # --- Calendar ---
+    def get_agenda(self, days: int = 7) -> list[dict] | None:
+        data = self._get("/api/calendar/agenda", days=days)
+        if data is None:
+            return None
+        return data.get("events")

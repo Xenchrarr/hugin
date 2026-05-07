@@ -12,3 +12,5 @@ simplenote>=2.1,<3
 sqlalchemy>=2.0,<3
 psycopg2-binary>=2.9,<3
 pytz>=2024.1
+google-api-python-client>=2.100,<3
+google-auth>=2.23,<3

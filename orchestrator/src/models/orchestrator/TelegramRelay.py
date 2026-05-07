@@ -62,6 +62,7 @@ class TelegramRelayRule:
     continue_on_match: bool
     conditions: Optional[dict]
     actions: list[dict]
+    is_preset: bool = False
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -74,6 +75,7 @@ class TelegramRelayRule:
             "continue_on_match": self.continue_on_match,
             "conditions": self.conditions,
             "actions": self.actions,
+            "is_preset": self.is_preset,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -94,8 +96,9 @@ class TelegramRelayRule:
             continue_on_match=bool(row[4]),
             conditions=conditions,
             actions=actions or [],
-            created_at=row[7],
-            updated_at=row[8],
+            is_preset=bool(row[7]),
+            created_at=row[8],
+            updated_at=row[9],
         )
 
     @staticmethod
@@ -108,4 +111,5 @@ class TelegramRelayRule:
             continue_on_match=bool(obj.get("continue_on_match", False)),
             conditions=obj.get("conditions"),
             actions=obj.get("actions", []),
+            is_preset=bool(obj.get("is_preset", False)),
         )

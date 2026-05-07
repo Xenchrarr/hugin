@@ -43,17 +43,9 @@
                         <mat-form-field class="wide-field">
                             <mat-label>Recurrence</mat-label>
                             <mat-select [(ngModel)]="reminder.recurrence">
-                                <mat-option *ngIf="true" [value]="null">One-time</mat-option>
-                                <mat-option value="daily">Daily</mat-option>
-                                <mat-option value="weekly:mon">Weekly (Monday)</mat-option>
-                                <mat-option value="weekly:tue">Weekly (Tuesday)</mat-option>
-                                <mat-option value="weekly:wed">Weekly (Wednesday)</mat-option>
-                                <mat-option value="weekly:thu">Weekly (Thursday)</mat-option>
-                                <mat-option value="weekly:fri">Weekly (Friday)</mat-option>
-                                <mat-option value="weekly:sat">Weekly (Saturday)</mat-option>
-                                <mat-option value="weekly:sun">Weekly (Sunday)</mat-option>
-                                <mat-option value="interval:1h">Every hour</mat-option>
-                                <mat-option value="interval:30m">Every 30 minutes</mat-option>
+                                <mat-option *ngFor="let opt of recurrenceOptions" [value]="opt.value || null">
+                                    {{ opt.label }}
+                                </mat-option>
                             </mat-select>
                         </mat-form-field>
                     </td>

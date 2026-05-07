@@ -98,6 +98,7 @@ class TelegramRelayStorage:
                 1 if rule.continue_on_match else 0,
                 json.dumps(rule.conditions) if rule.conditions is not None else None,
                 json.dumps(rule.actions),
+                1 if rule.is_preset else 0,
             ),
         )
         row = self.fetchone()
@@ -115,12 +116,18 @@ class TelegramRelayStorage:
                 1 if rule.continue_on_match else 0,
                 json.dumps(rule.conditions) if rule.conditions is not None else None,
                 json.dumps(rule.actions),
+                1 if rule.is_preset else 0,
                 rule.id,
             ),
         )
         row = self.fetchone()
         self.commit()
         return TelegramRelayRule.from_db_row(row) if row else None
+
+    def update_preset_enabled(self, enabled: bool) -> None:
+        query = read_sql_file('orchestrator/telegram_relay/update_preset_enabled.sql')
+        self.execute(query, (1 if enabled else 0,))
+        self.commit()
 
     def delete_rule(self, rule_id: int) -> None:
         query = read_sql_file('orchestrator/telegram_relay/delete_rule.sql')

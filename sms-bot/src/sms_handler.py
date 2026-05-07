@@ -566,6 +566,10 @@ class SMSHandler:
 
         self.flush_serial()
         ucs2_hex = chunk.encode("utf-16-be").hex().upper()
+        # Send a CR before Ctrl-Z so the modem's AT parser flushes its internal
+        # hex buffer and commits the last UCS-2 character before terminating.
+        # Without the CR, some modem firmware drops the last character because
+        # Ctrl-Z arrives while the last hex pair is still pending in the buffer.
         self.ser.write((ucs2_hex + "\x1A").encode("ascii"))
 
         response = self._read_until(["\nOK", "\nERROR", "+CMGS:", "ERROR"], timeout=60)
@@ -583,7 +587,7 @@ class SMSHandler:
         logger.info("Sending SMS to %s: %s", number, message)
         ucs2_number = number.encode("utf-16-be").hex().upper()
 
-        chunk_size = 159
+        chunk_size = 160
         chunks: list[str] = []
 
         while message:

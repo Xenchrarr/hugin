@@ -4,14 +4,16 @@ import logging
 
 import matplotlib.pyplot as plt
 
+from src.clients.deye import DeyeClient
 from src.clients.growatt import GrowattClient
 
 logger = logging.getLogger(__name__)
 
 
 class ChartService:
-    def __init__(self, growatt_client: GrowattClient) -> None:
+    def __init__(self, growatt_client: GrowattClient, deye_client: DeyeClient | None = None) -> None:
         self._growatt = growatt_client
+        self._deye = deye_client
 
     def generate_daily_chart(self, ecoflow_hourly: dict | None = None) -> io.BytesIO:
         data = self._growatt.get_daily_chart_data(datetime.datetime.today())
@@ -27,6 +29,14 @@ class ChartService:
             x_e = list(sorted_e.keys())
             y_e = list(sorted_e.values())
             ax.plot(x_e, y_e, marker="s", linestyle="--", label="EcoFlow Solar")
+
+        if self._deye:
+            deye_data = self._deye.get_daily_chart_data(datetime.datetime.today().date())
+            if deye_data:
+                sorted_d = dict(sorted(deye_data.items()))
+                x_d = list(sorted_d.keys())
+                y_d = [float(v) for v in sorted_d.values()]
+                ax.plot(x_d, y_d, marker="^", linestyle="-.", label="Deye Solar")
 
         ax.set_xlabel("Time")
         ax.set_ylabel("Wattage (W)")
@@ -54,9 +64,18 @@ class ChartService:
             extra_data = self._growatt.get_monthly_chart_data(first_day.year, first_day.month)
             extra_monthly = dict(sorted(extra_data.items()))
 
+        # Fetch Deye monthly data if client available
+        deye_monthly: dict = {}
+        deye_extra_monthly: dict = {}
+        if self._deye:
+            deye_monthly = self._deye.get_monthly_chart_data(today.year, today.month)
+            if first_day.month != today.month:
+                deye_extra_monthly = self._deye.get_monthly_chart_data(first_day.year, first_day.month)
+
         labels: list[str] = []
         growatt_vals: list[float] = []
         ecoflow_vals: list[float] = []
+        deye_vals: list[float] = []
 
         for i in reversed(range(days)):
             target_date = today - datetime.timedelta(days=i)
@@ -76,16 +95,28 @@ class ChartService:
 
             e_kwh = float((ecoflow_daily or {}).get(target_date.date(), 0))
 
+            if deye_extra_monthly and target_date.month != today.month:
+                d_kwh = float(deye_extra_monthly.get(day_str, 0))
+            else:
+                d_kwh = float(deye_monthly.get(day_str, 0))
+
             labels.append(label)
             growatt_vals.append(g_kwh)
             ecoflow_vals.append(e_kwh)
+            deye_vals.append(d_kwh)
 
         x = list(range(len(labels)))
-        width = 0.35
+        has_deye = self._deye is not None
+        width = 0.25 if has_deye else 0.35
 
         fig, ax = plt.subplots(figsize=(14, 8), dpi=300)
-        ax.bar([i - width / 2 for i in x], growatt_vals, width, label="Growatt")
-        ax.bar([i + width / 2 for i in x], ecoflow_vals, width, label="EcoFlow")
+        if has_deye:
+            ax.bar([i - width for i in x], growatt_vals, width, label="Growatt")
+            ax.bar([i for i in x], ecoflow_vals, width, label="EcoFlow")
+            ax.bar([i + width for i in x], deye_vals, width, label="Deye")
+        else:
+            ax.bar([i - width / 2 for i in x], growatt_vals, width, label="Growatt")
+            ax.bar([i + width / 2 for i in x], ecoflow_vals, width, label="EcoFlow")
 
         ax.set_xlabel("Day")
         ax.set_ylabel("Energy (kWh)")
@@ -105,16 +136,31 @@ class ChartService:
         data = self._growatt.get_monthly_chart_data(year, month)
         sorted_g = dict(sorted(data.items()))
 
-        all_days = sorted(set(sorted_g.keys()) | set((ecoflow_monthly or {}).keys()))
+        deye_monthly: dict = {}
+        if self._deye:
+            deye_monthly = self._deye.get_monthly_chart_data(year, month)
+
+        all_days = sorted(
+            set(sorted_g.keys())
+            | set((ecoflow_monthly or {}).keys())
+            | set(deye_monthly.keys())
+        )
         growatt_vals = [float(sorted_g.get(d, 0)) for d in all_days]
         ecoflow_vals = [float((ecoflow_monthly or {}).get(d, 0)) for d in all_days]
+        deye_vals = [float(deye_monthly.get(d, 0)) for d in all_days]
 
         x = list(range(len(all_days)))
-        width = 0.35
+        has_deye = self._deye is not None
+        width = 0.25 if has_deye else 0.35
 
         fig, ax = plt.subplots(figsize=(14, 7), dpi=300)
-        ax.bar([i - width / 2 for i in x], growatt_vals, width, label="Growatt")
-        ax.bar([i + width / 2 for i in x], ecoflow_vals, width, label="EcoFlow")
+        if has_deye:
+            ax.bar([i - width for i in x], growatt_vals, width, label="Growatt")
+            ax.bar([i for i in x], ecoflow_vals, width, label="EcoFlow")
+            ax.bar([i + width for i in x], deye_vals, width, label="Deye")
+        else:
+            ax.bar([i - width / 2 for i in x], growatt_vals, width, label="Growatt")
+            ax.bar([i + width / 2 for i in x], ecoflow_vals, width, label="EcoFlow")
 
         date = datetime.date(year, month, 1)
         ax.set_xlabel("Date")

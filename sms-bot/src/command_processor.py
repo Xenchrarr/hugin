@@ -18,6 +18,8 @@ from src.commands.tg.send import TgSendCommand
 from src.commands.tg.reply import TgReplyCommand
 from src.commands.relay.list import RelayListCommand
 from src.commands.relay.toggle import RelayStartCommand, RelayStopCommand
+from src.commands.relay.preset import RelayPresetOnCommand, RelayPresetOffCommand
+from src.commands.agenda_command import AgendaCommand
 from src.commands.ai_command import AiCommand
 from src.models.errors import (
     ERR_AUTH,
@@ -56,6 +58,9 @@ class CommandProcessor:
             RelayListCommand(),
             RelayStartCommand(),
             RelayStopCommand(),
+            RelayPresetOnCommand(),
+            RelayPresetOffCommand(),
+            AgendaCommand(),
         ]
 
         # Build command registry for NLU before AiCommand so it can be passed in

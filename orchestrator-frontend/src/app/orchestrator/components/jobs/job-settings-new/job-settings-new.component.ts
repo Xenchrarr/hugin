@@ -160,7 +160,8 @@ export class JobSettingsNewComponent implements OnInit {
         confirmDeleteJob(job: Job): void {
         const dialogRef = this.dialog.open(ConfirmDialogComponent, {
             data: { title: 'Delete Job?', message: `Are you sure you want to delete "${job.name || job.id}"?`, confirmLabel: 'Delete' },
-            width: '400px',
+            width: '500px',
+            maxWidth: '90vw',
         });
         dialogRef.afterClosed().subscribe(result => {
             if (result) {

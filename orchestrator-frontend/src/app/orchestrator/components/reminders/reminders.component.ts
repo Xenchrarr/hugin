@@ -87,7 +87,8 @@ export class RemindersComponent implements OnInit {
     addReminder() {
         const dialogRef = this.dialog.open(ReminderDialogComponent, {
             data: undefined,
-            width: '600px',
+            width: '1000px',
+            maxWidth: '90vw',
         });
         dialogRef.afterClosed().subscribe(result => {
             if (result) {
@@ -99,7 +100,8 @@ export class RemindersComponent implements OnInit {
     editReminder(reminder: Reminder) {
         const dialogRef = this.dialog.open(ReminderDialogComponent, {
             data: reminder,
-            width: '600px',
+            width: '1000px',
+            maxWidth: '90vw',
         });
         dialogRef.afterClosed().subscribe(result => {
             if (result) {
@@ -123,7 +125,8 @@ export class RemindersComponent implements OnInit {
     confirmDeleteReminder(reminder: Reminder): void {
         const dialogRef = this.dialog.open(ConfirmDialogComponent, {
             data: {title: 'Delete Reminder?', message: `Are you sure you want to delete "${reminder.title}"?`, confirmLabel: 'Delete'},
-            width: '400px',
+            width: '500px',
+            maxWidth: '90vw',
         });
         dialogRef.afterClosed().subscribe(result => {
             if (result) {

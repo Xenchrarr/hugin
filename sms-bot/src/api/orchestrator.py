@@ -86,3 +86,17 @@ class OrchestratorClient:
         except Exception:
             logger.exception("Orchestrator API error: PATCH /api/telegram_relay/rules/%s/enabled", rule_id)
             return None
+
+    def set_relay_preset(self, enabled: bool) -> dict | None:
+        try:
+            resp = requests.patch(
+                f"{self._base_url}/api/telegram_relay/rules/preset/enabled",
+                json={"enabled": enabled},
+                headers=self._headers(),
+                timeout=(5, 15),
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except Exception:
+            logger.exception("Orchestrator API error: PATCH /api/telegram_relay/rules/preset/enabled")
+            return None

@@ -40,6 +40,9 @@ class HuginCoreClient:
     def get_growatt_data(self) -> dict | None:
         return self._get("/api/power/growatt")
 
+    def get_deye_data(self) -> dict | None:
+        return self._get("/api/power/deye")
+
     # --- Energy ---
     def get_today_energy(self) -> dict | None:
         return self._get("/api/energy/today")

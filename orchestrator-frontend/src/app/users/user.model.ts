@@ -1,9 +1,14 @@
 export interface UserConfig {
   weather_location_id?: string;
-  inverter_type?: 'growatt' | 'ecoflow' | null;
+  inverter_type?: 'growatt' | 'ecoflow' | 'deye' | null;
   inverter_id?: string;
   growatt_username?: string;
   growatt_password?: string;
+  deye_app_id?: string;
+  deye_app_secret?: string;
+  deye_email?: string;
+  deye_password?: string;
+  deye_device_sn?: string;
   default_channels?: string[];
   pin?: string;
 }

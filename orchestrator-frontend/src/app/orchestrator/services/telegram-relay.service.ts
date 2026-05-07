@@ -41,4 +41,8 @@ export class TelegramRelayService {
     deleteRule(id: number): Observable<any> {
         return this.http.delete(this.baseUrl + '/rules/' + id);
     }
+
+    setPresetEnabled(enabled: boolean): Observable<any> {
+        return this.http.patch(this.baseUrl + '/rules/preset/enabled', { enabled });
+    }
 }

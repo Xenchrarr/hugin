@@ -55,6 +55,7 @@
             <mat-option [value]="null">— None —</mat-option>
             <mat-option value="growatt">Growatt</mat-option>
             <mat-option value="ecoflow">EcoFlow</mat-option>
+            <mat-option value="deye">Deye</mat-option>
           </mat-select>
         </mat-form-field>
 
@@ -72,6 +73,33 @@
           <mat-form-field appearance="outline">
             <mat-label>Growatt Password</mat-label>
             <input matInput type="password" [(ngModel)]="form.config!.growatt_password" autocomplete="new-password" />
+          </mat-form-field>
+        }
+
+        @if (form.config!.inverter_type === 'deye') {
+          <mat-form-field appearance="outline">
+            <mat-label>Deye App ID</mat-label>
+            <input matInput [(ngModel)]="form.config!.deye_app_id" autocomplete="off" />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Deye App Secret</mat-label>
+            <input matInput type="password" [(ngModel)]="form.config!.deye_app_secret" autocomplete="new-password" />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Deye Account Email</mat-label>
+            <input matInput [(ngModel)]="form.config!.deye_email" autocomplete="off" />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Deye Account Password</mat-label>
+            <input matInput type="password" [(ngModel)]="form.config!.deye_password" autocomplete="new-password" />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Deye Logger Serial Number</mat-label>
+            <input matInput [(ngModel)]="form.config!.deye_device_sn" autocomplete="off" />
           </mat-form-field>
         }
 

@@ -54,7 +54,7 @@ export class RuleDialogComponent {
         if (!data) {
             this.rule = {
                 id: 0, name: '', priority: 100, enabled: true,
-                continue_on_match: false, conditions: null, actions: []
+                continue_on_match: false, is_preset: false, conditions: null, actions: []
             };
             this.isNew = true;
         } else {

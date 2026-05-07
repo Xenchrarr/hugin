@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import logging
 import re
@@ -98,13 +99,36 @@ async def total_data_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.message.reply_text(formatted_dict)
 
 
+@restricted('telegram/deye')
+async def deye_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    data = core.get_deye_data()
+    if not data:
+        await update.message.reply_text("Could not fetch Deye data.")
+        return
+
+    formatted_dict = "\n".join(f"{key}: {value}" for key, value in data.items())
+    await update.message.reply_text(formatted_dict)
+
+
 @restricted('telegram/weather')
 async def get_weather(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = context.user_data.get('resolved_user', {})
-    location_id = (user.get('config') or {}).get('weather_location_id', '')
-    if not location_id:
-        await update.message.reply_text("Weather location not configured. Set it in your profile settings.")
-        return
+    if context.args:
+        name = " ".join(context.args)
+        target_user = orchestrator.get_user_by_name(name)
+        if target_user is None:
+            await update.message.reply_text(f"User not found: {name}")
+            return
+        location_id = (target_user.get('config') or {}).get('weather_location_id', '')
+        if not location_id:
+            display = target_user.get('display_name') or target_user.get('username') or name
+            await update.message.reply_text(f"{display}'s weather location is not configured.")
+            return
+    else:
+        user = context.user_data.get('resolved_user', {})
+        location_id = (user.get('config') or {}).get('weather_location_id', '')
+        if not location_id:
+            await update.message.reply_text("Weather location not configured. Set it in your profile settings.")
+            return
     image = core.get_weather_image(location_id)
     if image is None:
         await update.message.reply_text("Could not fetch weather.")
@@ -465,12 +489,23 @@ async def reminder_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             await query.edit_message_text("Failed to dismiss.")
 
 
+async def _post_init(application: Application) -> None:
+    """Capture the running event loop so the Flask API thread can schedule sends into it."""
+    import src.api.telegram_api as telegram_api
+    telegram_api.set_app_loop(asyncio.get_running_loop())
+
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.error("Unhandled exception", exc_info=context.error)
+
+
 def main() -> None:
-    application = Application.builder().token(settings.TELEGRAM_API_KEY).build()
+    application = Application.builder().token(settings.TELEGRAM_API_KEY).post_init(_post_init).build()
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("data", total_data_command))
+    application.add_handler(CommandHandler("deye", deye_command))
     application.add_handler(CommandHandler("weather", get_weather))
     application.add_handler(CommandHandler("nikolai_weather", nikolai_weather))
     application.add_handler(CommandHandler("chart", get_chart))
@@ -488,6 +523,7 @@ def main() -> None:
     application.add_handler(CommandHandler("register", register_command))
     application.add_handler(CommandHandler("registerphone", registerphone_command))
     application.add_handler(CallbackQueryHandler(reminder_callback))
+    application.add_error_handler(error_handler)
 
     # Start the outbound Telegram REST API in a background thread
     from src.api.telegram_api import start_api_server

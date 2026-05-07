@@ -64,7 +64,8 @@ export class ReposComponent implements OnInit {
     addRepo() {
         const dialogRef = this.dialog.open(RepoCardComponent, {
             data: undefined,
-            width: '600px',
+            width: '1000px',
+            maxWidth: '90vw',
         });
         dialogRef.afterClosed().subscribe(result => {
             if (result) {
@@ -76,7 +77,8 @@ export class ReposComponent implements OnInit {
     editRepo(repo: GitRepo) {
         const dialogRef = this.dialog.open(RepoCardComponent, {
             data: repo,
-            width: '600px',
+            width: '1000px',
+            maxWidth: '90vw',
         });
         dialogRef.afterClosed().subscribe(result => {
             if (result) {
@@ -88,7 +90,8 @@ export class ReposComponent implements OnInit {
     confirmDeleteRepo(repo: GitRepo): void {
         const dialogRef = this.dialog.open(ConfirmDialogComponent, {
             data: {title: 'Delete Repo?', message: `Are you sure you want to delete "${repo.name || repo.url}"?`, confirmLabel: 'Delete'},
-            width: '400px',
+            width: '500px',
+            maxWidth: '90vw',
         });
         dialogRef.afterClosed().subscribe(result => {
             if (result) {

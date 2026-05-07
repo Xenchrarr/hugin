@@ -244,7 +244,8 @@ export class JobRunsComponent implements OnInit{
     confirmDeleteJobRun(jobRun: JobRun): void {
         const dialogRef = this.dialog.open(ConfirmDialogComponent, {
             data: { title: 'Delete Run?', message: `Are you sure you want to delete "${jobRun.name || jobRun.id}"?`, confirmLabel: 'Delete' },
-            width: '400px',
+            width: '500px',
+            maxWidth: '90vw',
         });
         dialogRef.afterClosed().subscribe(result => {
             if (result) {

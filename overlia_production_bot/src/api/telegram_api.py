@@ -8,6 +8,14 @@ log = logging.getLogger(__name__)
 
 _app = Flask(__name__)
 _bot = None
+_app_loop: asyncio.AbstractEventLoop | None = None
+
+
+def set_app_loop(loop: asyncio.AbstractEventLoop) -> None:
+    """Store the bot application's running event loop for cross-thread message sending."""
+    global _app_loop
+    _app_loop = loop
+    log.info("Telegram API: application event loop captured")
 
 
 def set_bot(bot) -> None:
@@ -31,10 +39,15 @@ def send_message():
     if _bot is None:
         return jsonify({'error': 'Bot not initialized'}), 503
 
+    if _app_loop is None:
+        return jsonify({'error': 'Application event loop not ready'}), 503
+
     try:
-        loop = asyncio.new_event_loop()
-        loop.run_until_complete(_bot.send_message(chat_id=chat_id, text=message))
-        loop.close()
+        future = asyncio.run_coroutine_threadsafe(
+            _bot.send_message(chat_id=chat_id, text=message),
+            _app_loop,
+        )
+        future.result(timeout=30)
         return jsonify({'ok': True})
     except Exception as e:
         log.exception("Failed to send Telegram message to %s", chat_id)

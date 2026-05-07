@@ -6,6 +6,7 @@ import pytz
 from flask import Blueprint, Response, jsonify, request
 from sqlalchemy import desc
 
+from src.clients.deye import DeyeClient
 from src.clients.growatt import GrowattClient
 from src.database import get_session
 from src.models.power import PowerReading, DailyEnergy
@@ -75,7 +76,16 @@ def _get_chart_service() -> tuple[ChartService, tuple[dict, int] | None]:
     if not username or not password:
         return None, ({"error": "Growatt credentials not configured in user settings"}, 503)
 
-    return ChartService(GrowattClient(username, password)), None
+    deye_client: DeyeClient | None = None
+    deye_app_id = config.get("deye_app_id", "")
+    deye_app_secret = config.get("deye_app_secret", "")
+    deye_email = config.get("deye_email", "")
+    deye_password = config.get("deye_password", "")
+    deye_device_sn = config.get("deye_device_sn", "")
+    if all([deye_app_id, deye_app_secret, deye_email, deye_password, deye_device_sn]):
+        deye_client = DeyeClient(deye_app_id, deye_app_secret, deye_email, deye_password, deye_device_sn)
+
+    return ChartService(GrowattClient(username, password), deye_client=deye_client), None
 
 
 def _png_response(image_buf):

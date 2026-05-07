@@ -140,6 +140,20 @@ def toggle_rule_enabled(rule_id: int):
         return {'message': f"Something went wrong: {e}", 'status': 500, 'error': str(e)}, 500
 
 
+@telegram_relay_blueprint.route('/rules/preset/enabled', methods=['PATCH'])
+@require_auth_or_service_key
+def toggle_preset_rules_enabled():
+    try:
+        data = request.get_json(silent=True)
+        if data is None or "enabled" not in data:
+            return {'message': 'Missing required field: enabled', 'status': 400}, 400
+        _storage.update_preset_enabled(bool(data["enabled"]))
+        _notify_relay()
+        return {'message': 'Preset rules updated', 'status': 200}
+    except Exception as e:
+        return {'message': f"Something went wrong: {e}", 'status': 500, 'error': str(e)}, 500
+
+
 @telegram_relay_blueprint.route('/rules/<int:rule_id>', methods=['DELETE'])
 @require_admin
 def delete_rule(rule_id: int):
