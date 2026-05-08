@@ -163,6 +163,7 @@ services:
       SMS_BOT_URL: http://sms-hub:5050
       TELEGRAM_BOT_URL: http://overlia-power-bot:5060
       TELEGRAM_RELAY_URL: http://telegram-relay:8080
+      PRINTER_HUB_URL: http://printer-hub:6002
     networks:
       - backend
       - frontend
@@ -220,6 +221,25 @@ services:
       resources:
         limits:
           memory: 64M
+
+  # ── Printer ────────────────────────────────────────────────
+
+  printer-hub:
+    image: xenchrarr/printer-hub:latest
+    restart: unless-stopped
+    container_name: printer-hub
+    environment:
+      PRINTER_DEVICE: ${PRINTER_DEVICE:-/dev/usb/lp0}
+    devices:
+      - /dev/usb/lp0:/dev/usb/lp0
+    group_add:
+      - lp
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 128M
 
   # ── Telegram Relay ─────────────────────────────────────────
 

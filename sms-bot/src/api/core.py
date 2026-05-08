@@ -65,6 +65,16 @@ class HuginCoreClient:
         result = self._delete("/api/shopping/remove", json={"item": item})
         return result is not None and result.get("ok", False)
 
+    # --- Ideas ---
+    def get_ideas(self) -> str | None:
+        data = self._get("/api/ideas/list")
+        if data is None:
+            return None
+        return data.get("content")
+
+    def add_to_ideas(self, item: str) -> dict | None:
+        return self._post("/api/ideas/add", json={"item": item})
+
     # --- Calendar ---
     def get_agenda(self, days: int = 7) -> list[dict] | None:
         data = self._get("/api/calendar/agenda", days=days)

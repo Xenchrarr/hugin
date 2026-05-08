@@ -23,13 +23,23 @@ def _get_client() -> Simplenote:
 
 
 def add_to_shopping_list(text_to_append: str):
-    text = f"\n{text_to_append}"
+    text = f"\n\u00c4\u00d1 {text_to_append}"
     _append_to_note_with_key(settings.SIMPLENOTE_SHOPPING_LIST_KEY, text)
 
 
 def get_shopping_list() -> str:
     note = _get_note(settings.SIMPLENOTE_SHOPPING_LIST_KEY)
     return _strip_checklist_markers(note["content"])
+
+
+def get_ideas() -> str:
+    note = _get_note(settings.SIMPLENOTE_IDEAS_KEY)
+    return _strip_checklist_markers(note["content"])
+
+
+def add_to_ideas(text_to_append: str):
+    text = f"\n{text_to_append}"
+    _append_to_note_with_key(settings.SIMPLENOTE_IDEAS_KEY, text)
 
 
 def remove_from_shopping_list(item: str) -> bool:

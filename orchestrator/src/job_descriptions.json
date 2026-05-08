@@ -2,5 +2,6 @@
   "test": "Test",
   "git_sync": "Sync a git repository. Pass repo name as parameter, or leave empty to sync all.",
   "run_script": "Run a PowerShell script from the automatiserings-suite. Parameter is a JSON object with script_name and script-specific parameters.",
-  "power_aggregation": "Trigger hugin-core daily energy aggregation. Runs every 15 minutes and at midnight."
+  "power_aggregation": "Trigger hugin-core daily energy aggregation. Runs every 15 minutes and at midnight.",
+  "print_news": "Fetch news headlines from an RSS feed and print them on the Cashino printer. Parameter is a JSON object: {\"feed_url\": \"https://...\", \"count\": 5}."
 }

@@ -7,6 +7,8 @@ from src.commands.help_command import HelpCommand
 from src.commands.get_shoppinglist import GetShoppingListCommand
 from src.commands.list_add import ListAddCommand
 from src.commands.list_rm import ListRmCommand
+from src.commands.get_ideas import GetIdeasCommand
+from src.commands.ideas_add import IdeasAddCommand
 from src.commands.remind_command import RemindCommand
 from src.commands.remind_list_command import RemindListCommand
 from src.commands.snooze_command import SnoozeCommand
@@ -46,6 +48,8 @@ class CommandProcessor:
             GetShoppingListCommand(),
             ListAddCommand(),
             ListRmCommand(),
+            GetIdeasCommand(),
+            IdeasAddCommand(),
             RemindCommand(),
             RemindListCommand(),
             SnoozeCommand(),

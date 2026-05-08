@@ -6,6 +6,7 @@ from src.persistence.DatabaseLogger import DatabaseLogger
 from src.services.external.powershell_service import run_test_script, run_script
 from src.services.external.git_service import run_git_sync
 from src.services.external.power_aggregation_service import run_power_aggregation
+from src.services.external.printer_hub_service import run_print_news
 
 from src.jobs_registry import job_type
 
@@ -65,4 +66,9 @@ def git_sync_job(param: str = ""):
 @job_type('power_aggregation', JOB_DESCRIPTIONS.get('power_aggregation', 'Trigger hugin-core daily energy aggregation'))
 def power_aggregation_job(param: str = ""):
     run_power_aggregation(param)
+
+
+@job_type('print_news', JOB_DESCRIPTIONS.get('print_news', 'Fetch news headlines from an RSS feed and print them'))
+def print_news_job(param: str = ""):
+    run_print_news(param)
 
