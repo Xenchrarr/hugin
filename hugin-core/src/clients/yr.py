@@ -6,13 +6,14 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://www.yr.no/en/content/{yr_id}/meteogram.svg?mode=dark"
+BASE_URL = "https://www.yr.no/en/content/{yr_id}/meteogram.svg"
 
 
 class YrClient:
-    def get_weather_image(self, yr_id: str) -> bytes | None:
+    def get_weather_image(self, yr_id: str, dark_mode: bool = True) -> bytes | None:
         try:
-            url = BASE_URL.format(yr_id=yr_id)
+            mode = "dark" if dark_mode else "light"
+            url = BASE_URL.format(yr_id=yr_id) + f"?mode={mode}"
             response = requests.get(url, timeout=(5, 15))
 
             if response.status_code == 200:

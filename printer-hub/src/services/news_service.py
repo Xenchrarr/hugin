@@ -1,6 +1,7 @@
 import re
 import textwrap
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import feedparser
 
@@ -23,7 +24,7 @@ class NewsService:
         feed_title = feed.feed.get("title", feed_url)
 
         lines = self._format_entries(entries)
-        now = datetime.now().strftime("%d.%m.%Y  %H:%M")
+        now = datetime.now(ZoneInfo("Europe/Oslo")).strftime("%d.%m.%Y  %H:%M")
 
         self.print_service.print_content(
             title=feed_title,

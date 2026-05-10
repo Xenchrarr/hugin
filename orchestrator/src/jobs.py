@@ -6,7 +6,7 @@ from src.persistence.DatabaseLogger import DatabaseLogger
 from src.services.external.powershell_service import run_test_script, run_script
 from src.services.external.git_service import run_git_sync
 from src.services.external.power_aggregation_service import run_power_aggregation
-from src.services.external.printer_hub_service import run_print_news
+from src.services.external.printer_hub_service import run_print_news, run_print_weather
 
 from src.jobs_registry import job_type
 
@@ -71,4 +71,9 @@ def power_aggregation_job(param: str = ""):
 @job_type('print_news', JOB_DESCRIPTIONS.get('print_news', 'Fetch news headlines from an RSS feed and print them'))
 def print_news_job(param: str = ""):
     run_print_news(param)
+
+
+@job_type('print_weather', JOB_DESCRIPTIONS.get('print_weather', 'Print the yr.no weather meteogram on the thermal printer'))
+def print_weather_job(param: str = ""):
+    run_print_weather(param)
 

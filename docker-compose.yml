@@ -121,6 +121,7 @@ services:
     environment:
       CORE_API_URL: http://hugin-core:5100
       ORCHESTRATOR_API_URL: http://orchestrator:6000
+      PRINTER_HUB_URL: http://printer-hub:6002
     devices:
       - /dev/serial/by-id/usb-Quectel_EC25-EUX_0123456789ABCDEF-if02-port0:/dev/ttyUSB0
     group_add:
@@ -230,6 +231,8 @@ services:
     container_name: printer-hub
     environment:
       PRINTER_DEVICE: ${PRINTER_DEVICE:-/dev/usb/lp0}
+      HUGIN_CORE_URL: http://hugin-core:5100
+      YR_ID: ${YR_ID:-}
     devices:
       - /dev/usb/lp0:/dev/usb/lp0
     group_add:
