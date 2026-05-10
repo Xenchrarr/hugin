@@ -32,7 +32,11 @@ rem dismiss <id>              Dismiss a reminder permanently
 
 ENERGY & SOLAR
 --------------
+data                          Current inverter power and today's total energy
+weather                       Today's weather forecast as text
+weather/image                 Today's weather forecast as MMS image
 chart                         Today's solar production (Growatt + EcoFlow combined)
+chartdays [n]                 Energy per day for last n days (default 7, max 30)
 
 HOME AUTOMATION  [PIN required]
 ---------------------------------

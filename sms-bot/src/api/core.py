@@ -19,6 +19,15 @@ class HuginCoreClient:
             logger.exception("Core API error: GET %s", path)
             return None
 
+    def _get_bytes(self, path: str, **params) -> bytes | None:
+        try:
+            response = requests.get(f"{self._base_url}{path}", params=params)
+            response.raise_for_status()
+            return response.content
+        except Exception:
+            logger.exception("Core API error: GET %s (bytes)", path)
+            return None
+
     def _post(self, path: str, json: dict | None = None) -> dict | None:
         try:
             response = requests.post(f"{self._base_url}{path}", json=json or {})
@@ -50,6 +59,16 @@ class HuginCoreClient:
 
     def get_growatt_data(self) -> dict | None:
         return self._get("/api/power/growatt")
+
+    def get_daily_energy(self, days: int = 7) -> dict | None:
+        return self._get("/api/energy/daily", days=days)
+
+    # --- Weather ---
+    def get_weather_image_bytes(self, location_id: str) -> bytes | None:
+        return self._get_bytes(f"/api/weather/{location_id}")
+
+    def get_weather_summary(self, location_id: str) -> dict | None:
+        return self._get(f"/api/weather/{location_id}/summary")
 
     # --- Shopping List ---
     def get_shopping_list(self) -> str | None:

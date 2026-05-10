@@ -16,6 +16,10 @@ from src.commands.snooze_command import SnoozeCommand
 from src.commands.dismiss_command import DismissCommand
 from src.commands.trigger_automation import TriggerAutomation
 from src.commands.chart_command import ChartCommand
+from src.commands.data_command import DataCommand
+from src.commands.weather_command import WeatherCommand
+from src.commands.weather_image_command import WeatherImageCommand
+from src.commands.chartdays_command import ChartDaysCommand
 from src.commands.tg.list import TgListCommand
 from src.commands.tg.send import TgSendCommand
 from src.commands.tg.reply import TgReplyCommand
@@ -58,6 +62,10 @@ class CommandProcessor:
             DismissCommand(),
             TriggerAutomation(),
             ChartCommand(),
+            DataCommand(),
+            WeatherCommand(),
+            WeatherImageCommand(),
+            ChartDaysCommand(),
             TgListCommand(),
             TgSendCommand(),
             TgReplyCommand(),

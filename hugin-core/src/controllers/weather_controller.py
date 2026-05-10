@@ -1,4 +1,4 @@
-from flask import Blueprint, Response, request
+from flask import Blueprint, Response, jsonify, request
 
 from src.clients.yr import YrClient
 
@@ -14,3 +14,11 @@ def weather_image(location_id: str):
     if image is None:
         return {"error": "Could not fetch weather image"}, 502
     return Response(image, mimetype="image/png")
+
+
+@weather_blueprint.route("/<location_id>/summary")
+def weather_summary(location_id: str):
+    summary = yr_client.get_weather_summary(yr_id=location_id)
+    if summary is None:
+        return {"error": "Could not fetch weather summary"}, 502
+    return jsonify(summary)

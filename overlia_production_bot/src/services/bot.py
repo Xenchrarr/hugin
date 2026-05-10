@@ -80,7 +80,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 @restricted()
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("Help!")
+    text = (
+        "help - Show help\n"
+        "data - Show inverter data\n"
+        "weather - Show weather forecast\n"
+        "chart - Show daily production chart\n"
+        "chartdays - Show multi-day production"
+    )
+    await update.message.reply_text(text)
 
 
 @restricted('telegram/data')
