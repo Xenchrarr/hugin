@@ -1,4 +1,5 @@
 import io
+import threading
 
 from PIL import Image
 
@@ -9,6 +10,8 @@ GS = b"\x1d"
 
 PRINTER_WIDTH = 48
 PRINTER_IMAGE_WIDTH = 576  # 80mm paper @ 203 dpi
+
+_print_lock = threading.Lock()
 
 
 class PrintService:
@@ -53,9 +56,10 @@ class PrintService:
         return bytes(data)
 
     def _write(self, data: bytes):
-        with open(self.device, "wb") as printer:
-            printer.write(data)
-            printer.flush()
+        with _print_lock:
+            with open(self.device, "wb") as printer:
+                printer.write(data)
+                printer.flush()
 
     def print_image(self, image_bytes: bytes):
         data = self._build_image(image_bytes)
