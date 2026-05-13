@@ -1,0 +1,41 @@
+.form-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 420px;
+
+    .url-field {
+        width: 100%;
+    }
+}
+
+.color-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.color-label {
+    font-size: 0.875rem;
+    color: rgba(0, 0, 0, 0.6);
+    min-width: 40px;
+}
+
+.color-input {
+    width: 40px;
+    height: 36px;
+    padding: 2px;
+    border: 1px solid rgba(0, 0, 0, 0.38);
+    border-radius: 4px;
+    cursor: pointer;
+    background: none;
+}
+
+.color-preview {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    display: inline-block;
+}
+

@@ -6,7 +6,8 @@ import {ReposComponent} from "./components/repos/repos.component";
 import {ScriptsPageComponent} from "./components/scripts-page/scripts-page.component";
 import {RunsPageComponent} from "./components/runs-page/runs-page.component";
 import {RemindersComponent} from "./components/reminders/reminders.component";
-import {TelegramRelayComponent} from "./components/telegram-relay/telegram-relay.component";
+import {TelegramRelayComponent} from './components/telegram-relay/telegram-relay.component';
+import {CalendarComponent} from './components/calendar/calendar.component';
 
 export const routes: Routes = [
     {
@@ -45,5 +46,9 @@ export const routes: Routes = [
     {
         path: 'telegram-relay',
         component: TelegramRelayComponent,
+    },
+    {
+        path: 'calendar',
+        component: CalendarComponent,
     },
 ];

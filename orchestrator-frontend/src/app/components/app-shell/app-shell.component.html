@@ -68,6 +68,13 @@
                 }
             </a>
 
+            <a mat-list-item routerLink="/calendar" routerLinkActive="active">
+                <mat-icon matListItemIcon>calendar_month</mat-icon>
+                @if(!collapsed) {
+                <span>Calendar</span>
+                }
+            </a>
+
             <mat-divider></mat-divider>
 
             @if ((auth.user$ | async)?.is_admin) {

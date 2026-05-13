@@ -233,6 +233,12 @@ services:
       PRINTER_DEVICE: ${PRINTER_DEVICE:-/dev/usb/lp0}
       HUGIN_CORE_URL: http://hugin-core:5100
       YR_ID: ${YR_ID:-}
+      LLM_SUMMARIZE: ${LLM_SUMMARIZE:-true}
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
     devices:
       - /dev/usb/lp0:/dev/usb/lp0
     group_add:
@@ -242,7 +248,22 @@ services:
     deploy:
       resources:
         limits:
-          memory: 128M
+          memory: 256M
+
+  # ── AI / LLM ──────────────────────────────────────────────
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    container_name: ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 4G
 
   # ── Telegram Relay ─────────────────────────────────────────
 
@@ -281,3 +302,4 @@ volumes:
   shared_logs:
   powershell_scripts:
   telegram_tdlib:
+  ollama_data:

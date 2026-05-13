@@ -6,7 +6,7 @@ from src.persistence.DatabaseLogger import DatabaseLogger
 from src.services.external.powershell_service import run_test_script, run_script
 from src.services.external.git_service import run_git_sync
 from src.services.external.power_aggregation_service import run_power_aggregation
-from src.services.external.printer_hub_service import run_print_news, run_print_weather
+from src.services.external.printer_hub_service import run_print_news, run_print_weather, run_print_today
 
 from src.jobs_registry import job_type
 
@@ -55,6 +55,8 @@ def run_script_job(param: str = ""):
     if not script_name:
         raise Exception("script_name is required in parameter JSON")
 
+    logger = DatabaseLogger()
+    logger.log_info(f"Script: {script_name} | Params: {params}")
     run_script(script_name, params)
 
 
@@ -76,4 +78,9 @@ def print_news_job(param: str = ""):
 @job_type('print_weather', JOB_DESCRIPTIONS.get('print_weather', 'Print the yr.no weather meteogram on the thermal printer'))
 def print_weather_job(param: str = ""):
     run_print_weather(param)
+
+
+@job_type('print_today', JOB_DESCRIPTIONS.get('print_today', "Print today's calendar events and reminders on the thermal printer"))
+def print_today_job(param: str = ""):
+    run_print_today(param)
 

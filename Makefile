@@ -50,7 +50,7 @@ build-orchestrator:
 	docker build --tag ${DOCKER_USERNAME}/${ORCHESTRATOR_IMAGE} ${ORCHESTRATOR_DIR}
 
 build-orchestrator-frontend:
-	docker build --tag ${DOCKER_USERNAME}/${ORCH_FRONTEND_IMAGE} -f ${ORCH_FRONTEND_DIR}/dockerfile ${ORCH_FRONTEND_DIR}
+	docker build --no-cache --tag ${DOCKER_USERNAME}/${ORCH_FRONTEND_IMAGE} -f ${ORCH_FRONTEND_DIR}/dockerfile ${ORCH_FRONTEND_DIR}
 
 build-powershell-runner:
 	docker build --tag ${DOCKER_USERNAME}/${POWERSHELL_IMAGE} ${POWERSHELL_DIR}

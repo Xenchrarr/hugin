@@ -1,3 +1,4 @@
+import logging
 import re
 import textwrap
 from datetime import datetime
@@ -6,6 +7,8 @@ from zoneinfo import ZoneInfo
 import feedparser
 
 from src.services.print_service import PrintService
+
+log = logging.getLogger(__name__)
 
 PRINTER_WIDTH = 48
 
@@ -44,28 +47,25 @@ class NewsService:
 
         for i, entry in enumerate(entries):
             title = entry.get("title", "(uten tittel)")
-            summary = entry.get("summary", entry.get("description", ""))
-            summary = self._clean_summary(summary)
+            summary = self._get_summary(entry)
 
-            # Uppercase title for emphasis on thermal printer
-            lines.append(title.upper()[:PRINTER_WIDTH])
+            lines.extend(textwrap.wrap(title.upper(), PRINTER_WIDTH))
 
             if summary:
-                excerpt_lines = textwrap.wrap(summary[:600], width=PRINTER_WIDTH)[:8]
-                lines.extend(excerpt_lines)
+                lines.extend(textwrap.wrap(summary, width=PRINTER_WIDTH))
 
             if i < len(entries) - 1:
                 lines.append(divider)
 
         return lines
 
+    def _get_summary(self, entry: dict) -> str:
+        rss_text = entry.get("summary", entry.get("description", ""))
+        return self._clean_summary(rss_text)
+
     @staticmethod
     def _clean_summary(text: str) -> str:
-        # Strip HTML tags
         text = re.sub(r"<[^>]+>", "", text)
-        # Remove bare URLs (http/https lines)
         text = re.sub(r"https?://\S+", "", text)
-        # Collapse whitespace and punctuation left behind
         text = re.sub(r"[\s,;:]+", " ", text).strip()
-        # Discard if nothing meaningful remains (< 20 chars)
         return text if len(text) >= 20 else ""

@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 
 from src.services.print_service import PrintService
 from src.services.news_service import NewsService
+from src.services.today_service import TodayService
 from src.services.weather_service import WeatherService
 from src.services.shopping_service import ShoppingService
 
@@ -63,6 +64,15 @@ def print_weather():
 def print_shopping():
     try:
         result = ShoppingService().fetch_and_print()
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@print_blueprint.route('/today', methods=['POST'])
+def print_today():
+    try:
+        result = TodayService().fetch_and_print()
         return jsonify(result), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500

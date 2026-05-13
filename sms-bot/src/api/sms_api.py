@@ -1,5 +1,6 @@
 import base64
 import logging
+import os
 import threading
 
 from flask import Flask, request, jsonify
@@ -11,6 +12,7 @@ log = logging.getLogger(__name__)
 
 _app = Flask(__name__)
 _sms_handler: SMSHandler | None = None
+_SERVICE_KEY = os.environ.get("SERVICE_KEY", "")
 
 
 def set_sms_handler(handler: SMSHandler) -> None:
@@ -30,9 +32,11 @@ def send_sms():
     if not phone or not message:
         return jsonify({'error': 'Missing phone or message'}), 400
 
-    _orchestrator = OrchestratorClient()
-    if _orchestrator.lookup_user('sms', phone) is None:
-        return jsonify({'error': 'Phone number not registered'}), 403
+    trusted = _SERVICE_KEY and request.headers.get("X-Service-Key") == _SERVICE_KEY
+    if not trusted:
+        _orchestrator = OrchestratorClient()
+        if _orchestrator.lookup_user('sms', phone) is None:
+            return jsonify({'error': 'Phone number not registered'}), 403
 
     if _sms_handler is None:
         return jsonify({'error': 'SMS handler not initialized'}), 503
@@ -64,9 +68,11 @@ def send_mms():
     if not phone or not media_data_b64:
         return jsonify({'error': 'Missing phone or media_data'}), 400
 
-    _orchestrator = OrchestratorClient()
-    if _orchestrator.lookup_user('sms', phone) is None:
-        return jsonify({'error': 'Phone number not registered'}), 403
+    trusted = _SERVICE_KEY and request.headers.get("X-Service-Key") == _SERVICE_KEY
+    if not trusted:
+        _orchestrator = OrchestratorClient()
+        if _orchestrator.lookup_user('sms', phone) is None:
+            return jsonify({'error': 'Phone number not registered'}), 403
 
     if _sms_handler is None:
         return jsonify({'error': 'SMS handler not initialized'}), 503

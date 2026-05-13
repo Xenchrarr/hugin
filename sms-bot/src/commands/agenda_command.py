@@ -1,13 +1,12 @@
-import os
 from collections import defaultdict
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
-from src.api.core import HuginCoreClient
+from src.api.orchestrator import OrchestratorClient
 from src.commands.base_command import BaseCommand
 from src.models.parsed_command import ParsedCommand
 
-_core = HuginCoreClient(os.environ.get("CORE_API_URL", "http://hugin-core:5100"))
+_orchestrator = OrchestratorClient()
 _TZ = ZoneInfo("Europe/Oslo")
 
 _DAY_ABBR = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -76,13 +75,13 @@ class AgendaCommand(BaseCommand):
             except ValueError:
                 pass
 
-        events = _core.get_agenda(days=days)
+        events = _orchestrator.get_agenda(days=days)
         if events is None:
             return "ERR_INTERNAL: Could not fetch calendar"
         if not events:
             return f"(no events in the next {days} day{'s' if days != 1 else ''})"
 
-        n_cals = len({e.get("calendar_name", "") for e in events})
+        n_cals = len({e.get("source_name", "") for e in events})
 
         grouped: dict[date, list[str]] = defaultdict(list)
         for event in events:
@@ -93,7 +92,7 @@ class AgendaCommand(BaseCommand):
                 continue
             time_str = _format_time(start, all_day)
             summary = event.get("summary", "(no title)")
-            tag = _calendar_tag(event.get("calendar_name", ""), n_cals)
+            tag = _calendar_tag(event.get("source_name", ""), n_cals)
             grouped[d].append(f"{time_str} {summary}{tag}".strip())
 
         lines: list[str] = []

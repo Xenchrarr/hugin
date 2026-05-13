@@ -45,7 +45,9 @@ def run_generic_script(script_name: str, params: dict):
     }
     response = session.post(url, json=body, timeout=POWERSHELL_SCRIPT_TIMEOUT)
     if response.status_code == 200:
-        return response.json()
+        result = response.json()
+        logger.log_info(f"Script {script_name} completed: {result}")
+        return result
     else:
         logger.log_error(f"Error running script {script_name}: {response.status_code}: {response.text}", "")
         raise Exception(f"{response.status_code}: {response.text}")

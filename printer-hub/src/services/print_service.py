@@ -1,4 +1,5 @@
 import io
+import textwrap
 import threading
 
 from PIL import Image
@@ -32,7 +33,8 @@ class PrintService:
             # Center align, bold
             data += ESC + b"a" + b"\x01"
             data += ESC + b"E" + b"\x01"
-            data += self._encode(title[:PRINTER_WIDTH]) + b"\n"
+            for line in textwrap.wrap(title, PRINTER_WIDTH):
+                data += self._encode(line) + b"\n"
             data += ESC + b"E" + b"\x00"
             data += self._encode("-" * PRINTER_WIDTH) + b"\n"
 

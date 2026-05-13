@@ -65,6 +65,16 @@ class OrchestratorClient:
     def dismiss_reminder(self, reminder_id: int) -> dict | None:
         return self._post(f"/api/reminders/{reminder_id}/dismiss")
 
+    # ── Calendar ──────────────────────────────────────────────
+
+    def get_agenda(self, days: int = 7) -> list[dict] | None:
+        data = self._get("/api/ical_sources/agenda", days=days)
+        if data is None:
+            return None
+        return data.get("events")
+
+    # ── Users ─────────────────────────────────────────────────
+
     def lookup_user(self, channel: str, identifier: str) -> dict | None:
         return self._get("/api/users/lookup", channel=channel, identifier=identifier)
 

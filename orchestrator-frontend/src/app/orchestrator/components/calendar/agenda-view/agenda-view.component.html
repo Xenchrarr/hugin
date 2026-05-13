@@ -1,0 +1,16 @@
+<div class="agenda" *ngIf="days.length; else empty">
+    <div class="day-group" *ngFor="let day of days">
+        <div class="day-header" [class.today]="isToday(day.date)">
+            {{ day.label }}
+        </div>
+        <div class="event-row" *ngFor="let event of day.events" [style.borderLeftColor]="event.source_color">
+            <span class="event-time">{{ formatTime(event) }}</span>
+            <span class="event-summary">{{ event.summary }}</span>
+            <span class="event-cal">{{ event.source_name }}</span>
+        </div>
+    </div>
+</div>
+
+<ng-template #empty>
+    <p class="empty">No upcoming events.</p>
+</ng-template>

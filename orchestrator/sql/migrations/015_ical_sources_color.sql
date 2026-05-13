@@ -1,0 +1,2 @@
+ALTER TABLE ical_sources
+    ADD COLUMN color VARCHAR(7) NOT NULL DEFAULT '#1976d2';

@@ -1,0 +1,25 @@
+<div class="week-nav">
+    <button mat-icon-button (click)="prevWeek()" aria-label="Previous week">
+        <mat-icon>chevron_left</mat-icon>
+    </button>
+    <span class="week-label">{{ weekLabel }}</span>
+    <button mat-icon-button (click)="nextWeek()" aria-label="Next week">
+        <mat-icon>chevron_right</mat-icon>
+    </button>
+</div>
+
+<div class="week-grid">
+    <div class="day-col" *ngFor="let day of weekDays" [class.today]="day.isToday">
+        <div class="day-header">
+            <span class="weekday">{{ day.label }}</span>
+            <span class="date">{{ day.shortDate }}</span>
+        </div>
+        <div class="day-events">
+            <div class="event-chip" *ngFor="let event of day.events" [style.background]="event.source_color">
+                <span class="chip-time">{{ formatTime(event) }}</span>
+                <span class="chip-summary">{{ event.summary }}</span>
+            </div>
+            <div class="no-events" *ngIf="!day.events.length">—</div>
+        </div>
+    </div>
+</div>

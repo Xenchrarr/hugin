@@ -14,15 +14,16 @@ class GoogleCalendarClient:
 
         self._ical_urls = settings.GOOGLE_CALENDAR_ICAL_URLS
 
-    def get_events(self, days: int = 7) -> list[dict]:
-        if not self._ical_urls:
+    def get_events(self, days: int = 7, urls: list[str] | None = None) -> list[dict]:
+        effective_urls = urls if urls is not None else self._ical_urls
+        if not effective_urls:
             return []
 
         now = datetime.now(timezone.utc)
         time_max = now + timedelta(days=days)
 
         all_events: list[dict] = []
-        for url in self._ical_urls:
+        for url in effective_urls:
             try:
                 response = requests.get(url, timeout=10)
                 response.raise_for_status()
@@ -54,6 +55,7 @@ class GoogleCalendarClient:
                             "summary": str(component.get("SUMMARY", "(no title)")),
                             "calendar_name": calendar_name,
                             "all_day": all_day,
+                            "source_url": url,
                         }
                     )
             except Exception:

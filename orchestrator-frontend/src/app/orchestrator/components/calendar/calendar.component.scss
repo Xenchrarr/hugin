@@ -1,0 +1,46 @@
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+
+    h2 {
+        margin: 0;
+    }
+}
+
+.sources-table {
+    width: 100%;
+    margin-bottom: 24px;
+
+    .url-cell {
+        font-size: 0.8rem;
+        color: #666;
+        max-width: 400px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .actions-cell {
+        display: flex;
+        gap: 4px;
+    }
+}
+
+.calendar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+
+    h3 {
+        margin: 0;
+    }
+}
+
+.loading {
+    padding: 32px;
+    text-align: center;
+    color: #aaa;
+}

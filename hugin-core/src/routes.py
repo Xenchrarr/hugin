@@ -8,6 +8,7 @@ from src.controllers.home_controller import home_blueprint
 from src.controllers.ideas_controller import ideas_blueprint
 from src.controllers.power_controller import power_blueprint
 from src.controllers.shopping_controller import shopping_blueprint
+from src.controllers.today_controller import today_blueprint
 from src.controllers.weather_controller import weather_blueprint
 
 api = Blueprint('api', __name__)
@@ -19,4 +20,5 @@ api.register_blueprint(home_blueprint, url_prefix="/home")
 api.register_blueprint(ideas_blueprint, url_prefix="/ideas")
 api.register_blueprint(power_blueprint, url_prefix="/power")
 api.register_blueprint(shopping_blueprint, url_prefix="/shopping")
+api.register_blueprint(today_blueprint, url_prefix="/today")
 api.register_blueprint(weather_blueprint, url_prefix="/weather")

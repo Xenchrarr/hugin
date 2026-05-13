@@ -1,0 +1,52 @@
+.agenda {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.day-header {
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #888;
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 4px;
+    margin-bottom: 6px;
+
+    &.today {
+        color: #1976d2;
+    }
+}
+
+.event-row {
+    display: grid;
+    grid-template-columns: 70px 1fr auto;
+    gap: 8px;
+    align-items: baseline;
+    padding: 4px 0 4px 8px;
+    font-size: 0.9rem;
+    border-left: 3px solid transparent;
+}
+
+.event-time {
+    color: #555;
+    white-space: nowrap;
+    font-size: 0.8rem;
+}
+
+.event-summary {
+    font-weight: 500;
+}
+
+.event-cal {
+    font-size: 0.75rem;
+    color: #999;
+    white-space: nowrap;
+}
+
+.empty {
+    color: #aaa;
+    text-align: center;
+    padding: 32px 0;
+}

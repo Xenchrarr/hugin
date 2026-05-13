@@ -109,14 +109,12 @@ def _wap_content_id(cid: str) -> bytes:
     Encode a Content-ID part-header in WAP binary format.
 
     WSP header field code for Content-ID is 0x40 → short-form 0xC0.
-    Value is a proper WSP quoted-string: 0x22 + ASCII text + 0x22 + null.
-
-    FIX: Added closing 0x22 before the null terminator. Without it the MMSC
-    receives a malformed quoted-string (open quote, no close quote) and may
-    fail to match the Content-ID against the multipart/related start param,
-    causing silent delivery failure even when the MMSC returns HTTP 200.
+    Value is a plain null-terminated text-string (no WSP quoted-string
+    wrapper) so it matches the start param in Content-Type bytewise.
+    Using quoted-string encoding here while the start param uses a plain
+    text-string caused phones to fail resolving the SMIL start part.
     """
-    return b"\xc0\x22" + cid.encode("ascii", errors="replace") + b"\x22\x00"
+    return b"\xc0" + cid.encode("ascii", errors="replace") + b"\x00"
 
 
 def _wap_content_location(location: str) -> bytes:
@@ -566,11 +564,12 @@ class SMSHandler:
 
         self.flush_serial()
         ucs2_hex = chunk.encode("utf-16-be").hex().upper()
-        # Send a CR before Ctrl-Z so the modem's AT parser flushes its internal
-        # hex buffer and commits the last UCS-2 character before terminating.
-        # Without the CR, some modem firmware drops the last character because
-        # Ctrl-Z arrives while the last hex pair is still pending in the buffer.
-        self.ser.write((ucs2_hex + "\x1A").encode("ascii"))
+        # Append a UCS-2 space (0020) as a sacrificial trailing character before
+        # Ctrl-Z. Some modem firmware drops the last character in its internal
+        # hex buffer when Ctrl-Z arrives; the space absorbs the drop so the real
+        # final character is preserved. The recipient never sees the trailing space
+        # because it is consumed by the modem's transmit logic.
+        self.ser.write((ucs2_hex + "0020\x1A").encode("ascii"))
 
         response = self._read_until(["\nOK", "\nERROR", "+CMGS:", "ERROR"], timeout=60)
         if "\nOK" in response or "+CMGS:" in response:
@@ -880,6 +879,18 @@ class SMSHandler:
         if tcp_chunk < 128 or tcp_chunk > 1460:
             logger.warning("send_mms: invalid MMS_TCP_CHUNK=%d, using 1024", tcp_chunk)
             tcp_chunk = 1024
+
+        if media_bytes and "png" in media_mime_type.lower():
+            try:
+                from PIL import Image
+
+                buf = io.BytesIO()
+                Image.open(io.BytesIO(media_bytes)).convert("RGB").save(buf, format="JPEG", quality=85, optimize=True)
+                media_bytes = buf.getvalue()
+                media_mime_type = "image/jpeg"
+                logger.debug("send_mms: converted PNG to JPEG (%d bytes)", len(media_bytes))
+            except Exception as exc:
+                logger.warning("send_mms: PNG→JPEG conversion failed, using original: %s", exc)
 
         media_bytes = self._compress_jpeg_if_needed(
             media_bytes=media_bytes,

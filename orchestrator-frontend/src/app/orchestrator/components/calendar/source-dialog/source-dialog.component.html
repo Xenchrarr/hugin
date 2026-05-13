@@ -1,0 +1,30 @@
+<h2 mat-dialog-title>{{ isNew ? 'Add Calendar Source' : 'Edit Calendar Source' }}</h2>
+
+<mat-dialog-content>
+    <div class="form-grid">
+        <mat-form-field appearance="outline">
+            <mat-label>Name</mat-label>
+            <input matInput [(ngModel)]="source.name" placeholder="My Calendar" />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="url-field">
+            <mat-label>iCal URL</mat-label>
+            <input matInput [(ngModel)]="source.url" placeholder="https://calendar.google.com/…/basic.ics" />
+        </mat-form-field>
+
+        <div class="color-row">
+            <label class="color-label">Color</label>
+            <input type="color" [(ngModel)]="source.color" class="color-input" />
+            <span class="color-preview" [style.background]="source.color"></span>
+        </div>
+
+        <mat-checkbox [(ngModel)]="source.enabled">Enabled</mat-checkbox>
+    </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+    <button mat-button mat-dialog-close>Cancel</button>
+    <button mat-flat-button color="primary" [disabled]="!source.name || !source.url" (click)="save()">
+        {{ isNew ? 'Add' : 'Save' }}
+    </button>
+</mat-dialog-actions>

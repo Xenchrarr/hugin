@@ -13,6 +13,7 @@ log = logging.getLogger(__name__)
 
 SMS_BOT_URL = os.environ.get("SMS_BOT_URL", "http://sms-hub:5050")
 TELEGRAM_BOT_URL = os.environ.get("TELEGRAM_BOT_URL", "http://overlia-power-bot:5060")
+_SERVICE_KEY = os.environ.get("SERVICE_KEY", "")
 
 _TIMEOUT = (5, 15)
 
@@ -99,9 +100,11 @@ def _send_sms(phone_number: str, message: str) -> None:
     if not phone_number:
         raise ValueError("SMS phone_number not configured")
 
+    headers = {"X-Service-Key": _SERVICE_KEY} if _SERVICE_KEY else {}
     resp = requests.post(
         f"{SMS_BOT_URL}/api/sms/send",
         json={"phone": phone_number, "message": message},
+        headers=headers,
         timeout=_TIMEOUT,
     )
     resp.raise_for_status()

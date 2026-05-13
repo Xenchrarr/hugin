@@ -15,5 +15,8 @@ def get_agenda():
     except (ValueError, TypeError):
         days = 7
 
-    events = _client.get_events(days=days)
+    urls_param = request.args.get("urls")
+    urls = [u.strip() for u in urls_param.split(",") if u.strip()] if urls_param else None
+
+    events = _client.get_events(days=days, urls=urls)
     return jsonify({"events": events})
