@@ -17,4 +17,5 @@ RUN mkdir -p /app/logs \
     && touch /app/logs/response.txt
 
 EXPOSE 6001
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD curl -f http://localhost:6001/api/health || exit 1
 CMD ["python3", "app.py"]

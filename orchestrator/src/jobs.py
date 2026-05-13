@@ -6,7 +6,7 @@ from src.persistence.DatabaseLogger import DatabaseLogger
 from src.services.external.powershell_service import run_test_script, run_script
 from src.services.external.git_service import run_git_sync
 from src.services.external.power_aggregation_service import run_power_aggregation
-from src.services.external.printer_hub_service import run_print_news, run_print_weather, run_print_today
+from src.services.external.printer_hub_service import run_print_news, run_print_weather, run_print_today, run_print_shopping
 
 from src.jobs_registry import job_type
 
@@ -83,4 +83,9 @@ def print_weather_job(param: str = ""):
 @job_type('print_today', JOB_DESCRIPTIONS.get('print_today', "Print today's calendar events and reminders on the thermal printer"))
 def print_today_job(param: str = ""):
     run_print_today(param)
+
+
+@job_type('print_shopping', JOB_DESCRIPTIONS.get('print_shopping', 'Fetch the shopping list from hugin-core and print it on the thermal printer'))
+def print_shopping_job(param: str = ""):
+    run_print_shopping(param)
 

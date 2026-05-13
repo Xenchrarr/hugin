@@ -101,6 +101,7 @@ def get_agenda():
             source = url_to_source.get(event.get('source_url', ''))
             event['source_name'] = source.name if source else event.get('calendar_name', '')
             event['source_color'] = source.color if source else '#1976d2'
+            event['calendar_name'] = source.name if source else event.get('calendar_name', '')
         return {'events': events}
     except Exception as e:
         return {'message': f'Something went wrong: {e}', 'status': 500, 'error': str(e)}, 500

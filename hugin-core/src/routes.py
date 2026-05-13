@@ -1,4 +1,4 @@
-from flask import Blueprint
+from flask import Blueprint, jsonify
 
 from src.controllers.calendar_controller import calendar_blueprint
 from src.controllers.camera_controller import camera_blueprint
@@ -12,6 +12,13 @@ from src.controllers.today_controller import today_blueprint
 from src.controllers.weather_controller import weather_blueprint
 
 api = Blueprint('api', __name__)
+
+
+@api.route('/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'ok'})
+
+
 api.register_blueprint(calendar_blueprint, url_prefix="/calendar")
 api.register_blueprint(camera_blueprint, url_prefix="/camera")
 api.register_blueprint(charts_blueprint, url_prefix="/charts")

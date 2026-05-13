@@ -66,7 +66,7 @@ services:
       - stack.env
     environment:
       ENERGY_DATABASE_URL: postgresql://${ENERGY_DB_USER:-energy}:${ENERGY_DB_PASSWORD:?ENERGY_DB_PASSWORD must be set}@energy-postgres:5432/${ENERGY_DB:-energy}
-      ORCHESTRATOR_API_URL: http://orchestrator:6000
+      ORCHESTRATOR_API_URL: http://orchestrator:6000/api
       SERVICE_KEY: ${SERVICE_KEY}
       PRIMARY_USER_ID: ${PRIMARY_USER_ID:-1}
     networks:

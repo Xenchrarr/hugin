@@ -3,6 +3,7 @@ import signal
 import sys
 
 from service.database import engine
+from service.health import start_health_server
 from service.models import Base
 from service.mqtt_service import MQTTService
 
@@ -17,6 +18,9 @@ def main():
     # Ensure tables exist
     Base.metadata.create_all(bind=engine)
     log.info("Database tables verified/created")
+
+    # Start health check HTTP server
+    start_health_server()
 
     # Start MQTT listener (blocks via loop_forever)
     mqtt = MQTTService()

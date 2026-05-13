@@ -69,7 +69,7 @@ def get_today():
     if ORCHESTRATOR_BASE_URL:
         try:
             resp = session.get(
-                f"{ORCHESTRATOR_BASE_URL}/api/reminders/list",
+                f"{ORCHESTRATOR_BASE_URL}/reminders/list",
                 params={"status": "active"},
                 timeout=5,
             )

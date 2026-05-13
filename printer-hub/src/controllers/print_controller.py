@@ -1,10 +1,9 @@
+import base64
+
 from flask import Blueprint, request, jsonify
 
 from src.services.print_service import PrintService
 from src.services.news_service import NewsService
-from src.services.today_service import TodayService
-from src.services.weather_service import WeatherService
-from src.services.shopping_service import ShoppingService
 
 print_blueprint = Blueprint('print', __name__)
 
@@ -29,6 +28,24 @@ def print_content():
         return jsonify({'error': str(e)}), 500
 
 
+@print_blueprint.route('/image', methods=['POST'])
+def print_image():
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Request body is required'}), 400
+
+    image_b64 = data.get('image_b64')
+    if not image_b64:
+        return jsonify({'error': 'image_b64 is required'}), 400
+
+    try:
+        image_bytes = base64.b64decode(image_b64)
+        PrintService().print_image(image_bytes)
+        return jsonify({'status': 'printed'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @print_blueprint.route('/news', methods=['POST'])
 def print_news():
     data = request.get_json()
@@ -43,36 +60,6 @@ def print_news():
 
     try:
         result = NewsService().fetch_and_print(feed_url=feed_url, count=int(count))
-        return jsonify(result), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@print_blueprint.route('/weather', methods=['POST'])
-def print_weather():
-    data = request.get_json(silent=True) or {}
-    yr_id = data.get('yr_id') or None
-
-    try:
-        result = WeatherService().fetch_and_print(yr_id=yr_id)
-        return jsonify(result), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@print_blueprint.route('/shopping', methods=['POST'])
-def print_shopping():
-    try:
-        result = ShoppingService().fetch_and_print()
-        return jsonify(result), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@print_blueprint.route('/today', methods=['POST'])
-def print_today():
-    try:
-        result = TodayService().fetch_and_print()
         return jsonify(result), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
