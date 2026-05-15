@@ -1,3 +1,4 @@
+import logging
 import datetime
 from collections import defaultdict
 from datetime import timedelta
@@ -14,6 +15,7 @@ from src.services.chart_service import ChartService
 from src.services.user_config_service import get_primary_user_config
 
 charts_blueprint = Blueprint("charts", __name__)
+log = logging.getLogger(__name__)
 
 _LOCAL_TZ = datetime.datetime.now().astimezone().tzinfo
 
@@ -69,11 +71,13 @@ def _get_chart_service() -> tuple[ChartService, tuple[dict, int] | None]:
     try:
         config = get_primary_user_config()
     except RuntimeError as e:
+        log.error("_get_chart_service: could not fetch user config: %s", e)
         return None, ({"error": f"Could not fetch user config: {e}"}, 503)
 
     username = config.get("growatt_username", "")
     password = config.get("growatt_password", "")
     if not username or not password:
+        log.error("_get_chart_service: Growatt credentials not configured in user settings")
         return None, ({"error": "Growatt credentials not configured in user settings"}, 503)
 
     deye_client: DeyeClient | None = None

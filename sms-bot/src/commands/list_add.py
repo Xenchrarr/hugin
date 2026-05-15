@@ -13,5 +13,7 @@ class ListAddCommand(BaseCommand):
         if not cmd.positional:
             return "ERR_BAD_ARG: Missing item. Hint: list add milk"
         item = " ".join(cmd.positional)
-        add_to_shopping_list(item)
-        return f"OK added: {item}"
+        added = add_to_shopping_list(item)
+        if added:
+            return f"{item} added"
+        return "ERR_INTERNAL: Failed to add item"

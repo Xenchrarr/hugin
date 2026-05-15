@@ -45,10 +45,22 @@ class ReminderSchedulerService:
             active = storage.get_reminders(status_filter='active')
             snoozed = storage.get_reminders(status_filter='snoozed')
 
-            for reminder in active + snoozed:
+            # Recover recurring reminders that were incorrectly marked failed
+            failed = storage.get_reminders(status_filter='failed')
+            recovered = [r for r in failed if r.recurrence]
+            for reminder in recovered:
+                reminder.status = 'active'
+                storage.update_reminder(reminder)
+                log.info("Recovered stuck recurring reminder %s (recurrence=%s)", reminder.id, reminder.recurrence)
+
+            for reminder in active + snoozed + recovered:
                 self._schedule(reminder)
 
-            log.info("Loaded %d active reminders into scheduler", len(active) + len(snoozed))
+            log.info(
+                "Loaded %d active reminders into scheduler (%d recovered from failed)",
+                len(active) + len(snoozed) + len(recovered),
+                len(recovered),
+            )
         except Exception:
             log.exception("Failed to load active reminders")
         finally:
@@ -212,11 +224,19 @@ def _fire_reminder(reminder_id: int) -> None:
             storage = ReminderStorage()
             reminder = storage.get_reminder(reminder_id)
             if reminder and reminder.status in ('active', 'snoozed'):
-                reminder.status = 'failed'
-                storage.update_reminder(reminder)
-                storage.add_reminder_history(reminder_id, 'failed', detail='exception in _fire_reminder')
+                if not reminder.recurrence:
+                    # One-time: mark failed so it stops firing
+                    reminder.status = 'failed'
+                    storage.update_reminder(reminder)
+                    storage.add_reminder_history(reminder_id, 'failed', detail='exception in _fire_reminder')
+                else:
+                    # Recurring: leave active so the next interval tick retries
+                    if reminder.status == 'snoozed':
+                        reminder.status = 'active'
+                        storage.update_reminder(reminder)
+                    storage.add_reminder_history(reminder_id, 'failed', detail='exception in _fire_reminder (will retry)')
         except Exception:
-            log.exception("Failed to mark reminder %s as failed", reminder_id)
+            log.exception("Failed to handle exception for reminder %s", reminder_id)
     finally:
         JobDb.instance().close_connection()
 
