@@ -48,4 +48,8 @@ export class UserService {
   removeCommandPermission(id: number, commandPath: string): Observable<unknown> {
     return this.http.delete(`${this._base}/${id}/command_permissions/${commandPath}`);
   }
+
+  getBotCommands(): Observable<Record<string, string[]>> {
+    return this.http.get<Record<string, string[]>>('/api/bot-commands');
+  }
 }

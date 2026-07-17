@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 from flask import Blueprint, jsonify
 
-from src.api.orchestrator import ORCHESTRATOR_BASE_URL, session
+from src.api.orchestrator import ORCHESTRATOR_API_URL, session
 from src.config import settings
 
 log = logging.getLogger(__name__)
@@ -49,10 +49,10 @@ def get_today():
 
     # --- Calendar events ---
     all_events = []
-    if ORCHESTRATOR_BASE_URL:
+    if ORCHESTRATOR_API_URL:
         try:
             resp = session.get(
-                f"{ORCHESTRATOR_BASE_URL}/ical_sources/agenda",
+                f"{ORCHESTRATOR_API_URL}/api/ical_sources/agenda",
                 params={"days": 2},
                 headers={"X-Service-Key": settings.SERVICE_KEY},
                 timeout=15,
@@ -66,10 +66,10 @@ def get_today():
 
     # --- Reminders from orchestrator (optional) ---
     reminders = []
-    if ORCHESTRATOR_BASE_URL:
+    if ORCHESTRATOR_API_URL:
         try:
             resp = session.get(
-                f"{ORCHESTRATOR_BASE_URL}/reminders/list",
+                f"{ORCHESTRATOR_API_URL}/api/reminders/list",
                 params={"status": "active"},
                 timeout=5,
             )

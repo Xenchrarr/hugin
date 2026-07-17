@@ -66,7 +66,7 @@ services:
       - stack.env
     environment:
       ENERGY_DATABASE_URL: postgresql://${ENERGY_DB_USER:-energy}:${ENERGY_DB_PASSWORD:?ENERGY_DB_PASSWORD must be set}@energy-postgres:5432/${ENERGY_DB:-energy}
-      ORCHESTRATOR_API_URL: http://orchestrator:6000/api
+      ORCHESTRATOR_API_URL: http://orchestrator:6000
       SERVICE_KEY: ${SERVICE_KEY}
       PRIMARY_USER_ID: ${PRIMARY_USER_ID:-1}
     networks:
@@ -119,6 +119,7 @@ services:
     env_file:
       - stack.env
     environment:
+      TZ: Europe/Oslo
       CORE_API_URL: http://hugin-core:5100
       ORCHESTRATOR_API_URL: http://orchestrator:6000
       PRINTER_HUB_URL: http://printer-hub:6002
@@ -196,7 +197,7 @@ services:
     volumes:
       - powershell_scripts:/app/scripts
     environment:
-      ORCHESTRATOR_BASE_URL: http://orchestrator:6000/api
+      ORCHESTRATOR_API_URL: http://orchestrator:6000
       SHOULD_LOG: ${SHOULD_LOG:-True}
       SCRIPT_PROCESS_TIMEOUT: ${SCRIPT_PROCESS_TIMEOUT:-840}
       GIT_USERNAME: ${GIT_USERNAME:-}

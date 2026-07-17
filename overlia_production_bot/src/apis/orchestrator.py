@@ -3,6 +3,7 @@ import os
 from typing import Optional
 
 import requests
+from requests.exceptions import ConnectionError as RequestsConnectionError
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,9 @@ class OrchestratorClient:
             resp = requests.get(f"{self._base_url}{path}", params=params, timeout=(5, 15))
             resp.raise_for_status()
             return resp.json()
+        except RequestsConnectionError as e:
+            logger.warning("Orchestrator unreachable: GET %s — %s", path, e)
+            return None
         except Exception:
             logger.exception("Orchestrator API error: GET %s", path)
             return None
@@ -27,6 +31,9 @@ class OrchestratorClient:
             resp = requests.post(f"{self._base_url}{path}", json=json or {}, timeout=(5, 15))
             resp.raise_for_status()
             return resp.json()
+        except RequestsConnectionError as e:
+            logger.warning("Orchestrator unreachable: POST %s — %s", path, e)
+            return None
         except Exception:
             logger.exception("Orchestrator API error: POST %s", path)
             return None
@@ -68,6 +75,9 @@ class OrchestratorClient:
             "user_label": user_label,
             "user_id": user_id,
         })
+
+    def register_bot_commands(self, channel: str, commands: list[str]) -> None:
+        self._post("/api/bot-commands/register", json={"channel": channel, "commands": commands})
 
     def lookup_user(self, channel: str, identifier: str) -> dict | None:
         return self._get("/api/users/lookup", channel=channel, identifier=identifier)

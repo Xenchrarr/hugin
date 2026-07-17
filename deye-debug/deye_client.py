@@ -68,7 +68,7 @@ class DeyeClient:
     def get_inverter_data(self) -> dict | None:
         """Return current inverter snapshot.
 
-        Returns a dict with keys matching the Growatt response shape:
+        Returns a dict with keys:
           currentPower, todayEnergy, totalEnergy, monthlyEnergy
         """
         token = self._get_token()
@@ -117,10 +117,11 @@ class DeyeClient:
                 "totalChargeEnergy": battery_total_charge,
                 "totalDischargeEnergy": battery_total_discharge,
             },
+            "_raw": {"dataList": data_list},
         }
 
     def get_daily_chart_data(self, date: datetime.date) -> dict:
-        """Return hourly production for a single day as {"HH:00": kWh_float, ...}."""
+        """Return hourly production for a single day as {"HH:00": float, ...}."""
         token = self._get_token()
         if not token:
             return {}
@@ -146,7 +147,7 @@ class DeyeClient:
         return self._parse_historical_hourly(raw)
 
     def get_monthly_chart_data(self, year: int, month: int) -> dict:
-        """Return daily production for a month as {"DD": kWh_float, ...}."""
+        """Return daily production for a month as {"DD": float, ...}."""
         token = self._get_token()
         if not token:
             return {}
@@ -182,11 +183,6 @@ class DeyeClient:
 
     @staticmethod
     def _parse_historical_hourly(raw: dict) -> dict:
-        """
-        The SolarMan cloud API returns historical data in the dataList field.
-        Each entry has a "collectTime" (unix timestamp) and data key/value pairs.
-        We extract the production energy value per hour.
-        """
         result: dict[str, float] = {}
         for entry in raw.get("dataList", []):
             ts = entry.get("collectTime")
@@ -194,8 +190,10 @@ class DeyeClient:
                 continue
             dt = datetime.datetime.fromtimestamp(int(ts))
             hour_label = dt.strftime("%H:00")
-            # Look for production energy key
-            values: dict[str, str] = {item["key"]: item.get("value", "0") for item in entry.get("dataList", [])}
+            values: dict[str, str] = {
+                item["key"]: item.get("value", "0")
+                for item in entry.get("dataList", [])
+            }
             production = values.get("generation_power") or values.get("total_active_power", "0")
             try:
                 result[hour_label] = float(production)
@@ -205,9 +203,6 @@ class DeyeClient:
 
     @staticmethod
     def _parse_historical_daily(raw: dict) -> dict:
-        """
-        Daily history — extract one kWh value per day, keyed as zero-padded "DD".
-        """
         result: dict[str, float] = {}
         for entry in raw.get("dataList", []):
             ts = entry.get("collectTime")
@@ -215,7 +210,10 @@ class DeyeClient:
                 continue
             dt = datetime.datetime.fromtimestamp(int(ts))
             day_label = f"{dt.day:02d}"
-            values: dict[str, str] = {item["key"]: item.get("value", "0") for item in entry.get("dataList", [])}
+            values: dict[str, str] = {
+                item["key"]: item.get("value", "0")
+                for item in entry.get("dataList", [])
+            }
             production = values.get("daily_production") or values.get("today_production", "0")
             try:
                 result[day_label] = float(production)

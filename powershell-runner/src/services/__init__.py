@@ -7,15 +7,15 @@ should_log = (os.environ.get("SHOULD_LOG", False) == 'True')
 
 _git_sync_service = None
 
-ORCHESTRATOR_BASE_URL = os.environ.get('ORCHESTRATOR_BASE_URL', '')
+ORCHESTRATOR_API_URL = os.environ.get('ORCHESTRATOR_API_URL', '')
 
 
 def _fetch_repos_from_orchestrator():
     """Fetch enabled git repos from the orchestrator database API."""
-    if not ORCHESTRATOR_BASE_URL:
+    if not ORCHESTRATOR_API_URL:
         return []
     try:
-        url = f"{ORCHESTRATOR_BASE_URL}/git_repos/list"
+        url = f"{ORCHESTRATOR_API_URL}/api/git_repos/list"
         resp = requests.get(url, timeout=10)
         resp.raise_for_status()
         all_repos = resp.json()

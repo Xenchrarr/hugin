@@ -18,6 +18,7 @@ class Settings:
     ORCHESTRATOR_API_URL: str = os.environ.get("ORCHESTRATOR_API_URL", "http://orchestrator:6000")
     SERVICE_KEY: str = os.environ.get("SERVICE_KEY", "")
     PRIMARY_USER_ID: int = int(os.environ.get("PRIMARY_USER_ID", "1"))
+    TELEGRAM_BOT_URL: str = os.environ.get("TELEGRAM_BOT_URL", "http://overlia-power-bot:5060")
     GOOGLE_CALENDAR_ICAL_URLS: list[str] = [
         u.strip()
         for u in os.environ.get("GOOGLE_CALENDAR_ICAL_URLS", "").split(",")

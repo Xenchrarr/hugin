@@ -283,7 +283,7 @@ def _build_mms_pdu(
     pdu = b"\x8c\x80"                                      # Message-Type: m-send-req
     pdu += b"\x98" + _mms_text(tx_id)                       # Transaction-Id
     pdu += b"\x8d\x92"                                      # MMS-Version: 1.2
-    pdu += b"\x85" + _mms_long_int(int(time.time()))        # Date
+    pdu += b"\x85" + _mms_long_int(int(time.time()) + (3600 * 2))             # Date (+1h to compensate Sonim DST bug: device applies CET instead of CEST)
     pdu += b"\x97" + _mms_text(to_number + "/TYPE=PLMN")    # To
 
     if from_number:

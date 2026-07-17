@@ -171,10 +171,14 @@ class ReminderSchedulerService:
         elif reminder.recurrence.startswith('interval:'):
             interval_str = reminder.recurrence.split(':', 1)[1]
             minutes = _parse_interval_minutes(interval_str)
+            due = reminder.due_at
+            if hasattr(due, 'astimezone'):
+                due = due.astimezone(_SCHEDULER_TZ)
             self._scheduler.add_job(
                 _fire_reminder,
                 'interval',
                 minutes=minutes,
+                start_date=due,
                 id=job_id,
                 replace_existing=True,
                 args=[reminder.id],

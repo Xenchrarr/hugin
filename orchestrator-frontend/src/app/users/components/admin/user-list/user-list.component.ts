@@ -44,24 +44,25 @@ export class UserListComponent implements OnInit {
   readonly columns = ['username', 'display_name', 'phone_number', 'telegram_user_id', 'is_admin', 'actions'];
   readonly channelOptions = ['sms', 'telegram', 'teams'];
   readonly inverterTypes: Array<'growatt' | 'ecoflow' | null> = [null, 'growatt', 'ecoflow'];
-  readonly knownCommands = [
-    // SMS bot
+
+  private readonly _smsCommands = [
     'help', 'list/show', 'list/add', 'list/rm',
     'rem/in', 'rem/list', 'rem/snooze', 'rem/dismiss',
     'home/dev', 'chart',
-    // Overlia Telegram bot
-    'telegram/start', 'telegram/help', 'telegram/data', 'telegram/weather',
-    'telegram/chart', 'telegram/chartdays', 'telegram/chartmonth',
-    'telegram/nikolai_weather', 'telegram/nikolai_power',
-    'telegram/nikolai_energytoday', 'telegram/nikolai_energyhour',
-    'telegram/remind', 'telegram/reminders', 'telegram/snooze', 'telegram/dismiss',
-    'telegram/register', 'telegram/registerphone',
   ];
+  knownCommands = signal<string[]>(this._smsCommands);
 
   constructor(private svc: UserService) {}
 
   ngOnInit(): void {
     this.load();
+    this.svc.getBotCommands().subscribe({
+      next: registry => {
+        const botCommands = Object.values(registry).flat();
+        const merged = [...new Set([...this._smsCommands, ...botCommands])].sort();
+        this.knownCommands.set(merged);
+      },
+    });
   }
 
   load(): void {

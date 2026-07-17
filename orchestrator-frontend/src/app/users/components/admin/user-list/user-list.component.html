@@ -200,7 +200,7 @@
         <mat-form-field appearance="outline" class="permission-input">
           <mat-label>Add command paths</mat-label>
           <mat-select [(ngModel)]="selectedCommandPaths" multiple>
-            <mat-option *ngFor="let cmd of knownCommands" [value]="cmd"
+            <mat-option *ngFor="let cmd of knownCommands()" [value]="cmd"
                         [disabled]="editingPermissions().includes(cmd)">{{ cmd }}</mat-option>
           </mat-select>
         </mat-form-field>

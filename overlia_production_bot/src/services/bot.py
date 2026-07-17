@@ -2,6 +2,8 @@ import asyncio
 import datetime
 import logging
 import re
+import threading
+import time
 from functools import wraps
 from zoneinfo import ZoneInfo
 
@@ -20,6 +22,8 @@ _TZ = ZoneInfo("Europe/Oslo")
 core = HuginCoreClient(settings.CORE_API_URL)
 orchestrator = OrchestratorClient()
 
+_COMMAND_REGISTRY: list[str] = []
+
 
 def restricted(command_path: str = None):
     """Resolve the Telegram user against the orchestrator user database.
@@ -31,6 +35,9 @@ def restricted(command_path: str = None):
         @restricted('telegram/chart')        — identity + permission check
     """
     def decorator(func):
+        if command_path and command_path not in _COMMAND_REGISTRY:
+            _COMMAND_REGISTRY.append(command_path)
+
         @wraps(func)
         async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
             telegram_user_id = str(update.effective_user.id) if update.effective_user else None
@@ -113,8 +120,23 @@ async def deye_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("Could not fetch Deye data.")
         return
 
-    formatted_dict = "\n".join(f"{key}: {value}" for key, value in data.items())
-    await update.message.reply_text(formatted_dict)
+    battery = data.get("battery", {})
+    message = (
+        f"Solar data\n"
+        f"Power now: {data.get('currentPower', 'N/A')}\n"
+        f"Today: {data.get('todayEnergy', 'N/A')} kWh\n"
+        f"Total: {data.get('totalEnergy', 'N/A')} kWh\n"
+        f"This month: {data.get('monthlyEnergy', 'N/A')} kWh\n"
+        f"\n"
+        f"Battery\n"
+        f"State of charge: {battery.get('soc', 'N/A')}%\n"
+        f"Power: {battery.get('power', 'N/A')} W\n"
+        f"Voltage: {battery.get('voltage', 'N/A')} V\n"
+        f"Status: {battery.get('status', 'N/A')}\n"
+        f"Charged today: {battery.get('dailyChargeEnergy', 'N/A')} kWh\n"
+        f"Discharged today: {battery.get('dailyDischargeEnergy', 'N/A')} kWh"
+    )
+    await update.message.reply_text(message)
 
 
 @restricted('telegram/weather')
@@ -531,6 +553,20 @@ def main() -> None:
     application.add_handler(CommandHandler("registerphone", registerphone_command))
     application.add_handler(CallbackQueryHandler(reminder_callback))
     application.add_error_handler(error_handler)
+
+    # Register bot commands with orchestrator for GUI discovery (retries in background)
+    def _register_commands():
+        commands = sorted(_COMMAND_REGISTRY)
+        for attempt in range(1, 11):
+            result = orchestrator.register_bot_commands('telegram', commands)
+            if result is not None:
+                logger.info("Registered %d bot commands with orchestrator.", len(commands))
+                return
+            logger.warning("Orchestrator not ready (attempt %d/10), retrying in 10s...", attempt)
+            time.sleep(10)
+        logger.error("Failed to register bot commands after 10 attempts.")
+
+    threading.Thread(target=_register_commands, daemon=True, name="bot-cmd-register").start()
 
     # Start the outbound Telegram REST API in a background thread
     from src.api.telegram_api import start_api_server

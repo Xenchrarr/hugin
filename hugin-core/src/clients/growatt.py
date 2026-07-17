@@ -21,7 +21,7 @@ class GrowattClient:
         api = self._get_api()
         login_response = api.login(self._username, self._password)
         if not login_response["success"]:
-            logger.error("Growatt login failed")
+            logger.error("Growatt login failed: %s", login_response)
             return None
         return api, login_response
 

@@ -17,6 +17,7 @@ from src.controllers.reminder_controller import reminder_blueprint
 from src.controllers.user_command_permission_controller import user_command_permission_blueprint
 from src.controllers.telegram_relay_controller import telegram_relay_blueprint
 from src.controllers.ical_source_controller import ical_source_blueprint
+from src.controllers.bot_commands_controller import bot_commands_blueprint
 
 api = Blueprint('api', __name__)
 
@@ -52,3 +53,5 @@ api.register_blueprint(user_command_permission_blueprint, url_prefix="/users")
 api.register_blueprint(telegram_relay_blueprint, url_prefix="/telegram_relay")
 
 api.register_blueprint(ical_source_blueprint, url_prefix="/ical_sources")
+
+api.register_blueprint(bot_commands_blueprint, url_prefix="/bot-commands")
