@@ -747,8 +747,12 @@ class SMSHandler:
         # acknowledgement is lost or sms-hub is interrupted.
         self._last_send_uncertain = True
 
-        response = self._read_until(["\nOK", "\nERROR", "+CMGS:", "ERROR"], timeout=60)
-        if "\nOK" in response or "+CMGS:" in response:
+        # Do not stop at +CMGS:; the command is only complete after its final
+        # OK.  In particular, ESC cancels text entry and also returns a bare OK,
+        # which must not be mistaken for a successful submission.
+        response = self._read_until(["\nOK", "\nERROR", "ERROR"], timeout=60)
+        logger.debug("CMGS response: %s", repr(response))
+        if "+CMGS:" in response and "\nOK" in response and "ERROR" not in response:
             return True
 
         logger.error("Failed to send SMS: %s", response.strip())
@@ -819,7 +823,13 @@ class SMSHandler:
 
     def _send_sms_locked(self, number: str, message: str) -> bool:
         logger.info("Sending SMS to %s: %s", number, message)
-        use_gsm7 = self._gsm7_encode(message) is not None
+        # GSM extension-table characters are introduced by the ESC byte.  In
+        # the EC25 text-entry prompt that byte aborts AT+CMGS, so use UCS-2 for
+        # messages containing characters such as |, ^, {, }, [, ], ~ or \\.
+        use_gsm7 = (
+            self._gsm7_encode(message) is not None
+            and not any(character in _GSM7_EXTENSION for character in message)
+        )
         charset = "GSM" if use_gsm7 else "UCS2"
         response = self.send_at(f'AT+CSCS="{charset}"', timeout=3)
         if "OK" not in response:

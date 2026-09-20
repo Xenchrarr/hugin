@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from src.sms_handler import SMSHandler
 
@@ -64,6 +64,43 @@ class SmsSendingTests(unittest.TestCase):
     def test_gsm7_supports_norwegian_letters_and_counts_extension_septets(self):
         self.assertEqual(6, len(SMSHandler._gsm7_encode("ÅåÆæØø")))
         self.assertEqual(2, len(SMSHandler._gsm7_encode("[")))
+
+    @patch("src.sms_handler.time.sleep", return_value=None)
+    def test_gsm_extension_character_uses_ucs2_to_avoid_escape_cancelling_cmgs(
+        self, _sleep
+    ):
+        handler = self._handler()
+        chunks = []
+        handler._send_sms_chunk = (
+            lambda number, chunk, use_gsm7: chunks.append((number, chunk, use_gsm7))
+            or True
+        )
+
+        self.assertTrue(handler._send_sms_locked("+4712345678", "power | energy"))
+        self.assertEqual(
+            [("002B0034003700310032003300340035003600370038", "power | energy", False)],
+            chunks,
+        )
+
+    @patch("src.sms_handler.time.sleep", return_value=None)
+    def test_cmgs_requires_submission_reference_not_bare_ok(self, _sleep):
+        handler = SMSHandler.__new__(SMSHandler)
+        handler.ser = Mock()
+        handler.flush_serial = Mock()
+        handler._read_until = Mock(side_effect=[">", "\r\nOK\r\n"])
+
+        self.assertFalse(handler._send_sms_chunk("+4712345678", "hello", True))
+
+    @patch("src.sms_handler.time.sleep", return_value=None)
+    def test_cmgs_accepts_submission_reference_followed_by_ok(self, _sleep):
+        handler = SMSHandler.__new__(SMSHandler)
+        handler.ser = Mock()
+        handler.flush_serial = Mock()
+        handler._read_until = Mock(
+            side_effect=[">", "\r\n+CMGS: 42\r\n\r\nOK\r\n"]
+        )
+
+        self.assertTrue(handler._send_sms_chunk("+4712345678", "hello", True))
 
     def test_ucs2_prefix_counts_non_bmp_characters_as_two_units(self):
         self.assertEqual(1, SMSHandler._encoded_prefix_end("a😀", 1, False))
