@@ -5,7 +5,7 @@ from src.services.ideas_service import add_to_ideas
 
 class IdeasAddCommand(BaseCommand):
     path = "ideas/add"
-    aliases = ["idea/add"]
+    aliases = ["idea/add", "note"]
     description = "Add item to ideas note"
     usage = "ideas add <idea>"
 

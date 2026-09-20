@@ -12,7 +12,7 @@ class HuginCoreClient:
 
     def _get(self, path: str, **params) -> dict | None:
         try:
-            response = requests.get(f"{self._base_url}{path}", params=params)
+            response = requests.get(f"{self._base_url}{path}", params=params, timeout=(5, 20))
             response.raise_for_status()
             return response.json()
         except Exception:
@@ -21,7 +21,7 @@ class HuginCoreClient:
 
     def _get_bytes(self, path: str, **params) -> bytes | None:
         try:
-            response = requests.get(f"{self._base_url}{path}", params=params)
+            response = requests.get(f"{self._base_url}{path}", params=params, timeout=(5, 30))
             response.raise_for_status()
             return response.content
         except Exception:
@@ -30,7 +30,7 @@ class HuginCoreClient:
 
     def _post(self, path: str, json: dict | None = None) -> dict | None:
         try:
-            response = requests.post(f"{self._base_url}{path}", json=json or {})
+            response = requests.post(f"{self._base_url}{path}", json=json or {}, timeout=(5, 20))
             response.raise_for_status()
             return response.json()
         except Exception:
@@ -39,7 +39,7 @@ class HuginCoreClient:
 
     def _delete(self, path: str, json: dict | None = None) -> dict | None:
         try:
-            response = requests.delete(f"{self._base_url}{path}", json=json or {})
+            response = requests.delete(f"{self._base_url}{path}", json=json or {}, timeout=(5, 20))
             response.raise_for_status()
             return response.json()
         except Exception:
@@ -69,6 +69,19 @@ class HuginCoreClient:
 
     def get_weather_summary(self, location_id: str) -> dict | None:
         return self._get(f"/api/weather/{location_id}/summary")
+
+    # --- Dumb-phone dashboard ---
+    def get_today(self) -> dict | None:
+        return self._get("/api/today/")
+
+    def get_camera_snapshot(self) -> bytes | None:
+        return self._get_bytes("/api/camera/snapshot")
+
+    def get_home_states(self, entity_ids: list[str]) -> list[dict] | None:
+        data = self._get("/api/home/states", entities=",".join(entity_ids))
+        if data is None:
+            return None
+        return data.get("states", [])
 
     # --- Shopping List ---
     def get_shopping_list(self) -> str | None:

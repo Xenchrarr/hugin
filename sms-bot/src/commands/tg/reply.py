@@ -8,10 +8,9 @@ _relay = TelegramRelayClient()
 
 class TgReplyCommand(BaseCommand):
     path = "tg/reply"
-    aliases = ["tg/r"]
+    aliases = ["tg/r", "r", "reply"]
     description = "Reply to the last active Telegram conversation"
     usage = "tg/reply <message>"
-    requires_pin = True
 
     def execute(self, cmd: ParsedCommand) -> str:
         if not cmd.positional:

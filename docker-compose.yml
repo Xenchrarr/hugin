@@ -123,6 +123,11 @@ services:
       CORE_API_URL: http://hugin-core:5100
       ORCHESTRATOR_API_URL: http://orchestrator:6000
       PRINTER_HUB_URL: http://printer-hub:6002
+      SMS_DELIVERY_LEDGER_PATH: /data/sms-delivery-ledger.sqlite3
+      SMS_DELIVERY_STALE_SECONDS: ${SMS_DELIVERY_STALE_SECONDS:-600}
+      SMS_DELIVERY_RECEIPT_RETENTION_DAYS: ${SMS_DELIVERY_RECEIPT_RETENTION_DAYS:-30}
+    volumes:
+      - sms_hub_data:/data
     devices:
       - /dev/serial/by-id/usb-Quectel_EC25-EUX_0123456789ABCDEF-if02-port0:/dev/ttyUSB0
     group_add:
@@ -166,6 +171,14 @@ services:
       TELEGRAM_BOT_URL: http://overlia-power-bot:5060
       TELEGRAM_RELAY_URL: http://telegram-relay:8080
       PRINTER_HUB_URL: http://printer-hub:6002
+      MESSAGE_HUB_POLL_SECONDS: ${MESSAGE_HUB_POLL_SECONDS:-1}
+      MESSAGE_HUB_HEALTH_INTERVAL_SECONDS: ${MESSAGE_HUB_HEALTH_INTERVAL_SECONDS:-30}
+      MESSAGE_HUB_DOWN_FAILURE_THRESHOLD: ${MESSAGE_HUB_DOWN_FAILURE_THRESHOLD:-3}
+      MESSAGE_HUB_UP_SUCCESS_THRESHOLD: ${MESSAGE_HUB_UP_SUCCESS_THRESHOLD:-2}
+      MESSAGE_HUB_DEFAULT_TTL_SECONDS: ${MESSAGE_HUB_DEFAULT_TTL_SECONDS:-2592000}
+      MESSAGE_HUB_RETENTION_DAYS: ${MESSAGE_HUB_RETENTION_DAYS:-30}
+      MESSAGE_HUB_MAX_ATTACHMENT_BYTES: ${MESSAGE_HUB_MAX_ATTACHMENT_BYTES:-5242880}
+      MESSAGE_HUB_ALERT_TARGETS: ${MESSAGE_HUB_ALERT_TARGETS:-}
     networks:
       - backend
       - frontend
@@ -283,7 +296,6 @@ services:
     environment:
       ORCHESTRATOR_API_URL: http://orchestrator:6000
       SERVICE_KEY: ${SERVICE_KEY}
-      SMS_BOT_URL: http://sms-hub:5050
     networks:
       - backend
     deploy:
@@ -303,4 +315,5 @@ volumes:
   shared_logs:
   powershell_scripts:
   telegram_tdlib:
+  sms_hub_data:
   ollama_data:

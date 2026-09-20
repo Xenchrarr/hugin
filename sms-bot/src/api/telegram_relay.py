@@ -47,6 +47,37 @@ class TelegramRelayClient:
             logger.exception("TelegramRelayClient: send_message to chat %s failed", chat_id)
             return False
 
+    def send_media(
+        self,
+        chat_id: int,
+        media_bytes: bytes,
+        media_mime_type: str,
+        caption: str = "",
+    ) -> bool:
+        """Send an image and optional caption to a Telegram chat."""
+        extensions = {
+            "image/jpeg": "photo.jpg",
+            "image/png": "photo.png",
+            "image/gif": "photo.gif",
+        }
+        filename = extensions.get(media_mime_type.lower())
+        if filename is None:
+            logger.error("TelegramRelayClient: unsupported media type %s", media_mime_type)
+            return False
+        try:
+            resp = requests.post(
+                f"{self._base}/api/telegram/send-media",
+                data={"chat_id": str(chat_id), "caption": caption},
+                files={"media": (filename, media_bytes, media_mime_type)},
+                headers=_headers(),
+                timeout=(5, 120),
+            )
+            resp.raise_for_status()
+            return True
+        except Exception:
+            logger.exception("TelegramRelayClient: send_media to chat %s failed", chat_id)
+            return False
+
     def get_context(self, phone: str) -> Optional[dict]:
         """Return {chat_id, title} for the sticky reply target, or None."""
         try:

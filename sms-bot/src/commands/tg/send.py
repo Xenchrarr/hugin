@@ -11,7 +11,6 @@ class TgSendCommand(BaseCommand):
     aliases = []
     description = "Send a message to a Telegram conversation"
     usage = "tg/send <num|chat_id> <message>"
-    requires_pin = True
 
     def execute(self, cmd: ParsedCommand) -> str:
         if len(cmd.positional) < 2:

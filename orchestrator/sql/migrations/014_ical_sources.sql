@@ -1,4 +1,4 @@
-CREATE TABLE ical_sources (
+CREATE TABLE IF NOT EXISTS ical_sources (
     id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name       VARCHAR(200)  NOT NULL,
     url        TEXT          NOT NULL,

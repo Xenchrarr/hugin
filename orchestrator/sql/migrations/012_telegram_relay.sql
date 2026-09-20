@@ -1,7 +1,7 @@
 -- Telegram Relay configuration tables
 -- Destinations and rules previously defined in config.yaml are now stored here.
 
-CREATE TABLE telegram_relay_destinations (
+CREATE TABLE IF NOT EXISTS telegram_relay_destinations (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(200) NOT NULL,
     type VARCHAR(50) NOT NULL,         -- 'webhook' | 'sms'
@@ -11,7 +11,7 @@ CREATE TABLE telegram_relay_destinations (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE telegram_relay_rules (
+CREATE TABLE IF NOT EXISTS telegram_relay_rules (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(200) NOT NULL,
     priority INTEGER NOT NULL DEFAULT 100,
@@ -23,4 +23,4 @@ CREATE TABLE telegram_relay_rules (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX telegram_relay_rules_priority_idx ON telegram_relay_rules (priority);
+CREATE INDEX IF NOT EXISTS telegram_relay_rules_priority_idx ON telegram_relay_rules (priority);

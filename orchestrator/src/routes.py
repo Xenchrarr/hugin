@@ -18,6 +18,8 @@ from src.controllers.user_command_permission_controller import user_command_perm
 from src.controllers.telegram_relay_controller import telegram_relay_blueprint
 from src.controllers.ical_source_controller import ical_source_blueprint
 from src.controllers.bot_commands_controller import bot_commands_blueprint
+from src.controllers.checkin_controller import checkin_blueprint
+from src.controllers.message_hub_controller import message_hub_blueprint
 
 api = Blueprint('api', __name__)
 
@@ -55,3 +57,6 @@ api.register_blueprint(telegram_relay_blueprint, url_prefix="/telegram_relay")
 api.register_blueprint(ical_source_blueprint, url_prefix="/ical_sources")
 
 api.register_blueprint(bot_commands_blueprint, url_prefix="/bot-commands")
+
+api.register_blueprint(checkin_blueprint, url_prefix="/checkins")
+api.register_blueprint(message_hub_blueprint, url_prefix="/message-hub")

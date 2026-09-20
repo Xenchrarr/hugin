@@ -1,9 +1,10 @@
 import asyncio
-import base64
 import json
 import logging
 import os
 import threading
+import time
+import uuid
 from typing import Optional
 
 from telegram.client import Telegram
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 _RECENT_CHATS_MAX = 20
 _CACHE_PATH = "./data/tdlib/recent_chats.json"
+_REPLY_CONTEXT_PATH = "./data/tdlib/reply_context.json"
 _TITLE_MAX = 15
 _CONVERSATIONS_LIMIT = 10
 
@@ -38,6 +40,7 @@ class TelegramForwarder:
         self._redactor = Redactor()
         self._lock = threading.Lock()
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._ready = False
         # conversation tracker: chat_id → {chat_id, title, last_sender, last_text, timestamp}
         self._recent_chats: dict[int, dict] = {}
         # channel chat_ids to exclude from the conversations list
@@ -45,7 +48,9 @@ class TelegramForwarder:
         # reply context: sms phone number → chat_id of last forwarded message
         self._reply_context: dict[str, int] = {}
         self._cache_path = _CACHE_PATH
+        self._reply_context_path = _REPLY_CONTEXT_PATH
         self._load_cache()
+        self._load_reply_context()
 
         tg = telegram_config
         self._client = Telegram(
@@ -71,14 +76,14 @@ class TelegramForwarder:
             "Config reloaded: %d destination(s), %d rule(s)",
             len(destinations), len(rules),
         )
-        # Close old adapters that are no longer in the new set (fire-and-forget via main loop)
+        # Every reload builds fresh adapter instances, so all replaced adapters
+        # must be closed even when their endpoint id still exists.
         loop = getattr(self, "_loop", None)
         for dest_id, adapter in old_destinations.items():
-            if dest_id not in destinations:
-                if loop and loop.is_running():
-                    asyncio.run_coroutine_threadsafe(adapter.aclose(), loop)
-                else:
-                    logger.debug("Cannot close old adapter '%s': no running loop", dest_id)
+            if loop and loop.is_running():
+                asyncio.run_coroutine_threadsafe(adapter.aclose(), loop)
+            else:
+                logger.debug("Cannot close old adapter '%s': no running loop", dest_id)
 
     async def start(self) -> None:
         self._loop = asyncio.get_running_loop()
@@ -90,9 +95,16 @@ class TelegramForwarder:
         self._client.login()
         self._seed_from_history()
         self._client.add_message_handler(_sync_handler)
+        self._ready = True
         logger.info("Telegram forwarder running")
-        while True:
-            await asyncio.sleep(3600)
+        try:
+            while True:
+                await asyncio.sleep(3600)
+        finally:
+            self._ready = False
+
+    def is_ready(self) -> bool:
+        return self._ready
 
     async def _handle_message(self, update: dict) -> None:
         with self._lock:
@@ -230,15 +242,13 @@ class TelegramForwarder:
             # Use direct assignment (not setdefault) because to_payload() already sets
             # these keys to None, making setdefault a no-op.
             if isinstance(destination, SmsAdapter):
+                payload["message_id"] = msg.message_id
+                payload["chat_id"] = msg.chat_id
                 payload["chat_title"] = msg.chat_title
                 payload["sender_name"] = msg.sender_name
                 payload["chat_type"] = msg.chat_type
-                # Attach media bytes for MMS if available
-                if msg.media_file_id is not None:
-                    media_bytes, mime_type = self._download_media(msg.media_file_id, msg.media_type)
-                    if media_bytes:
-                        payload["media_data"] = base64.b64encode(media_bytes).decode("ascii")
-                        payload["media_mime_type"] = mime_type
+                # The durable queue is text-only here. Captions and the media
+                # type remain available, but binary media is not stored.
             logger.info(
                 "Rule '%s': forwarding message %d → '%s'",
                 rule_name, msg.message_id, action.destination,
@@ -387,6 +397,28 @@ class TelegramForwarder:
 
     # ── Reply context ──────────────────────────────────────────────────────────
 
+    def _load_reply_context(self) -> None:
+        try:
+            with open(self._reply_context_path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            if not isinstance(raw, dict):
+                raise ValueError("reply context cache must be a JSON object")
+            self._reply_context = {str(phone): int(chat_id) for phone, chat_id in raw.items()}
+            logger.info("Loaded %d persisted SMS reply context(s)", len(self._reply_context))
+        except FileNotFoundError:
+            pass
+        except Exception:
+            logger.exception("Failed to load reply context cache from %s", self._reply_context_path)
+
+    def _save_reply_context(self, snapshot: dict[str, int]) -> None:
+        tmp = self._reply_context_path + ".tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(snapshot, f)
+            os.replace(tmp, self._reply_context_path)
+        except Exception:
+            logger.exception("Failed to save reply context cache to %s", self._reply_context_path)
+
     def get_reply_context(self, phone: str) -> Optional[dict]:
         """Return {chat_id, title} for the sticky reply target of this SMS phone, or None."""
         with self._lock:
@@ -400,10 +432,12 @@ class TelegramForwarder:
     def set_reply_context(self, phone: str, chat_id: int) -> None:
         with self._lock:
             self._reply_context[phone] = chat_id
+            snapshot = dict(self._reply_context)
+            self._save_reply_context(snapshot)
 
     # ── Send message ───────────────────────────────────────────────────────────
 
-    def send_message(self, chat_id: int, text: str) -> None:
+    def send_message(self, chat_id: int, text: str) -> int | None:
         """Send a text message to a Telegram chat via TDLib (synchronous)."""
         result = self._client.call_method(
             "sendMessage",
@@ -418,3 +452,93 @@ class TelegramForwarder:
         result.wait()
         if result.error:
             raise RuntimeError(f"TDLib sendMessage error: {result.error_info}")
+        message_id = (result.update or {}).get("id")
+        return int(message_id) if message_id is not None else None
+
+    def send_photo(
+        self,
+        chat_id: int,
+        image_bytes: bytes,
+        mime_type: str,
+        caption: str = "",
+    ) -> None:
+        """Stage and send an image through TDLib.
+
+        TDLib uploads local files asynchronously, so staged files are retained
+        until a later send cleans up entries older than 24 hours.
+        """
+        extensions = {
+            "image/jpeg": ".jpg",
+            "image/png": ".png",
+            "image/gif": ".gif",
+        }
+        extension = extensions.get(mime_type.lower())
+        if extension is None:
+            raise ValueError(f"Unsupported Telegram image type: {mime_type}")
+        if not image_bytes or len(image_bytes) > 10 * 1024 * 1024:
+            raise ValueError("Telegram image must be between 1 byte and 10 MB")
+
+        outgoing_dir = os.path.abspath("./data/tdlib/outgoing")
+        os.makedirs(outgoing_dir, exist_ok=True)
+        cutoff = time.time() - (24 * 60 * 60)
+        for name in os.listdir(outgoing_dir):
+            path = os.path.join(outgoing_dir, name)
+            try:
+                if os.path.isfile(path) and os.path.getmtime(path) < cutoff:
+                    os.unlink(path)
+            except OSError:
+                logger.debug("Could not remove old Telegram upload %s", path)
+
+        path = os.path.join(outgoing_dir, f"{uuid.uuid4().hex}{extension}")
+        with open(path, "wb") as staged:
+            staged.write(image_bytes)
+
+        if mime_type.lower() == "image/gif":
+            message_content = {
+                "@type": "inputMessageDocument",
+                "document": {"@type": "inputFileLocal", "path": path},
+                "caption": {"@type": "formattedText", "text": caption},
+            }
+        else:
+            message_content = {
+                "@type": "inputMessagePhoto",
+                "photo": {"@type": "inputFileLocal", "path": path},
+                "caption": {"@type": "formattedText", "text": caption},
+            }
+
+        result = self._client.call_method(
+            "sendMessage",
+            params={
+                "chat_id": chat_id,
+                "input_message_content": message_content,
+            },
+        )
+        result.wait()
+        if result.error:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+            raise RuntimeError(f"TDLib sendMessage photo error: {result.error_info}")
+
+    def send_message_to_self(self, text: str) -> int | None:
+        """Send an operational alert to the authenticated account's Saved Messages."""
+        me = self._client.call_method("getMe")
+        me.wait()
+        if me.error:
+            raise RuntimeError(f"TDLib getMe error: {me.error_info}")
+        user_id = me.update.get("id")
+        if not user_id:
+            raise RuntimeError("TDLib getMe returned no user id")
+
+        chat = self._client.call_method(
+            "createPrivateChat",
+            params={"user_id": user_id, "force": False},
+        )
+        chat.wait()
+        if chat.error:
+            raise RuntimeError(f"TDLib createPrivateChat error: {chat.error_info}")
+        chat_id = chat.update.get("id")
+        if not chat_id:
+            raise RuntimeError("TDLib createPrivateChat returned no chat id")
+        return self.send_message(int(chat_id), text)

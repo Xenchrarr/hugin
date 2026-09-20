@@ -36,3 +36,31 @@ def trigger_automation():
         if job_run_id:
             log_error(f"Automation trigger failed: {e}", stack_trace=stack_trace)
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@home_blueprint.route("/states")
+def get_states():
+    """Return a compact subset of Home Assistant states for SMS status views."""
+    raw_entities = request.args.get("entities", "")
+    entity_ids = [item.strip() for item in raw_entities.split(",") if item.strip()]
+    if not entity_ids:
+        return jsonify({"states": []})
+    if len(entity_ids) > 20:
+        return jsonify({"error": "at most 20 entities are allowed"}), 400
+
+    try:
+        all_states = homeassistant_service.get_api().get("/api/states") or []
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 502
+    by_id = {item.get("entity_id"): item for item in all_states}
+    states = []
+    for entity_id in entity_ids:
+        data = by_id.get(entity_id) or {}
+        attrs = data.get("attributes") or {}
+        states.append({
+            "entity_id": entity_id,
+            "state": data.get("state", "unavailable"),
+            "friendly_name": attrs.get("friendly_name", entity_id),
+            "unit": attrs.get("unit_of_measurement", ""),
+        })
+    return jsonify({"states": states})

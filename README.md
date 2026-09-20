@@ -63,8 +63,27 @@ A Docker Compose stack for home automation, energy monitoring, and task orchestr
 | **orchestrator** | `xenchrarr/orchestrator` | — | Job scheduler and execution engine for automated tasks (PowerShell scripts, git syncs, power aggregation) |
 | **orchestrator-frontend** | `xenchrarr/orchestrator-frontend` | 80 | Angular web UI for managing scheduled jobs |
 | **powershell-runner** | `xenchrarr/powershell-runner` | — | Executes PowerShell scripts on behalf of the orchestrator |
-| **telegram-relay** | `xenchrarr/telegram-relay` | 8080 | Relays Telegram messages between the MTProto API and orchestrator/sms-hub services |
+| **telegram-relay** | `xenchrarr/telegram-relay` | 8080 | Telegram connector for the endpoint-and-route message router |
 | **file-server** | `nginx:alpine` | — | Serves shared log files from orchestrator job runs (internal only) |
+
+### SMS resilience
+
+Outbound Telegram and reminder SMS messages pass through a durable PostgreSQL
+outbox in the orchestrator. The orchestrator monitors modem readiness, alerts the
+Telegram Relay account's Saved Messages after a confirmed outage, and retains
+messages for retrieval with the SMS `inbox` commands. Missed reminders are sent
+as a compact digest after recovery; other messages remain grouped by source to
+avoid a recovery-time message burst.
+
+Text and image replies produced by SMS and MMS commands also enter the durable
+queue before the modem sends them. Binary media is stored separately from queue
+JSON and removed by the normal retention cleanup. Incoming modem messages are
+removed only after the reply is stored, and `inbox` items are acknowledged only
+when that queued reply is accepted by the SMS gateway.
+
+The SMS hub preserves stored modem messages across restarts. Registered senders
+can select a Telegram conversation with `tg/use <num>` and forward an MMS image
+to that conversation; JPEG, PNG, and GIF payloads are supported.
 
 ## Setup
 
@@ -81,8 +100,8 @@ Key variables to set:
 - **EcoFlow** — `ECOFLOW_ACCESS_KEY`, `ECOFLOW_SECRET_KEY`
 - **Hugin Core** — `TIBBER_ACCESS_TOKEN`, `HA_URL`, `HA_TOKEN`, `SIMPLENOTE_EMAIL`, `SIMPLENOTE_PASSWORD`, `SERVICE_KEY`
 - **Telegram bot** — `TELEGRAM_API_KEY`, `ALLOWED_USER_IDS`
-- **Telegram Relay** — `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_PHONE_NUMBER`, `DB_ENCRYPTION_KEY`
-- **SMS** — `ALLOWED_SENDERS`, `SENDER_PINS`
+- **Telegram connector** — `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_PHONE_NUMBER`, `DB_ENCRYPTION_KEY`; optionally `MESSAGE_RELAY_ENDPOINT_KEY`
+- **SMS** — register the sender's phone number on an orchestrator user
 - **Orchestrator** — `TEAMS_WEBHOOK_URL`, `GIT_USERNAME`, `GIT_PASSWORD`, `GIT_REPO_URLS`
 
 ### 2. Build and push images

@@ -7,3 +7,4 @@ class SmsMessage:
     sender: str
     date: str
     text: str
+    status: str = "REC UNREAD"

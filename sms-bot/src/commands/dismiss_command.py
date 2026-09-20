@@ -7,7 +7,7 @@ _orchestrator = OrchestratorClient()
 
 class DismissCommand(BaseCommand):
     path = "rem/dismiss"
-    aliases = ["dismiss"]
+    aliases = ["dismiss", "d", "done"]
     description = "Dismiss a reminder"
     usage = "rem dismiss <id>"
 

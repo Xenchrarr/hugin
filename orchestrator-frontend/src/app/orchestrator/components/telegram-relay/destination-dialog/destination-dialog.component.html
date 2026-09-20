@@ -1,4 +1,4 @@
-<h2 mat-dialog-title>{{ isNew ? 'Add destination' : 'Edit destination' }}</h2>
+<h2 mat-dialog-title>{{ isNew ? 'Add endpoint' : 'Edit endpoint' }}</h2>
 <mat-dialog-content class="mat-typography">
     <mat-card appearance="outlined">
         <mat-card-content>
@@ -8,31 +8,46 @@
                     <td>
                         <mat-form-field>
                             <mat-label>Name</mat-label>
-                            <input matInput [(ngModel)]="destination.name">
+                            <input matInput [(ngModel)]="endpoint.name" (blur)="normalizeKey()">
                         </mat-form-field>
                     </td>
                 </tr>
                 <tr>
-                    <th>Type</th>
+                    <th>Key</th>
+                    <td>
+                        <mat-form-field>
+                            <mat-label>Stable key</mat-label>
+                            <input matInput [(ngModel)]="endpoint.key" placeholder="cabin-sms" [disabled]="!isNew">
+                            <mat-hint>Lowercase letters, numbers and hyphens.</mat-hint>
+                        </mat-form-field>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Connector</th>
                     <td>
                         <mat-form-field>
                             <mat-label>Type</mat-label>
-                            <mat-select [(ngModel)]="destination.type">
-                                <mat-option value="webhook">Webhook</mat-option>
+                            <mat-select [(ngModel)]="endpoint.type">
+                                <mat-option value="telegram">Telegram</mat-option>
                                 <mat-option value="sms">SMS</mat-option>
+                                <mat-option value="webhook">Webhook</mat-option>
                             </mat-select>
                         </mat-form-field>
                     </td>
                 </tr>
                 <tr>
                     <th>Enabled</th>
-                    <td>
-                        <mat-checkbox [(ngModel)]="destination.enabled"></mat-checkbox>
-                    </td>
+                    <td><mat-checkbox [(ngModel)]="endpoint.enabled"></mat-checkbox></td>
                 </tr>
 
-                <!-- Webhook-specific fields -->
-                <ng-container *ngIf="destination.type === 'webhook'">
+                <ng-container *ngIf="endpoint.type === 'telegram'">
+                    <tr>
+                        <th></th>
+                        <td>Telegram credentials are supplied to the connector through environment variables.</td>
+                    </tr>
+                </ng-container>
+
+                <ng-container *ngIf="endpoint.type === 'webhook'">
                     <tr>
                         <th>URL</th>
                         <td>
@@ -47,20 +62,34 @@
                         <td>
                             <mat-form-field class="wide-field">
                                 <mat-label>Authorization token (optional)</mat-label>
-                                <input matInput [(ngModel)]="webhookToken" placeholder="Leave blank if not required">
+                                <input matInput type="password" [(ngModel)]="webhookToken">
                             </mat-form-field>
                         </td>
                     </tr>
                 </ng-container>
 
-                <!-- SMS-specific fields -->
-                <ng-container *ngIf="destination.type === 'sms'">
+                <ng-container *ngIf="endpoint.type === 'sms'">
                     <tr>
                         <th>Phone</th>
                         <td>
                             <mat-form-field>
                                 <mat-label>Phone number</mat-label>
                                 <input matInput [(ngModel)]="smsPhone" placeholder="+4712345678">
+                            </mat-form-field>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Outage recovery</th>
+                        <td>
+                            <mat-form-field>
+                                <mat-label>Policy</mat-label>
+                                <mat-select [(ngModel)]="smsRecoveryPolicy">
+                                    <mat-option value="digest_hold">Hold and summarize</mat-option>
+                                    <mat-option value="inbox_only">Inbox only</mat-option>
+                                    <mat-option value="replay">Replay every message</mat-option>
+                                    <mat-option value="latest_only">Keep latest only</mat-option>
+                                </mat-select>
+                                <mat-hint>Hold and summarize prevents recovery spam.</mat-hint>
                             </mat-form-field>
                         </td>
                     </tr>
@@ -71,5 +100,6 @@
 </mat-dialog-content>
 <mat-dialog-actions align="end">
     <button mat-button mat-dialog-close>Cancel</button>
-    <button mat-flat-button color="primary" (click)="save()" [disabled]="!destination.name">Save</button>
+    <button mat-flat-button color="primary" (click)="save()"
+            [disabled]="!endpoint.name || !endpoint.key">Save</button>
 </mat-dialog-actions>

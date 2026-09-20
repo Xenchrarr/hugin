@@ -41,8 +41,10 @@ try:
     JobDb.instance()  # ensure the pool is initialized
     run_init_sql()
     run_migrations()
+    from src.services.core.message_hub_service import MessageHubRuntime
+    MessageHubRuntime.instance().start()
 except Exception as exc:
-    log.warning("Database init skipped: %s", exc)
+    log.exception("Database initialization failed: %s", exc)
 
 try:
     if job_service_running:
@@ -51,5 +53,7 @@ try:
         reminder_svc = ReminderSchedulerService.instance()
         reminder_svc.init_scheduler(JobSchedulerService.instance().scheduler)
         reminder_svc.load_active_reminders()
+        from src.services.core.checkin_service import load_active_checkins
+        load_active_checkins()
 except Exception as exc:
     log.warning("Scheduler startup skipped: %s", exc)

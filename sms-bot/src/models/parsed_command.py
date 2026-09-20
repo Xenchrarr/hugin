@@ -12,3 +12,4 @@ class ParsedCommand:
     raw: str = ""
     user_id: Optional[int] = None
     sender_phone: Optional[str] = None
+    user_config: dict = field(default_factory=dict)

@@ -1,16 +1,141 @@
-h2 {
-    margin-top: 1.5rem;
+.page-heading,
+.section-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.page-heading h1,
+.section-heading h2 {
+    margin-bottom: 0.25rem;
+}
+
+.subtitle,
+.section-heading p {
+    margin-top: 0;
+    color: #666;
+}
+
+.heading-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.route-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 1rem;
+}
+
+.route-card {
+    transition: opacity 120ms ease;
+}
+
+.route-disabled {
+    opacity: 0.68;
+}
+
+.route-card mat-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.route-flow {
+    display: grid;
+    grid-template-columns: minmax(100px, 1fr) auto minmax(150px, 1.4fr);
+    align-items: start;
+    gap: 1rem;
+    padding-top: 1.25rem;
+}
+
+.flow-label {
+    display: block;
+    color: #777;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.35rem;
+}
+
+.arrow {
+    padding-top: 1.25rem;
+    font-size: 1.4rem;
+    color: #777;
+}
+
+.target {
+    display: block;
+}
+
+.connector-type {
+    margin-left: 0.35rem;
+    color: #777;
+    font-size: 0.8rem;
+}
+
+.route-key {
+    margin: 1rem 0 0;
+    color: #888;
+    font-family: monospace;
+    font-size: 0.78rem;
+}
+
+.filter-note {
+    display: inline-block;
+    margin: 1rem 0 0;
+    padding: 0.15rem 0.5rem;
+    border-radius: 1rem;
+    background: #eceff1;
+    font-size: 0.78rem;
+}
+
+.endpoints-section {
+    margin-top: 2.5rem;
+}
+
+.warning,
+.error {
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+}
+
+.warning {
+    background: #fff3cd;
+    color: #664d03;
+}
+
+.error {
+    background: #f8d7da;
+    color: #842029;
 }
 
 .empty-state {
+    color: #777;
     padding: 1rem;
-    color: #888;
 }
 
 table {
     width: 100%;
 }
 
-button + button {
-    margin-left: 4px;
+@media (max-width: 680px) {
+    .page-heading,
+    .section-heading {
+        display: block;
+    }
+
+    .heading-actions {
+        margin-top: 1rem;
+    }
+
+    .route-flow {
+        grid-template-columns: 1fr;
+    }
+
+    .arrow {
+        transform: rotate(90deg);
+        padding: 0;
+    }
 }

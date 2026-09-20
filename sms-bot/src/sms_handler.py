@@ -1,4 +1,5 @@
 import io
+import csv
 import logging
 import os
 import re
@@ -10,8 +11,36 @@ from urllib.parse import urlparse
 import serial
 
 from src.models.sms_message import SmsMessage
+from src.mms.decoder import MmsNotification, RetrievedMms, decode_retrieved_mms
+from src.mms.sms_pdu import decode_sms_deliver_pdu
 
 logger = logging.getLogger(__name__)
+
+
+_GSM7_ALPHABET = (
+    "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ"
+    "\x1bÆæßÉ !\"#¤%&'()*+,-./"
+    "0123456789:;<=>?¡"
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿"
+    "abcdefghijklmnopqrstuvwxyzäöñüà"
+)
+_GSM7_BASIC = {
+    character: index
+    for index, character in enumerate(_GSM7_ALPHABET)
+    if character != "\x1b"
+}
+_GSM7_EXTENSION = {
+    "\f": 0x0A,
+    "^": 0x14,
+    "{": 0x28,
+    "}": 0x29,
+    "\\": 0x2F,
+    "[": 0x3C,
+    "~": 0x3D,
+    "]": 0x3E,
+    "|": 0x40,
+    "€": 0x65,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -312,9 +341,15 @@ def _build_mms_pdu(
 
 class SMSHandler:
     def __init__(self, port: str = "/dev/ttyUSB0", baudrate: int = 115200):
+        self._port = port
+        self._baudrate = baudrate
         self.ser = serial.Serial(port, baudrate, timeout=2)
         self._modem_lock = threading.RLock()
         self._own_number: str = ""
+        self._last_successful_send: float | None = None
+        self._last_send_error: str = ""
+        self._last_send_uncertain: bool = False
+        self._last_call_by_number: dict[str, float] = {}
         logger.info("Initializing modem")
         self.init_modem()
 
@@ -346,6 +381,28 @@ class SMSHandler:
 
     def flush_serial(self) -> None:
         self.ser.reset_input_buffer()
+
+    def _recover_serial_locked(self) -> bool:
+        """Replace a failed USB serial descriptor and reinitialize the modem."""
+        logger.warning("Reconnecting to modem on %s", self._port)
+        try:
+            self.ser.close()
+        except Exception:
+            logger.debug("Could not close failed modem descriptor", exc_info=True)
+
+        try:
+            self.ser = serial.Serial(self._port, self._baudrate, timeout=2)
+            self.init_modem()
+        except (OSError, serial.SerialException):
+            logger.exception("Could not reconnect to modem on %s", self._port)
+            try:
+                self.ser.close()
+            except Exception:
+                pass
+            return False
+
+        logger.info("Reconnected to modem on %s", self._port)
+        return True
 
     def cancel_pending_input(self) -> None:
         """Cancel pending SMS/TCP input mode if the modem is stuck waiting for data."""
@@ -445,9 +502,6 @@ class SMSHandler:
         logger.info("Disabling notifications")
         self.send_at("AT+CNMI=0,0,0,0,0")
 
-        logger.info("Deleting all stored messages")
-        self.send_at("AT+CMGD=1,4", timeout=5)
-
         logger.info("Waiting for network registration")
         for attempt in range(30):
             resp = self.send_at("AT+CREG?", timeout=3)
@@ -485,20 +539,73 @@ class SMSHandler:
     # SMS read / delete
     # -----------------------------------------------------------------------
 
-    def read_messages(self) -> list[SmsMessage]:
+    def read_messages(self) -> list[SmsMessage | MmsNotification]:
         with self._modem_lock:
-            return self._read_messages_locked()
+            try:
+                return self._read_messages_locked()
+            except (OSError, serial.SerialException):
+                logger.exception("Serial I/O failed while polling stored messages")
+                self._recover_serial_locked()
+                return []
 
-    def _read_messages_locked(self) -> list[SmsMessage]:
-        response = self.send_at('AT+CMGL="ALL"', timeout=5)
-        if "ERROR" in response:
-            logger.error("CMGL failed: %s", response.strip())
-            return []
+    def _read_messages_locked(self) -> list[SmsMessage | MmsNotification]:
+        # PDU mode is required to retain the binary WAP-push payload used for
+        # inbound MMS. It also lets one parser handle both text SMS and MMS
+        # notifications without first corrupting binary messages in text mode.
+        try:
+            mode_response = self.send_at("AT+CMGF=0", timeout=3)
+            if "ERROR" in mode_response:
+                logger.error("Could not enter SMS PDU mode: %s", mode_response.strip())
+                return []
+            response = self.send_at("AT+CMGL=4", timeout=10)
+            if "ERROR" in response:
+                logger.error("CMGL failed in PDU mode: %s", response.strip())
+                return []
+            if response.strip():
+                logger.debug("CMGL PDU raw: %s", repr(response))
+            return self.parse_pdu_messages(response)
+        finally:
+            # Outbound SMS code uses text mode with UCS-2 phone numbers and
+            # payloads, so always restore that state before releasing the lock.
+            self.send_at("AT+CMGF=1", timeout=3)
+            self.send_at('AT+CSCS="UCS2"', timeout=3)
 
-        if response.strip():
-            logger.debug("CMGL raw: %s", repr(response))
-
-        return self.parse_messages(response)
+    @staticmethod
+    def parse_pdu_messages(response: str) -> list[SmsMessage | MmsNotification]:
+        messages: list[SmsMessage | MmsNotification] = []
+        status_names = {
+            "0": "REC UNREAD",
+            "1": "REC READ",
+            "2": "STO UNSENT",
+            "3": "STO SENT",
+        }
+        lines = response.splitlines()
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            if not line.startswith("+CMGL:"):
+                i += 1
+                continue
+            try:
+                parts = next(csv.reader([line.split(":", 1)[1]], skipinitialspace=True))
+                index = parts[0].strip()
+                raw_status = parts[1].strip().strip('"').upper()
+                status = status_names.get(raw_status, raw_status)
+                pdu_hex = lines[i + 1].strip()
+            except (IndexError, csv.Error):
+                logger.warning("Could not parse PDU CMGL entry: %r", line)
+                i += 1
+                continue
+            i += 2
+            if not status.startswith("REC "):
+                continue
+            try:
+                messages.append(decode_sms_deliver_pdu(pdu_hex, index=index, status=status))
+            except (ValueError, IndexError) as exc:
+                # Keep the raw modem entry in storage. It may be a format we do
+                # not support yet and must not be silently destroyed.
+                logger.warning("Could not decode stored SMS index %s: %s", index, exc)
+        return messages
 
     @staticmethod
     def _decode_ucs2(hexstr: str) -> str:
@@ -517,8 +624,28 @@ class SMSHandler:
             line = lines[i].strip()
 
             if line.startswith("+CMGL:"):
-                parts = line.split(",")
-                index = parts[0].split(":")[1].strip()
+                try:
+                    header = line.split(":", 1)[1].strip()
+                    parts = next(csv.reader([header], skipinitialspace=True))
+                except (IndexError, csv.Error):
+                    logger.warning("Could not parse CMGL header: %r", line)
+                    i += 1
+                    continue
+
+                if len(parts) < 3:
+                    logger.warning("Incomplete CMGL header: %r", line)
+                    i += 1
+                    continue
+
+                index = parts[0].strip()
+                status = parts[1].strip().strip('"').upper()
+
+                # CMGL=ALL can also return STO SENT and STO UNSENT entries. They
+                # are not inbound commands and must never be executed.
+                if not status.startswith("REC "):
+                    i += 2
+                    continue
+
                 sender = self._decode_ucs2(parts[2].strip().strip('"'))
                 date = parts[4].strip().strip('"') if len(parts) >= 5 else ""
 
@@ -531,6 +658,7 @@ class SMSHandler:
                         sender=sender,
                         date=date,
                         text=text,
+                        status=status,
                     )
                 )
                 i += 2
@@ -539,23 +667,64 @@ class SMSHandler:
 
         return messages
 
-    def delete_message(self, index: str) -> None:
+    def delete_message(self, index: str) -> bool:
         with self._modem_lock:
-            self._delete_message_locked(index)
+            try:
+                return self._delete_message_locked(index)
+            except (OSError, serial.SerialException):
+                logger.exception("Serial I/O failed while deleting message %s", index)
+                self._recover_serial_locked()
+                return False
 
-    def _delete_message_locked(self, index: str) -> None:
+    def _delete_message_locked(self, index: str) -> bool:
         logger.info("Deleting message index %s", index)
         response = self.send_at(f"AT+CMGD={index}", timeout=5)
         logger.info("Delete response: %s", response.strip())
+        return "OK" in response and "ERROR" not in response
+
+    def poll_incoming_calls(self) -> list[str]:
+        """Hang up configured one-ring triggers and return their caller numbers once."""
+        with self._modem_lock:
+            try:
+                response = self.send_at("AT+CLCC", timeout=3)
+            except (OSError, serial.SerialException):
+                logger.exception("Serial I/O failed while polling incoming calls")
+                self._recover_serial_locked()
+                return []
+            numbers: list[str] = []
+            now = time.time()
+            for line in response.splitlines():
+                # +CLCC: <id>,<dir>,<stat>,<mode>,<mpty>,"<number>",<type>
+                match = re.search(r'\+CLCC:\s*\d+\s*,\s*1\s*,\s*4\s*,[^\"]*"([^\"]+)"', line)
+                if not match:
+                    continue
+                number = match.group(1)
+                if re.fullmatch(r"[0-9A-Fa-f]+", number or "") and len(number) % 4 == 0:
+                    number = self._decode_ucs2(number)
+                if now - self._last_call_by_number.get(number, 0) < 60:
+                    continue
+                self._last_call_by_number[number] = now
+                numbers.append(number)
+            if numbers:
+                try:
+                    self.send_at("ATH", timeout=3)
+                except (OSError, serial.SerialException):
+                    logger.exception("Serial I/O failed while hanging up incoming call")
+                    self._recover_serial_locked()
+            self._last_call_by_number = {
+                number: seen for number, seen in self._last_call_by_number.items()
+                if now - seen < 300
+            }
+            return numbers
 
     # -----------------------------------------------------------------------
     # SMS send
     # -----------------------------------------------------------------------
 
-    def _send_sms_chunk(self, ucs2_number: str, chunk: str) -> bool:
+    def _send_sms_chunk(self, recipient: str, chunk: str, use_gsm7: bool) -> bool:
         """Send a single SMS chunk."""
         self.flush_serial()
-        self.ser.write(f'AT+CMGS="{ucs2_number}"\r'.encode("ascii"))
+        self.ser.write(f'AT+CMGS="{recipient}"\r'.encode("ascii"))
 
         prompt = self._read_until([">"], timeout=5)
         if ">" not in prompt:
@@ -563,13 +732,20 @@ class SMSHandler:
             return False
 
         self.flush_serial()
-        ucs2_hex = chunk.encode("utf-16-be").hex().upper()
-        # Append a UCS-2 space (0020) as a sacrificial trailing character before
-        # Ctrl-Z. Some modem firmware drops the last character in its internal
-        # hex buffer when Ctrl-Z arrives; the space absorbs the drop so the real
-        # final character is preserved. The recipient never sees the trailing space
-        # because it is consumed by the modem's transmit logic.
-        self.ser.write((ucs2_hex + "0020\x1A").encode("ascii"))
+        # Append a sacrificial trailing space before Ctrl-Z. Some modem firmware
+        # drops the final character in its input buffer; the space absorbs that.
+        if use_gsm7:
+            body = self._gsm7_encode(chunk)
+            if body is None:
+                raise ValueError("GSM-7 chunk contains an unsupported character")
+            self.ser.write(body + b" \x1a")
+        else:
+            ucs2_hex = chunk.encode("utf-16-be").hex().upper()
+            self.ser.write((ucs2_hex + "0020\x1A").encode("ascii"))
+
+        # From this point the modem may have accepted the part even if its
+        # acknowledgement is lost or sms-hub is interrupted.
+        self._last_send_uncertain = True
 
         response = self._read_until(["\nOK", "\nERROR", "+CMGS:", "ERROR"], timeout=60)
         if "\nOK" in response or "+CMGS:" in response:
@@ -580,37 +756,138 @@ class SMSHandler:
 
     def send_sms(self, number: str, message: str) -> bool:
         with self._modem_lock:
-            return self._send_sms_locked(number, message)
+            self._last_send_uncertain = False
+            result = self._send_sms_locked(number, message)
+            if result:
+                self._last_successful_send = time.time()
+                self._last_send_error = ""
+                self._last_send_uncertain = False
+            else:
+                self._last_send_error = "modem did not accept SMS"
+            return result
+
+    @property
+    def last_send_uncertain(self) -> bool:
+        """Whether the most recent failed send may have reached the carrier."""
+        return self._last_send_uncertain
+
+    def get_health(self) -> dict:
+        """Probe modem, SIM, and mobile-network readiness."""
+        with self._modem_lock:
+            try:
+                modem_response = self.send_at("AT", timeout=2)
+                modem_ready = "OK" in modem_response
+                sim_response = self.send_at("AT+CPIN?", timeout=3)
+                sim_ready = "+CPIN: READY" in sim_response
+
+                registration_response = self.send_at("AT+CEREG?", timeout=3)
+                if "+CEREG:" not in registration_response:
+                    registration_response = self.send_at("AT+CREG?", timeout=3)
+                registration_match = re.search(
+                    r"\+(?:CE|C)REG:\s*(?:\d+\s*,\s*)?(\d+)", registration_response
+                )
+                registration = int(registration_match.group(1)) if registration_match else -1
+                network_ready = registration in (1, 5)
+
+                signal_response = self.send_at("AT+CSQ", timeout=3)
+                signal_match = re.search(r"\+CSQ:\s*(\d+)", signal_response)
+                signal = int(signal_match.group(1)) if signal_match else None
+                ready = modem_ready and sim_ready and network_ready
+                return {
+                    "ready": ready,
+                    "modem": modem_ready,
+                    "sim": sim_ready,
+                    "network": network_ready,
+                    "registration": registration,
+                    "signal": signal,
+                    "last_successful_send": self._last_successful_send,
+                    "last_send_error": self._last_send_error,
+                    "error": "" if ready else "modem, SIM, or network is not ready",
+                }
+            except Exception as exc:
+                logger.exception("Modem health probe failed")
+                return {
+                    "ready": False,
+                    "modem": False,
+                    "sim": False,
+                    "network": False,
+                    "signal": None,
+                    "last_successful_send": self._last_successful_send,
+                    "last_send_error": self._last_send_error,
+                    "error": str(exc),
+                }
 
     def _send_sms_locked(self, number: str, message: str) -> bool:
         logger.info("Sending SMS to %s: %s", number, message)
-        ucs2_number = number.encode("utf-16-be").hex().upper()
+        use_gsm7 = self._gsm7_encode(message) is not None
+        charset = "GSM" if use_gsm7 else "UCS2"
+        response = self.send_at(f'AT+CSCS="{charset}"', timeout=3)
+        if "OK" not in response:
+            logger.error("Could not select %s for outbound SMS: %s", charset, response.strip())
+            return False
 
-        chunk_size = 160
+        recipient = number if use_gsm7 else number.encode("utf-16-be").hex().upper()
+        # GSM-7 has 160 septets and UCS-2 has 70 code units. Reserve one unit
+        # for the sacrificial trailing space appended by _send_sms_chunk.
+        chunk_size = 159 if use_gsm7 else 69
         chunks: list[str] = []
 
         while message:
-            if len(message) <= chunk_size:
+            prefix_end = self._encoded_prefix_end(message, chunk_size, use_gsm7)
+            if prefix_end == len(message):
                 chunks.append(message)
                 break
 
-            split_at = message.rfind(" ", 0, chunk_size + 1)
+            split_at = max(
+                message.rfind(" ", 0, prefix_end + 1),
+                message.rfind("\n", 0, prefix_end + 1),
+            )
             if split_at <= 0:
-                split_at = chunk_size
+                split_at = prefix_end
 
             chunks.append(message[:split_at])
-            message = message[split_at:].lstrip(" ")
+            message = message[split_at:].lstrip()
 
         for idx, chunk in enumerate(chunks):
             logger.info("Sending part %d/%d", idx + 1, len(chunks))
-            if not self._send_sms_chunk(ucs2_number, chunk):
+            if not self._send_sms_chunk(recipient, chunk, use_gsm7):
                 return False
+            self._last_send_uncertain = True
 
             if idx < len(chunks) - 1:
                 time.sleep(1)
 
         logger.info("Message sent successfully")
         return True
+
+    @staticmethod
+    def _encoded_prefix_end(text: str, max_units: int, use_gsm7: bool) -> int:
+        """Return the largest prefix fitting in the selected SMS encoding."""
+        units = 0
+        for index, character in enumerate(text):
+            if use_gsm7:
+                encoded = SMSHandler._gsm7_encode(character)
+                if encoded is None:
+                    return index
+                character_units = len(encoded)
+            else:
+                character_units = len(character.encode("utf-16-be")) // 2
+            if units + character_units > max_units:
+                return index
+            units += character_units
+        return len(text)
+
+    @staticmethod
+    def _gsm7_encode(text: str) -> bytes | None:
+        encoded = bytearray()
+        for character in text:
+            if character in _GSM7_BASIC:
+                encoded.append(_GSM7_BASIC[character])
+            elif character in _GSM7_EXTENSION:
+                encoded.extend((0x1B, _GSM7_EXTENSION[character]))
+            else:
+                return None
+        return bytes(encoded)
 
     # -----------------------------------------------------------------------
     # MMS helper methods
@@ -779,41 +1056,263 @@ class SMSHandler:
         except Exception:
             logger.exception("send_mms: failed reading QIRD")
 
-    def _read_http_response(self, conn_id: int, timeout_rounds: int = 20) -> str:
-        """Read HTTP response from modem socket using QIRD."""
-        http_resp_text = ""
+    def _read_qird_payload(
+        self,
+        conn_id: int,
+        max_bytes: int = 1500,
+        timeout: float = 10,
+    ) -> bytes | None:
+        """Read one QIRD response without interpreting its binary payload."""
+        self.ser.write(f"AT+QIRD={conn_id},{max_bytes}\r".encode("ascii"))
+        deadline = time.time() + timeout
+        response = bytearray()
+        payload_start: int | None = None
+        payload_length: int | None = None
+
+        while time.time() < deadline:
+            available = self.ser.in_waiting
+            if available:
+                response.extend(self.ser.read(available))
+
+                if payload_start is None:
+                    match = re.search(rb"\+QIRD:\s*(\d+)\r?\n", response)
+                    if match:
+                        payload_length = int(match.group(1))
+                        payload_start = match.end()
+                    elif b"\r\nERROR\r\n" in response:
+                        logger.error("receive_mms: QIRD failed: %r", bytes(response))
+                        return None
+
+                if payload_start is not None and payload_length is not None:
+                    payload_end = payload_start + payload_length
+                    if len(response) >= payload_end:
+                        trailer = response[payload_end:]
+                        if b"\r\nERROR" in trailer:
+                            logger.error("receive_mms: QIRD failed: %r", bytes(response))
+                            return None
+                        if b"\r\nOK" in trailer:
+                            return bytes(response[payload_start:payload_end])
+            else:
+                time.sleep(0.05)
+
+        logger.error(
+            "receive_mms: timed out reading QIRD response (received %d bytes)",
+            len(response),
+        )
+        return None
+
+    def _read_http_response(self, conn_id: int, timeout_rounds: int = 20) -> bytes:
+        """Read a binary HTTP response from the modem socket using QIRD."""
+        http_response = bytearray()
+        empty_rounds = 0
 
         for _ in range(timeout_rounds):
-            self.ser.write(f"AT+QIRD={conn_id},1500\r".encode("ascii"))
-            rd = self._read_until(["\nOK", "\nERROR", "ERROR"], timeout=10)
-
-            m = re.search(r"\+QIRD:\s*(\d+)", rd)
-            if not m:
-                logger.debug("send_mms: QIRD without length: %s", rd.strip())
+            payload = self._read_qird_payload(conn_id)
+            if payload is None:
                 break
 
-            n = int(m.group(1))
-            if n == 0:
-                if "\r\n\r\n" in http_resp_text:
+            if not payload:
+                empty_rounds += 1
+                if b"\r\n\r\n" in http_response:
                     break
-
+                if empty_rounds >= 10:
+                    break
                 time.sleep(0.5)
                 continue
 
-            data_start = rd.find("\r\n", rd.find("+QIRD:"))
-            if data_start < 0:
-                logger.debug("send_mms: QIRD data start not found: %s", rd.strip())
-                break
+            empty_rounds = 0
+            http_response.extend(payload)
 
-            data_start += 2
+            header_end = http_response.find(b"\r\n\r\n")
+            if header_end >= 0:
+                length_match = re.search(
+                    rb"(?im)^Content-Length:\s*(\d+)",
+                    http_response[:header_end],
+                )
+                if length_match:
+                    expected = int(length_match.group(1))
+                    if len(http_response[header_end + 4:]) >= expected:
+                        break
 
-            ok_pos = rd.rfind("\r\nOK")
-            if ok_pos >= 0:
-                http_resp_text += rd[data_start:ok_pos]
+        return bytes(http_response)
+
+    def _send_socket_bytes(
+        self,
+        conn_id: int,
+        payload: bytes,
+        chunk_size: int,
+        max_unacked: int,
+    ) -> bool:
+        offset = 0
+        while offset < len(payload):
+            chunk = payload[offset:offset + chunk_size]
+            self.ser.write(f"AT+QISEND={conn_id},{len(chunk)}\r".encode("ascii"))
+            prompt = self._read_until([">", "ERROR", "+QIURC:"], timeout=30)
+            if ">" not in prompt:
+                self.cancel_pending_input()
+                logger.error("MMS HTTP request did not receive a QISEND prompt: %r", prompt)
+                return False
+            self.ser.write(chunk)
+            result = self._read_until(
+                ["SEND OK", "SEND FAIL", "ERROR", "+QIURC:"],
+                timeout=90,
+            )
+            if "SEND OK" not in result:
+                logger.error("MMS HTTP socket send failed: %r", result)
+                return False
+            offset += len(chunk)
+            self._wait_for_tcp_drain(conn_id, max_unacked=max_unacked, timeout=30)
+        return True
+
+    @staticmethod
+    def _decode_chunked_http_body(body: bytes) -> bytes:
+        decoded = bytearray()
+        pos = 0
+        while pos < len(body):
+            line_end = body.find(b"\n", pos)
+            if line_end < 0:
+                raise ValueError("truncated chunk size")
+            size_line = body[pos:line_end]
+            if size_line.endswith(b"\r"):
+                size_line = size_line[:-1]
+            size_text = size_line.split(b";", 1)[0].strip()
+            size = int(size_text, 16)
+            pos = line_end + 1
+            if size == 0:
+                return bytes(decoded)
+            if pos + size > len(body):
+                raise ValueError("truncated HTTP chunk")
+            decoded.extend(body[pos:pos + size])
+            pos += size
+            if body[pos:pos + 2] == b"\r\n":
+                pos += 2
+            elif body[pos:pos + 1] == b"\n":
+                pos += 1
             else:
-                http_resp_text += rd[data_start:]
+                context = body[pos:pos + 16].hex()
+                raise ValueError(
+                    f"invalid HTTP chunk delimiter at byte {pos}: {context}"
+                )
+        raise ValueError("chunked HTTP response has no terminating chunk")
 
-        return http_resp_text
+    def retrieve_mms(self, notification: MmsNotification) -> RetrievedMms | None:
+        with self._modem_lock:
+            try:
+                raw = self._download_mms_locked(notification.content_location)
+                if raw is None:
+                    return None
+                return decode_retrieved_mms(raw, fallback_caption=notification.subject)
+            except Exception as exc:
+                logger.exception(
+                    "receive_mms: failed to retrieve/decode transaction %s: %s",
+                    notification.transaction_id,
+                    exc,
+                )
+                return None
+
+    def _download_mms_locked(self, content_location: str) -> bytes | None:
+        """Download an inbound MMS PDU through the carrier MMS bearer."""
+        parsed = urlparse(content_location)
+        if parsed.scheme.lower() != "http" or not parsed.hostname:
+            logger.error("receive_mms: unsupported content location: %s", content_location)
+            return None
+
+        mms_apn = os.environ.get("MMS_APN", "mms").strip()
+        mms_context = int(os.environ.get("MMS_CONTEXT_ID", "3"))
+        proxy_host = os.environ.get("MMS_PROXY_HOST", "").strip()
+        proxy_port_raw = os.environ.get("MMS_PROXY_PORT", "").strip()
+        proxy_port = int(proxy_port_raw) if proxy_port_raw else None
+        max_bytes = int(os.environ.get("MMS_RECEIVE_MAX_BYTES", str(5 * 1024 * 1024)))
+        tcp_chunk = int(os.environ.get("MMS_TCP_CHUNK", "1024"))
+        max_unacked = int(os.environ.get("MMS_MAX_UNACKED", "4096"))
+        user_agent = os.environ.get("MMS_USER_AGENT", "Android-Mms/2.0").strip()
+        wap_profile = os.environ.get("MMS_WAP_PROFILE", "").strip()
+
+        host = parsed.hostname
+        port = parsed.port or 80
+        path = parsed.path or "/"
+        if parsed.query:
+            path += "?" + parsed.query
+        connect_host = proxy_host or host
+        connect_port = proxy_port or port
+        request_target = content_location if proxy_host else path
+
+        headers = [
+            f"GET {request_target} HTTP/1.1",
+            f"Host: {host}",
+            "Accept: application/vnd.wap.mms-message, */*",
+            f"User-Agent: {user_agent}",
+            "Connection: close",
+        ]
+        if wap_profile:
+            headers.append(f"X-WAP-Profile: {wap_profile}")
+        request_bytes = ("\r\n".join(headers) + "\r\n\r\n").encode("ascii")
+
+        conn_id = 0
+        try:
+            self.send_at('AT+CSCS="IRA"', timeout=3)
+            self.send_at(f"AT+QICLOSE={conn_id}", timeout=10)
+            self.send_at(f"AT+QIDEACT={mms_context}", timeout=45)
+            self.send_at(
+                f'AT+QICSGP={mms_context},1,"{mms_apn}","","",1',
+                timeout=5,
+            )
+            activated = self.send_at(f"AT+QIACT={mms_context}", timeout=160)
+            if "ERROR" in activated:
+                logger.error("receive_mms: could not activate MMS PDP context: %s", activated.strip())
+                return None
+
+            self.flush_serial()
+            self.ser.write(
+                (
+                    f'AT+QIOPEN={mms_context},{conn_id},"TCP",'
+                    f'"{connect_host}",{connect_port},0,0\r'
+                ).encode("ascii")
+            )
+            opened = self._read_until(["+QIOPEN:", "ERROR"], timeout=160)
+            match = re.search(r"\+QIOPEN:\s*\d+,(\d+)", opened)
+            if not match or match.group(1) != "0":
+                logger.error("receive_mms: QIOPEN failed: %s", opened.strip())
+                return None
+
+            if not self._send_socket_bytes(conn_id, request_bytes, tcp_chunk, max_unacked):
+                return None
+            response = self._read_http_response(
+                conn_id,
+                timeout_rounds=max(20, (max_bytes // 1500) + 10),
+            )
+            header_end = response.find(b"\r\n\r\n")
+            if header_end < 0:
+                logger.error("receive_mms: invalid HTTP response")
+                return None
+            header_bytes = response[:header_end]
+            status_match = re.search(rb"HTTP/1\.[01]\s+(\d+)", header_bytes)
+            if not status_match or int(status_match.group(1)) != 200:
+                logger.error("receive_mms: MMSC GET failed: %r", header_bytes[:500])
+                return None
+            body = response[header_end + 4:]
+            if b"transfer-encoding: chunked" in header_bytes.lower():
+                body = self._decode_chunked_http_body(body)
+            if len(body) > max_bytes:
+                logger.error("receive_mms: payload exceeds %d-byte limit", max_bytes)
+                return None
+            content_length = re.search(rb"(?im)^Content-Length:\s*(\d+)", header_bytes)
+            if content_length and len(body) < int(content_length.group(1)):
+                logger.error(
+                    "receive_mms: incomplete body (%d/%s bytes)",
+                    len(body),
+                    content_length.group(1).decode("ascii"),
+                )
+                return None
+            logger.info("receive_mms: downloaded %d bytes", len(body))
+            return body
+        finally:
+            try:
+                self.send_at(f"AT+QICLOSE={conn_id}", timeout=10)
+                self.send_at(f"AT+QIDEACT={mms_context}", timeout=20)
+                self.send_at('AT+CSCS="UCS2"', timeout=3)
+            except Exception:
+                logger.exception("receive_mms: failed to restore modem state")
 
     # -----------------------------------------------------------------------
     # MMS send
@@ -827,7 +1326,15 @@ class SMSHandler:
         media_mime_type: str = "image/jpeg",
     ) -> bool:
         with self._modem_lock:
-            return self._send_mms_locked(number, message, media_bytes, media_mime_type)
+            self._last_send_uncertain = False
+            result = self._send_mms_locked(number, message, media_bytes, media_mime_type)
+            if result:
+                self._last_successful_send = time.time()
+                self._last_send_error = ""
+                self._last_send_uncertain = False
+            else:
+                self._last_send_error = "modem did not accept MMS"
+            return result
 
     def _send_mms_locked(
         self,
@@ -1055,6 +1562,9 @@ class SMSHandler:
                     return False
 
                 self.ser.write(chunk)
+                # The MMSC may receive this request even if the response never
+                # makes it back to us. Do not automatically resend on failure.
+                self._last_send_uncertain = True
 
                 sr = self._read_until(
                     ["SEND OK", "OK", "SEND FAIL", "ERROR", "+QIURC:"],

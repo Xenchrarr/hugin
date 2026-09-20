@@ -1,4 +1,4 @@
-<h2 mat-dialog-title>{{ isNew ? 'Add rule' : 'Edit rule' }}</h2>
+<h2 mat-dialog-title>{{ isNew ? 'Add route' : 'Edit route' }}</h2>
 <mat-dialog-content class="mat-typography">
     <mat-card appearance="outlined">
         <mat-card-content>
@@ -8,54 +8,62 @@
                     <td>
                         <mat-form-field>
                             <mat-label>Name</mat-label>
-                            <input matInput [(ngModel)]="rule.name">
+                            <input matInput [(ngModel)]="route.name" (blur)="normalizeKey()">
                         </mat-form-field>
                     </td>
                 </tr>
                 <tr>
-                    <th>Priority</th>
+                    <th>Key</th>
                     <td>
                         <mat-form-field>
-                            <mat-label>Priority (lower = higher priority)</mat-label>
-                            <input matInput type="number" [(ngModel)]="rule.priority">
+                            <mat-label>Stable key</mat-label>
+                            <input matInput [(ngModel)]="route.key" placeholder="telegram-to-sms" [disabled]="!isNew">
+                            <mat-hint>Used by commands and APIs; it does not change when the name changes.</mat-hint>
                         </mat-form-field>
                     </td>
                 </tr>
                 <tr>
                     <th>Enabled</th>
-                    <td><mat-checkbox [(ngModel)]="rule.enabled"></mat-checkbox></td>
+                    <td><mat-checkbox [(ngModel)]="route.enabled"></mat-checkbox></td>
                 </tr>
                 <tr>
-                    <th>Continue on match</th>
-                    <td>
-                        <mat-checkbox [(ngModel)]="rule.continue_on_match"></mat-checkbox>
-                    </td>
+                    <th>All sources</th>
+                    <td><mat-checkbox [(ngModel)]="route.match_all_sources"></mat-checkbox></td>
                 </tr>
-                <tr>
-                    <th>Preset</th>
-                    <td>
-                        <mat-checkbox [(ngModel)]="rule.is_preset"></mat-checkbox>
-                    </td>
-                </tr>
-                <tr>
-                    <th>Conditions</th>
+                <tr *ngIf="!route.match_all_sources">
+                    <th>From</th>
                     <td>
                         <mat-form-field class="json-field">
-                            <mat-label>Conditions (JSON — leave blank for catch-all)</mat-label>
-                            <textarea matInput rows="6" [(ngModel)]="conditionsJson"
-                                placeholder='{"all": [{"field": "chat_id", "op": "eq", "value": -1001234567890}]}'></textarea>
-                            <mat-hint>Operators: eq, neq, in, not_in, contains, regex, exists, gt, lt. Combinators: all, any, not.</mat-hint>
+                            <mat-label>Source endpoints</mat-label>
+                            <mat-select multiple [(ngModel)]="route.source_endpoint_ids">
+                                <mat-option *ngFor="let endpoint of sourceEndpoints" [value]="endpoint.id">
+                                    {{ endpoint.name }} ({{ endpoint.type }})
+                                </mat-option>
+                            </mat-select>
                         </mat-form-field>
                     </td>
                 </tr>
                 <tr>
-                    <th>Actions</th>
+                    <th>To</th>
                     <td>
                         <mat-form-field class="json-field">
-                            <mat-label>Actions (JSON array)</mat-label>
-                            <textarea matInput rows="8" [(ngModel)]="actionsJson"
-                                placeholder='[{"type": "forward", "destination": "1"}]'></textarea>
-                            <mat-hint>Types: forward (destination: dest id), skip, log (level: info/debug/warning/error)</mat-hint>
+                            <mat-label>Target endpoints</mat-label>
+                            <mat-select multiple [(ngModel)]="targetEndpointIds">
+                                <mat-option *ngFor="let endpoint of targetEndpoints" [value]="endpoint.id">
+                                    {{ endpoint.name }} ({{ endpoint.type }})
+                                </mat-option>
+                            </mat-select>
+                        </mat-form-field>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Filter</th>
+                    <td>
+                        <mat-form-field class="json-field">
+                            <mat-label>Optional filter JSON</mat-label>
+                            <textarea matInput rows="6" [(ngModel)]="filterJson"
+                                placeholder='{"field": "chat_id", "op": "eq", "value": -100123}'></textarea>
+                            <mat-hint>Leave blank to relay every incoming message from the selected sources.</mat-hint>
                         </mat-form-field>
                     </td>
                 </tr>
@@ -66,5 +74,7 @@
 </mat-dialog-content>
 <mat-dialog-actions align="end">
     <button mat-button mat-dialog-close>Cancel</button>
-    <button mat-flat-button color="primary" (click)="save()" [disabled]="!rule.name">Save</button>
+    <button mat-flat-button color="primary" (click)="save()"
+            [disabled]="!route.name || !route.key || targetEndpointIds.length === 0
+                || (!route.match_all_sources && route.source_endpoint_ids.length === 0)">Save</button>
 </mat-dialog-actions>

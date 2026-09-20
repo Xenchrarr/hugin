@@ -8,6 +8,8 @@ import {RunsPageComponent} from "./components/runs-page/runs-page.component";
 import {RemindersComponent} from "./components/reminders/reminders.component";
 import {TelegramRelayComponent} from './components/telegram-relay/telegram-relay.component';
 import {CalendarComponent} from './components/calendar/calendar.component';
+import {MessageHubComponent} from './components/message-hub/message-hub.component';
+import {adminGuard} from '../auth/admin.guard';
 
 export const routes: Routes = [
     {
@@ -46,6 +48,11 @@ export const routes: Routes = [
     {
         path: 'telegram-relay',
         component: TelegramRelayComponent,
+    },
+    {
+        path: 'message-hub',
+        component: MessageHubComponent,
+        canActivate: [adminGuard],
     },
     {
         path: 'calendar',

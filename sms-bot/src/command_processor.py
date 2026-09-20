@@ -23,11 +23,25 @@ from src.commands.chartdays_command import ChartDaysCommand
 from src.commands.tg.list import TgListCommand
 from src.commands.tg.send import TgSendCommand
 from src.commands.tg.reply import TgReplyCommand
+from src.commands.tg.use import TgUseCommand
 from src.commands.relay.list import RelayListCommand
 from src.commands.relay.toggle import RelayStartCommand, RelayStopCommand
 from src.commands.relay.preset import RelayPresetOnCommand, RelayPresetOffCommand
 from src.commands.agenda_command import AgendaCommand
 from src.commands.ai_command import AiCommand
+from src.commands.inbox_command import InboxCommand
+from src.commands.menu_command import MenuCommand
+from src.commands.today_command import TodayCommand
+from src.commands.camera_command import CameraCommand
+from src.commands.status_command import StatusCommand
+from src.commands.scene_command import SceneCommand
+from src.commands.print_command import PrintCommand
+from src.commands.news_command import NewsCommand
+from src.commands.transit_command import TransitCommand
+from src.commands.run_command import RunCommand
+from src.commands.brief_command import BriefCommand
+from src.commands.quiet_command import QuietCommand
+from src.commands.checkin_command import CheckinCommand, CheckinOkCommand
 from src.models.errors import (
     ERR_AUTH,
     ERR_AMBIG,
@@ -36,8 +50,10 @@ from src.models.errors import (
     ERR_UNKNOWN_CMD,
     error_response,
 )
+from src.models.media_relay_result import MediaRelayResult
 from src.parser import parse
 from src.services.ai_service import AIService, is_available as ai_available
+from src.services.dumbphone_session import sessions
 
 logger = logging.getLogger(__name__)
 
@@ -69,12 +85,27 @@ class CommandProcessor:
             TgListCommand(),
             TgSendCommand(),
             TgReplyCommand(),
+            TgUseCommand(),
             RelayListCommand(),
             RelayStartCommand(),
             RelayStopCommand(),
             RelayPresetOnCommand(),
             RelayPresetOffCommand(),
             AgendaCommand(),
+            InboxCommand(),
+            MenuCommand(),
+            TodayCommand(),
+            CameraCommand(),
+            StatusCommand(),
+            SceneCommand(),
+            PrintCommand(),
+            NewsCommand(),
+            TransitCommand(),
+            RunCommand(),
+            BriefCommand(),
+            QuietCommand(),
+            CheckinCommand(),
+            CheckinOkCommand(),
         ]
 
         # Build command registry for NLU before AiCommand so it can be passed in
@@ -104,12 +135,156 @@ class CommandProcessor:
 
         self._ai = AIService(command_registry=self._command_registry)
 
+    def acknowledge_hub_inbox(self, phone: str, delivery_ids: list[int]) -> bool:
+        return _orchestrator.acknowledge_message_hub_inbox(phone, delivery_ids)
+
+    def queue_sms_response(
+        self,
+        phone: str,
+        message: str,
+        idempotency_key: str,
+        *,
+        source_type: str = "sms-command",
+        source_label: str = "SMS command",
+        acknowledge_delivery_ids: list[int] | None = None,
+    ) -> bool:
+        return _orchestrator.queue_sms_response(
+            phone,
+            message,
+            idempotency_key,
+            source_type=source_type,
+            source_label=source_label,
+            acknowledge_delivery_ids=acknowledge_delivery_ids,
+        ) is not None
+
+    def queue_mms_response(
+        self,
+        phone: str,
+        message: str,
+        image_bytes: bytes,
+        image_mime: str,
+        idempotency_key: str,
+        *,
+        source_type: str = "sms-command",
+        source_label: str = "SMS command",
+        acknowledge_delivery_ids: list[int] | None = None,
+    ) -> bool:
+        return _orchestrator.queue_mms_response(
+            phone,
+            message,
+            image_bytes,
+            image_mime,
+            idempotency_key,
+            source_type=source_type,
+            source_label=source_label,
+            acknowledge_delivery_ids=acknowledge_delivery_ids,
+        ) is not None
+
+    def process_missed_call(self, sender: str):
+        user = _orchestrator.lookup_user(channel="sms", identifier=sender)
+        if user is None:
+            return None
+        command = str((user.get("config") or {}).get("missed_call_command") or "").strip()
+        if not command:
+            return None
+        logger.info("Running missed-call command for %s: %s", sender, command)
+        return self.process(command, sender=sender)
+
+    def process_media(
+        self,
+        caption: str,
+        sender: str,
+        image_bytes: bytes,
+        image_mime: str,
+    ) -> MediaRelayResult:
+        """Route an inbound MMS image to an explicit or sticky Telegram target."""
+        user = _orchestrator.lookup_user(channel="sms", identifier=sender)
+        if user is None:
+            logger.warning("Unknown MMS sender %s. Rejecting.", sender)
+            return MediaRelayResult(handled=True, response="Unknown user. Contact admin.")
+
+        from src.api.telegram_relay import TelegramRelayClient
+        from src.commands.tg.send import TgSendCommand
+
+        relay = TelegramRelayClient()
+        text = caption.strip()
+        tokens = text.split()
+        command = tokens[0].lower() if tokens else ""
+        chat_id: int | None = None
+        title = ""
+        outgoing_caption = text
+
+        if command in {"tg/send", "tg/use", "tg/target"}:
+            if len(tokens) < 2:
+                return MediaRelayResult(
+                    handled=True,
+                    response="ERR_BAD_ARG: MMS needs a Telegram target. Try tg/use <num> first.",
+                )
+            resolved = TgSendCommand._resolve_chat(tokens[1])
+            if resolved is None:
+                return MediaRelayResult(
+                    handled=True,
+                    response=f"ERR_BAD_ARG: Could not resolve conversation '{tokens[1]}'.",
+                )
+            chat_id, title = resolved
+            outgoing_caption = " ".join(tokens[2:])
+            relay.set_context(sender, chat_id)
+        elif command in {"tg/reply", "tg/r", "reply", "r"}:
+            outgoing_caption = " ".join(tokens[1:])
+
+        if chat_id is None:
+            context = relay.get_context(sender)
+            if context is None:
+                return MediaRelayResult(
+                    handled=True,
+                    response="No Telegram target. Send tg/use <num> first.",
+                )
+            chat_id = int(context["chat_id"])
+            title = context.get("title") or str(chat_id)
+
+        if not relay.send_media(chat_id, image_bytes, image_mime, outgoing_caption):
+            return MediaRelayResult(handled=False)
+        return MediaRelayResult(handled=True, response=f"OK photo sent to {title}")
+
     def process(self, text: str, sender: str = "") -> str:
         # Resolve user by phone number before processing any command
         user = _orchestrator.lookup_user(channel='sms', identifier=sender)
         if user is None:
             logger.warning("Unknown sender %s. Rejecting.", sender)
             return "Unknown user. Contact admin."
+
+        stripped = text.strip()
+        control = stripped.lower()
+        if control in ("more", "next"):
+            return sessions.move(sender, 1)
+        if control in ("back", "prev", "previous"):
+            return sessions.move(sender, -1)
+        if control == "cancel":
+            return sessions.cancel(sender)
+        if control in ("again", "repeat"):
+            previous = sessions.last_command(sender)
+            if not previous:
+                return "Nothing to repeat."
+            text = previous
+        else:
+            shortcuts = {
+                "1": "today",
+                "2": "list show",
+                "3": "status",
+                "4": "inbox",
+                "5": "ideas show",
+                "6": "help",
+            }
+            configured = (user.get("config") or {}).get("sms_shortcuts", {})
+            if isinstance(configured, dict):
+                shortcuts.update({str(k).lower(): str(v) for k, v in configured.items()})
+            text = shortcuts.get(control, text)
+            first_word = control.split(None, 1)[0] if control else ""
+            scenes = (user.get("config") or {}).get("sms_scenes", {})
+            if text == stripped and isinstance(scenes, dict):
+                if any(str(name).lower() == first_word for name in scenes):
+                    text = f"scene {stripped}"
+            sessions.remember_command(sender, stripped)
 
         try:
             cmd = parse(text)
@@ -118,18 +293,32 @@ class CommandProcessor:
 
         cmd.user_id = user.get('id')
         cmd.sender_phone = sender
+        cmd.user_config = user.get("config") or {}
 
         handler, suggestions = self.resolver.resolve(cmd.path)
 
-        # Fallback: try path/first_positional for backward-compat space syntax
-        # e.g. "get shoppinglist" → path="get", positional=["shoppinglist"] → try "get/shoppinglist"
-        if handler is None and cmd.positional:
-            compound = f"{cmd.path}/{cmd.positional[0].lower()}"
-            fallback_handler, fallback_suggestions = self.resolver.resolve(compound)
-            if fallback_handler is not None:
-                handler = fallback_handler
+        # `relay` is both a useful status command and a command namespace.
+        # Prefer a concrete subcommand when one is present so permission checks
+        # apply to relay/start or relay/stop rather than the read-only list command.
+        if cmd.path == "relay" and cmd.positional:
+            compound = f"relay/{cmd.positional[0].lower()}"
+            compound_handler, _ = self.resolver.resolve(compound)
+            if compound_handler is not None:
+                handler = compound_handler
                 cmd.positional = cmd.positional[1:]
                 suggestions = []
+
+        # Fallback: consume space-separated namespace tokens as slash paths.
+        # e.g. "relay preset on" -> "relay/preset/on".
+        if handler is None and cmd.positional:
+            for consumed in range(len(cmd.positional), 0, -1):
+                compound = "/".join([cmd.path] + [part.lower() for part in cmd.positional[:consumed]])
+                fallback_handler, _ = self.resolver.resolve(compound)
+                if fallback_handler is not None:
+                    handler = fallback_handler
+                    cmd.positional = cmd.positional[consumed:]
+                    suggestions = []
+                    break
 
         if handler is None:
             if suggestions:
@@ -164,8 +353,10 @@ class CommandProcessor:
                 return error_response(ERR_AUTH, "Permission denied", handler.path)
 
         try:
-            return handler.execute(cmd)
+            result = handler.execute(cmd)
+            if isinstance(result, str) and len(result) > 160:
+                return sessions.first_page(sender, result)
+            return result
         except Exception as e:
             logger.exception("Command %s failed: %s", cmd.path, e)
             return error_response(ERR_INTERNAL, "Command failed")
-

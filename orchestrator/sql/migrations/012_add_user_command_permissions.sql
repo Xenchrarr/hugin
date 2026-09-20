@@ -1,4 +1,4 @@
-CREATE TABLE user_command_permissions (
+CREATE TABLE IF NOT EXISTS user_command_permissions (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id BIGINT NOT NULL,
     command_path VARCHAR(100) NOT NULL,

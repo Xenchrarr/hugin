@@ -16,6 +16,7 @@ from app.destinations import build_destinations
 from app.forwarder import TelegramForwarder
 from app.rules.engine import RuleEngine
 from app.rules.models import Rule
+from app.routing_config import compile_routes
 
 _SERVICE_KEY = os.environ.get("SERVICE_KEY", "")
 
@@ -49,19 +50,15 @@ def _setup_logging() -> None:
 
 
 def _build_rules_and_destinations(raw: dict):
-    """Parse raw config dict into destinations map and Rule objects."""
-    destinations = build_destinations(raw.get("destinations", []))
-    rules = []
-    for r in raw.get("rules", []):
-        rule_data = {
-            "name": r.get("name", "unnamed"),
-            "priority": r.get("priority", 100),
-            "enabled": bool(r.get("enabled", True)),
-            "continue": bool(r.get("continue_on_match", False)),
-            "conditions": r.get("conditions"),
-            "actions": r.get("actions", []),
-        }
-        rules.append(Rule.model_validate(rule_data))
+    """Compile transport-independent endpoints and routes for this connector."""
+    return _build_routes(raw)
+
+
+def _build_routes(raw: dict):
+    source_key = os.environ.get("MESSAGE_RELAY_ENDPOINT_KEY", "telegram-main")
+    target_endpoints, rule_data = compile_routes(raw, source_key)
+    destinations = build_destinations(target_endpoints)
+    rules = [Rule.model_validate(item) for item in rule_data]
     return destinations, rules
 
 
@@ -121,10 +118,53 @@ def _create_reload_server(forwarder: TelegramForwarder) -> threading.Thread:
         if not chat_id or not text:
             return jsonify({"message": "Missing chat_id or text"}), 400
         try:
-            forwarder.send_message(int(chat_id), text)
-            return jsonify({"status": "ok"})
+            message_id = forwarder.send_message(int(chat_id), text)
+            return jsonify({"status": "ok", "message_id": message_id})
         except Exception as exc:
             logger.error("Failed to send Telegram message: %s", exc)
+            return jsonify({"message": str(exc)}), 500
+
+    @app.route("/api/telegram/send-media", methods=["POST"])
+    def send_telegram_media():
+        if _SERVICE_KEY:
+            key = request.headers.get("X-Service-Key", "")
+            if key != _SERVICE_KEY:
+                return jsonify({"message": "Unauthorized"}), 401
+        chat_id = request.form.get("chat_id", "").strip()
+        caption = request.form.get("caption", "").strip()
+        media = request.files.get("media")
+        if not chat_id or media is None:
+            return jsonify({"message": "Missing chat_id or media"}), 400
+        mime_type = (media.mimetype or "").lower()
+        if mime_type not in {"image/jpeg", "image/png", "image/gif"}:
+            return jsonify({"message": "Unsupported image type"}), 415
+        image_bytes = media.stream.read((10 * 1024 * 1024) + 1)
+        if not image_bytes or len(image_bytes) > 10 * 1024 * 1024:
+            return jsonify({"message": "Image must be between 1 byte and 10 MB"}), 413
+        try:
+            forwarder.send_photo(int(chat_id), image_bytes, mime_type, caption)
+            return jsonify({"status": "ok"})
+        except (TypeError, ValueError) as exc:
+            return jsonify({"message": str(exc)}), 400
+        except Exception as exc:
+            logger.error("Failed to send Telegram photo: %s", exc)
+            return jsonify({"message": str(exc)}), 500
+
+    @app.route("/api/telegram/send-self", methods=["POST"])
+    def send_telegram_to_self():
+        if _SERVICE_KEY:
+            key = request.headers.get("X-Service-Key", "")
+            if key != _SERVICE_KEY:
+                return jsonify({"message": "Unauthorized"}), 401
+        data = request.get_json(silent=True) or {}
+        text = data.get("text", "").strip()
+        if not text:
+            return jsonify({"message": "Missing text"}), 400
+        try:
+            message_id = forwarder.send_message_to_self(text)
+            return jsonify({"status": "ok", "message_id": message_id})
+        except Exception as exc:
+            logger.error("Failed to send Telegram Saved Messages alert: %s", exc)
             return jsonify({"message": str(exc)}), 500
 
     @app.route("/api/telegram/context/<phone>", methods=["GET"])
@@ -154,7 +194,8 @@ def _create_reload_server(forwarder: TelegramForwarder) -> threading.Thread:
 
     @app.route("/health", methods=["GET"])
     def health():
-        return jsonify({"status": "ok"})
+        ready = forwarder.is_ready()
+        return jsonify({"status": "ok" if ready else "starting", "ready": ready}), 200 if ready else 503
 
     def _run():
         app.run(host="0.0.0.0", port=8080, use_reloader=False)

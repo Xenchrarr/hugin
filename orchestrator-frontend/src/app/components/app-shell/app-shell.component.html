@@ -64,7 +64,7 @@
             <a mat-list-item routerLink="/telegram-relay" routerLinkActive="active">
                 <mat-icon matListItemIcon>send</mat-icon>
                 @if(!collapsed) {
-                <span>Telegram Relay</span>
+                <span>Message Routes</span>
                 }
             </a>
 
@@ -78,6 +78,12 @@
             <mat-divider></mat-divider>
 
             @if ((auth.user$ | async)?.is_admin) {
+            <a mat-list-item routerLink="/message-hub" routerLinkActive="active">
+                <mat-icon matListItemIcon>hub</mat-icon>
+                @if(!collapsed) {
+                <span>Message Hub</span>
+                }
+            </a>
             <a mat-list-item routerLink="/users/list" routerLinkActive="active">
                 <mat-icon matListItemIcon>admin_panel_settings</mat-icon>
                 @if(!collapsed) {

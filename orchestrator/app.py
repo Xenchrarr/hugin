@@ -1,6 +1,10 @@
 import logging
+import os
 
-
+logging.basicConfig(
+    level=getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO),
+    format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+)
 
 from src import config, app
 

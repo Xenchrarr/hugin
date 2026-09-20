@@ -7,7 +7,7 @@ _orchestrator = OrchestratorClient()
 
 class SnoozeCommand(BaseCommand):
     path = "rem/snooze"
-    aliases = ["snooze"]
+    aliases = ["snooze", "s"]
     description = "Snooze a reminder"
     usage = "rem snooze <id> [duration]"
 

@@ -13,7 +13,6 @@ class RelayPresetOnCommand(BaseCommand):
     aliases = ["relay/preset on"]
     description = "Enable all preset Telegram relay rules"
     usage = "relay/preset/on"
-    requires_pin = True
 
     def execute(self, cmd: ParsedCommand) -> str:
         result = _orchestrator.set_relay_preset(enabled=True)
@@ -27,7 +26,6 @@ class RelayPresetOffCommand(BaseCommand):
     aliases = ["relay/preset off"]
     description = "Disable all preset Telegram relay rules"
     usage = "relay/preset/off"
-    requires_pin = True
 
     def execute(self, cmd: ParsedCommand) -> str:
         result = _orchestrator.set_relay_preset(enabled=False)

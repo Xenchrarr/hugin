@@ -234,3 +234,27 @@ def get_service_config(user_id: int):
         return user.config
     except Exception as e:
         return {'message': f'Something went wrong: {e}', 'status': 500}, 500
+
+
+@user_blueprint.route('/<int:user_id>/service-config', methods=['POST'])
+@require_service_key
+def patch_service_config(user_id: int):
+    """Merge trusted service-owned preferences into a user's config."""
+    try:
+        values = request.get_json(silent=True)
+        if not isinstance(values, dict):
+            return {'message': 'JSON object required', 'status': 400}, 400
+        user = _storage.get_user(user_id)
+        if user is None:
+            return {'message': 'User not found', 'status': 404}, 404
+        config = dict(user.config or {})
+        for key, value in values.items():
+            if value is None:
+                config.pop(key, None)
+            else:
+                config[key] = value
+        user.config = config
+        updated = _storage.update_user(user)
+        return updated.config
+    except Exception as e:
+        return {'message': f'Something went wrong: {e}', 'status': 500}, 500

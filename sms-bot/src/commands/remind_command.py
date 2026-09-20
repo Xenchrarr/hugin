@@ -17,7 +17,7 @@ _orchestrator = OrchestratorClient()
 
 class RemindCommand(BaseCommand):
     path = "rem/in"
-    aliases = ["remind"]
+    aliases = ["remind", "t", "timer"]
     description = "Set a reminder"
     usage = "rem in <duration> <message>"
 
@@ -33,8 +33,10 @@ class RemindCommand(BaseCommand):
         }
         time_string = cmd.positional[0]
         msg_start = 1
+        if cmd.path in ("t", "timer") and time_string.isdigit():
+            time_string = f"{time_string}m"
         # If the AI gave a bare number, consume the next token if it's a time unit
-        if time_string.isdigit() and len(cmd.positional) > 1 and cmd.positional[1].lower() in _TIME_UNITS:
+        elif time_string.isdigit() and len(cmd.positional) > 1 and cmd.positional[1].lower() in _TIME_UNITS:
             time_string = f"{time_string} {cmd.positional[1]}"
             msg_start = 2
         message = " ".join(cmd.positional[msg_start:]) or "Reminder"

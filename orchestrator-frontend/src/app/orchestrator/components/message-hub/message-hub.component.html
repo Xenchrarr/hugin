@@ -1,0 +1,91 @@
+<div class="page-heading">
+    <div>
+        <h1>Message Hub</h1>
+        <p>Gateway health, queued deliveries, and controlled recovery actions.</p>
+    </div>
+    <button mat-stroked-button (click)="load()" [disabled]="loading">Reload</button>
+</div>
+
+<p class="error" *ngIf="error">{{ error }}</p>
+<p *ngIf="loading">Loading queue status…</p>
+<p *ngIf="!loading && stats.attachments.count">
+    Stored media: {{ stats.attachments.count }} attachment(s), {{ attachmentSize() }}
+</p>
+
+<section class="incident-list" *ngIf="stats.open_incidents.length">
+    <h2>Open incidents</h2>
+    <div class="incident" *ngFor="let incident of stats.open_incidents">
+        <strong>{{ incident.gateway_key }}</strong>
+        <span>{{ incident.error || 'Gateway unavailable' }}</span>
+        <time>{{ incident.opened_at | date:'medium' }}</time>
+    </div>
+</section>
+
+<section class="gateway-grid" *ngIf="!loading">
+    <mat-card appearance="outlined" *ngFor="let gateway of stats.gateways">
+        <mat-card-header>
+            <mat-card-title>{{ gateway.name }}</mat-card-title>
+            <span class="health" [attr.data-health]="gateway.health">{{ gateway.health }}</span>
+        </mat-card-header>
+        <mat-card-content>
+            <code>{{ gateway.gateway_key }}</code>
+            <div class="bucket" *ngFor="let bucket of queueBuckets(gateway)">
+                <span>{{ bucket.status }}</span>
+                <strong>{{ bucket.count }}</strong>
+                <small *ngIf="bucket.oldest_at">oldest {{ bucket.oldest_at | date:'short' }}</small>
+            </div>
+            <p class="empty" *ngIf="queueBuckets(gateway).length === 0">No deliveries recorded.</p>
+        </mat-card-content>
+    </mat-card>
+</section>
+
+<section class="deliveries">
+    <h2>Actionable deliveries</h2>
+    <p class="empty" *ngIf="!loading && deliveries.length === 0">The active queue is empty.</p>
+    <div class="table-wrap" *ngIf="deliveries.length">
+        <table mat-table [dataSource]="deliveries">
+            <ng-container matColumnDef="created">
+                <th mat-header-cell *matHeaderCellDef>Created</th>
+                <td mat-cell *matCellDef="let item">{{ item.created_at | date:'short' }}</td>
+            </ng-container>
+            <ng-container matColumnDef="gateway">
+                <th mat-header-cell *matHeaderCellDef>Gateway</th>
+                <td mat-cell *matCellDef="let item"><code>{{ item.gateway_key }}</code></td>
+            </ng-container>
+            <ng-container matColumnDef="recipient">
+                <th mat-header-cell *matHeaderCellDef>Recipient</th>
+                <td mat-cell *matCellDef="let item"><code>{{ item.recipient_key }}</code></td>
+            </ng-container>
+            <ng-container matColumnDef="status">
+                <th mat-header-cell *matHeaderCellDef>Status</th>
+                <td mat-cell *matCellDef="let item">
+                    <span class="status" [attr.data-status]="item.status">{{ item.status }}</span>
+                    <small class="error-detail" *ngIf="item.last_error">{{ item.last_error }}</small>
+                </td>
+            </ng-container>
+            <ng-container matColumnDef="message">
+                <th mat-header-cell *matHeaderCellDef>Message</th>
+                <td mat-cell *matCellDef="let item" class="message">{{ messageText(item) }}</td>
+            </ng-container>
+            <ng-container matColumnDef="attempts">
+                <th mat-header-cell *matHeaderCellDef>Attempts</th>
+                <td mat-cell *matCellDef="let item">{{ item.attempts }}/{{ item.max_attempts }}</td>
+            </ng-container>
+            <ng-container matColumnDef="actions">
+                <th mat-header-cell *matHeaderCellDef></th>
+                <td mat-cell *matCellDef="let item" class="actions">
+                    <button mat-button *ngIf="item.status === 'dead' || item.status === 'retry_wait'"
+                            [disabled]="busy.has(item.id)" (click)="retry(item)">Retry</button>
+                    <button mat-button color="warn" *ngIf="item.status === 'uncertain'"
+                            [disabled]="busy.has(item.id)" (click)="confirmRetryAnyway(item)">Retry anyway</button>
+                    <button mat-button *ngIf="item.status === 'held'"
+                            [disabled]="busy.has(item.id)" (click)="release(item)">Release</button>
+                    <button mat-button color="warn" [disabled]="busy.has(item.id)"
+                            (click)="confirmCancel(item)">Cancel</button>
+                </td>
+            </ng-container>
+            <tr mat-header-row *matHeaderRowDef="columns"></tr>
+            <tr mat-row *matRowDef="let row; columns: columns"></tr>
+        </table>
+    </div>
+</section>

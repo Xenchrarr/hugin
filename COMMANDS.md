@@ -2,13 +2,13 @@
 
 ## SMS Bot
 
-**Syntax:** `<command> [args] [key=value] [+flag] [-flag] [#PIN]`
+**Syntax:** `<command> [args] [key=value] [+flag] [-flag]`
 
 ### Authentication & Input Rules
 
 - All senders must be registered users (looked up by phone number). Unknown numbers are rejected.
 - Non-admin users must have each command explicitly in their `allowed_commands` list.
-- Commands marked **[PIN]** require a `#<4–8 digit PIN>` appended to the message.
+- The registered sender phone number is the SMS authentication boundary; PINs are not enforced.
 - Typos of up to 1 character are auto-corrected (Damerau-Levenshtein distance ≤ 1).
 - Unknown input falls back to the AI NLU handler (if configured).
 
@@ -19,6 +19,14 @@
 | Command | Aliases | Description | Parameters | PIN |
 |---|---|---|---|---|
 | `help` | `?` | Show all available commands | `[command]` — optional name for detailed help | No |
+| `menu` | `m` | Compact numbered dumb-phone menu | — | No |
+| `today` | `day`, `1` | Calendar, reminders, weather, and solar summary | — | No |
+| `cam` | `camera` | Latest camera snapshot by MMS | — | No |
+| `status` | `3` | Configured home entities, solar, and service health | — | No |
+| `more` / `back` | — | Navigate long responses | — | No |
+| `again` / `cancel` | — | Repeat the last command or clear interaction state | — | No |
+
+Numeric defaults are `1 today`, `2 list show`, `3 status`, `4 inbox`, `5 ideas show`, and `6 help`. They can be overridden per user.
 
 ---
 
@@ -36,7 +44,7 @@
 
 | Command | Aliases | Description | Parameters | PIN |
 |---|---|---|---|---|
-| `rem in <duration> <message>` | `remind` | Create a reminder | `<duration>` — e.g. `45m`, `1h`; `<message>` — reminder text; `repeat=daily\|weekly:MON\|interval:30m` | No |
+| `rem in <duration> <message>` | `remind`, `t`, `timer` | Create a reminder or fast timer | `<duration>` — e.g. `45m`, `1h`; `<message>` — reminder text; `repeat=daily\|weekly:MON\|interval:30m` | No |
 | `rem list [status]` | `reminders` | List reminders | `[status]` — `active` (default), `snoozed`, `dismissed`, `completed` | No |
 | `rem snooze <id> [duration]` | `snooze` | Snooze a reminder | `<id>` — reminder ID; `[duration]` — default `10m` | No |
 | `rem dismiss <id>` | `dismiss` | Permanently dismiss a reminder | `<id>` — reminder ID (required) | No |
@@ -65,11 +73,15 @@ rem dismiss 7
 
 | Command | Aliases | Description | Parameters | PIN |
 |---|---|---|---|---|
-| `home/dev <entity_id>` | `trigger/tv` | Trigger a Home Assistant automation or entity | `<entity_id>` — HA entity ID (required) | **Yes** |
+| `home/dev <entity_id>` | `trigger/tv` | Trigger a Home Assistant automation or entity | `<entity_id>` — HA entity ID (required) | No |
+| `scene <name> [argument]` | `mode` | Run an allowlisted named scene; configured automations can receive a duration argument | `<name>` or `list` | No |
+| `run <name>` | `job` | Start an allowlisted orchestrator job | `<name>` or `list` | No |
 
 **Example:**
 ```
-home/dev switch.living_room_lights #1234
+home/dev switch.living_room_lights
+scene bed
+scene heat 60
 ```
 
 ---
@@ -79,33 +91,37 @@ home/dev switch.living_room_lights #1234
 | Command | Aliases | Description | Parameters | PIN |
 |---|---|---|---|---|
 | `tg/list` | `tg/convos` | List recent Telegram conversations (numbered index) | — | No |
-| `tg/send <num> <message>` | — | Send a message to conversation `#<num>`; sets sticky reply context | `<num>` — 1-based index from `tg/list` or raw `chat_id`; `<message>` — text | **Yes** |
-| `tg/reply <message>` | `tg/r` | Reply to the last active Telegram conversation | `<message>` — text to send | **Yes** |
+| `tg/send <num> <message>` | — | Send a message to conversation `#<num>`; sets sticky reply context | `<num>` — 1-based index from `tg/list` or raw `chat_id`; `<message>` — text | No |
+| `tg/reply <message>` | `tg/r`, `r`, `reply` | Reply to the last active Telegram conversation | `<message>` — text to send | No |
+| `tg/use <num\|chat_id>` | `tg/target` | Select the sticky conversation used by replies and unaddressed MMS photos | `<num>` — index from `tg/list`, or a raw chat ID | No |
 
-**Note:** `tg/reply` requires a prior `tg/send` or an incoming relayed message to establish context.
+**Note:** `tg/reply` requires a prior `tg/send`, `tg/use`, or an incoming relayed message to establish context. The context is persisted across relay restarts.
+
+After `tg/use`, an MMS containing a JPEG, PNG, or GIF is forwarded to the selected conversation. Its text part becomes the Telegram caption. An MMS may also select its target directly with a caption such as `tg/send 2 Snow at the cabin`.
 
 **Examples:**
 ```
 tg/list
-tg/send 2 Hey, are you home? #1234
-tg/reply On my way #1234
+tg/send 2 Hey, are you home?
+tg/reply On my way
+tg/use 2
 ```
 
 ---
 
-### Relay Rules
+### Message Routes
 
 | Command | Aliases | Description | Parameters | PIN |
 |---|---|---|---|---|
-| `relay/list` | `relay/ls` | List all Telegram relay rules with `[ON]`/`[OFF]` status and priority | — | No |
-| `relay/start <num\|name>` | `relay/enable` | Enable a relay rule | `<num\|name>` — 1-based index from `relay/list` or exact/prefix rule name | **Yes** |
-| `relay/stop <num\|name>` | `relay/disable` | Disable a relay rule | `<num\|name>` — 1-based index from `relay/list` or exact/prefix rule name | **Yes** |
+| `relay` | `relay/list`, `relay/ls` | List message routes and their targets | — | No |
+| `relay on [route]` | `relay/start`, `relay/enable` | Enable a route; the route may be omitted when exactly one SMS route exists | route key, index, or name | No |
+| `relay off [route]` | `relay/stop`, `relay/disable` | Disable a route; the route may be omitted when exactly one SMS route exists | route key, index, or name | No |
 
 **Examples:**
 ```
-relay/list
-relay/start 1 #1234
-relay/stop urgent-alerts #1234
+relay
+relay on
+relay off telegram-to-lora
 ```
 
 ---
@@ -116,7 +132,7 @@ relay/stop urgent-alerts #1234
 |---|---|---|---|---|
 | `ai <message>` | `chat` | Chat with the AI assistant, or describe what you want to do | `<message>` — free-text prompt | No* |
 
-**\*** NLU-dispatched commands inherit their own PIN requirements. Keeps last 5 turns of context per session.
+Keeps the last 5 turns of context per session. NLU-dispatched commands still use the sender's normal command permissions.
 
 **Examples:**
 ```
@@ -127,32 +143,52 @@ chat turn off the living room lights
 
 ---
 
-## Telegram Relay Bot
+### Dumb-phone Utilities
 
-The Telegram Relay bot is a **passive message-forwarding service**, not a command bot. It has no user-facing commands.
+| Command | Description |
+|---|---|
+| `agenda [days]` / `cal` | Upcoming calendar events |
+| `note <text>` | Add to the ideas note |
+| `ideas show` | Retrieve the ideas note |
+| `print today\|weather\|list` | Print useful views on the thermal printer |
+| `print note <text>` | Print an arbitrary note |
+| `news [count]` | Retrieve RSS headlines from `news_feed_url` |
+| `bus <destination>` | Call the configured transit webhook |
+| `brief <HHMM\|off>` | Schedule or disable a durable daily SMS brief |
+| `quiet <HHMM> <HHMM>` | Queue proactive messages during quiet hours |
+| `checkin <minutes>` | Begin a safety deadline; reply `OK` to acknowledge |
+
+Long command results are kept within one GSM-7 SMS when their characters permit it. Reply `more`, `back`, or `again` instead of retyping the command.
+
+---
+
+## Message Router — Telegram Connector
+
+The Telegram connector is a **passive message source**, not a command bot. Route control is exposed through the orchestrator UI and the SMS `relay` commands.
 
 ### Overview
 
 - Authenticates with Telegram via TDLib using a real phone-number account (not a bot token).
-- Listens for all incoming messages and applies a rule engine to route them.
+- Listens for incoming messages and evaluates every enabled route for the configured Telegram source endpoint.
 - Supports message types: `messageText`, `messagePhoto`, `messageDocument`. All other types are discarded before the rule engine runs.
 - Outgoing messages are ignored entirely.
-- Configuration (rules + destinations) is hot-reloaded at runtime from the orchestrator.
+- Configuration (endpoints + many-source/many-target routes) is hot-reloaded at runtime from the orchestrator.
+- Every matching route and every enabled target is dispatched; routes do not use first-match-wins behavior.
 
 ---
 
-### Rule Schema
+### Advanced Route Filter Schema
+
+Normal configuration is managed through **Message Routes** in the orchestrator UI. The condition format below is available as an optional per-route filter.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `name` | `string` | required | Label used in log output |
-| `priority` | `int` | `100` | Rules are sorted ascending — **lower number = higher priority** |
-| `enabled` | `bool` | `true` | Disabled rules are filtered out at startup |
-| `conditions` | `dict` | `null` | Condition tree. `null` or empty = catch-all (always matches) |
-| `actions` | `list` | `[]` | Ordered list of actions to execute when the rule matches |
-| `continue` / `continue_on_match` | `bool` | `false` | If `true`, keep evaluating lower-priority rules after a match. If `false` (default), stop at first match |
-
-> **Note:** In YAML config the field is `continue`; when sourced from the orchestrator API it is `continue_on_match`.
+| `name` | `string` | required | Route label used in the UI and logs |
+| `key` | `string` | required | Stable lowercase key used by commands and APIs |
+| `enabled` | `bool` | `true` | Master switch for the route |
+| `filter` | `dict` | `null` | Condition tree. `null` or empty forwards every message from the selected sources |
+| `sources` | `list` | required* | Source endpoints; `match_all_sources` can be used instead |
+| `targets` | `list` | required | Independently switchable target endpoints |
 
 ---
 
@@ -208,6 +244,8 @@ Combinators nest arbitrarily — a combinator node can contain leaf nodes or oth
 ---
 
 ### Actions
+
+The action representation below is the connector's compiled runtime format. The Message Routes UI generates it from route targets; normal route setup does not require editing actions directly.
 
 #### `forward`
 
@@ -278,82 +316,11 @@ Forwards the message to a phone number via the SMS bot.
 | `type` | required | `"sms"` |
 | `config.phone` | `""` | E.164 recipient phone number (e.g. `+46701234567`) |
 
-- Calls `POST {SMS_BOT_URL}/api/sms/send`. `SMS_BOT_URL` defaults to `http://sms-hub:5050`.
+- Submits text to `POST {ORCHESTRATOR_API_URL}/api/message-hub/messages`; the orchestrator queues it durably and its SMS gateway consumer delivers it.
 - Message format: `"{chat_title} | {sender_name}: {text}"` (degrades gracefully if either is absent).
-- Timeout: 15 s. No retry logic.
-
----
-
-### Full Config Example
-
-```yaml
-destinations:
-  - id: main_webhook
-    type: webhook
-    url: "https://hooks.example.com/relay"
-    headers:
-      Authorization: "Bearer secret"
-    timeout: 10.0
-    retry:
-      max_attempts: 3
-      backoff_seconds: 2.0
-
-  - id: my_sms
-    type: sms
-    config:
-      phone: "+46701234567"
-
-rules:
-  - name: "Audit log — runs before all others, always continues"
-    priority: 5
-    continue: true
-    conditions:
-      all:
-        - field: chat_id
-          op: in
-          value: [-1001234567890, -1009876543210]
-    actions:
-      - type: log
-        level: info
-
-  - name: "Critical alerts from ops group"
-    priority: 10
-    conditions:
-      all:
-        - field: chat_id
-          op: in
-          value: [-1001234567890]
-        - field: text
-          op: regex
-          value: "(?i)(alert|critical|error|down)"
-    actions:
-      - type: forward
-        destination: main_webhook
-        redact:
-          - field: text
-            pattern: "\\+?[0-9]{8,15}"
-            replace: "[PHONE]"
-
-  - name: "Forward photos from any group"
-    priority: 50
-    conditions:
-      all:
-        - field: chat_type
-          op: eq
-          value: "group"
-        - field: media_type
-          op: eq
-          value: "photo"
-    actions:
-      - type: forward
-        destination: my_sms
-        include_fields: [chat_title, sender_name, caption]
-
-  - name: "default-skip"
-    priority: 999
-    actions:
-      - type: skip
-```
+- Stored messages retain the Telegram `chat_id` and title so they can be filtered by source with the SMS `inbox` command.
+- `inbox` reads recipient-scoped held deliveries and acknowledges them only after a successful SMS response.
+- Binary Telegram media is not queued; captions and media placeholders are retained as text.
 
 ---
 
@@ -367,5 +334,19 @@ These endpoints are consumed by the SMS bot's `tg/*` commands and internal servi
 | `/internal/auth/code` | `POST` | Submit a Telegram login auth code or password during login flow |
 | `/api/telegram/conversations` | `GET` | Return the list of recent conversations (used by `tg/list`) |
 | `/api/telegram/send` | `POST` | Send a message to a chat by `chat_id` (used by `tg/send` / `tg/reply`) |
+| `/api/telegram/send-media` | `POST` | Send a multipart image upload and optional caption to a chat |
+| `/api/telegram/send-self` | `POST` | Send an operational alert to the relay account's Saved Messages |
 | `/api/telegram/context/<phone>` | `GET` | Get the sticky reply context (last `chat_id`) for a phone number |
 | `/api/telegram/context` | `POST` | Set the sticky reply context for a phone number |
+
+The orchestrator exposes the routing control plane under `/api/telegram_relay`:
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/endpoints` | `GET`, `POST` | List or save source/target endpoints |
+| `/endpoints/<id>` | `DELETE` | Delete an endpoint and remove it from routes |
+| `/routes` | `GET`, `POST` | List or save many-source/many-target routes |
+| `/routes/<key>/enabled` | `PATCH` | Toggle a complete route |
+| `/routes/preset/enabled` | `PATCH` | Toggle every preset route |
+| `/routes/<route>/targets/<endpoint>/enabled` | `PATCH` | Toggle one target without affecting the others |
+| `/routes/<id>` | `DELETE` | Delete a route |

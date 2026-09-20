@@ -94,6 +94,9 @@ def run_print_shopping(param: str = ""):
         raise Exception("Shopping list is empty")
 
     logger.log_info(f"Printing {len(items)} shopping items")
+    for item in items:
+        item = "[] " + item
+
     send_print_content(lines=items, title="Handleliste")
     logger.log_info("Shopping list printed")
 

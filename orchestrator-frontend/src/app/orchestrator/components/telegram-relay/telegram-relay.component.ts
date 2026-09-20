@@ -1,7 +1,10 @@
 import {Component, inject, OnInit} from '@angular/core';
-import {TelegramRelayDestination, TelegramRelayRule} from '../../models/telegram-relay.model';
-import {TelegramRelayService} from '../../services/telegram-relay.service';
+import {NgFor, NgIf} from '@angular/common';
 import {MatButton} from '@angular/material/button';
+import {MatCard, MatCardActions, MatCardContent, MatCardHeader, MatCardTitle} from '@angular/material/card';
+import {MatCheckbox} from '@angular/material/checkbox';
+import {MatDialog} from '@angular/material/dialog';
+import {MatSlideToggle} from '@angular/material/slide-toggle';
 import {
     MatCell,
     MatCellDef,
@@ -14,9 +17,9 @@ import {
     MatRowDef,
     MatTable
 } from '@angular/material/table';
-import {MatCheckbox} from '@angular/material/checkbox';
-import {NgIf} from '@angular/common';
-import {MatDialog} from '@angular/material/dialog';
+import {forkJoin} from 'rxjs';
+import {MessageRelayEndpoint, MessageRelayRoute} from '../../models/telegram-relay.model';
+import {TelegramRelayService} from '../../services/telegram-relay.service';
 import {DestinationDialogComponent} from './destination-dialog/destination-dialog.component';
 import {RuleDialogComponent} from './rule-dialog/rule-dialog.component';
 import {ConfirmDialogComponent} from '../confirm-dialog/confirm-dialog.component';
@@ -25,7 +28,16 @@ import {ConfirmDialogComponent} from '../confirm-dialog/confirm-dialog.component
     selector: 'app-telegram-relay',
     standalone: true,
     imports: [
+        NgFor,
+        NgIf,
         MatButton,
+        MatCard,
+        MatCardActions,
+        MatCardContent,
+        MatCardHeader,
+        MatCardTitle,
+        MatCheckbox,
+        MatSlideToggle,
         MatCell,
         MatCellDef,
         MatColumnDef,
@@ -36,19 +48,18 @@ import {ConfirmDialogComponent} from '../confirm-dialog/confirm-dialog.component
         MatRow,
         MatRowDef,
         MatTable,
-        MatCheckbox,
-        NgIf,
     ],
     templateUrl: './telegram-relay.component.html',
     styleUrl: './telegram-relay.component.css'
 })
 export class TelegramRelayComponent implements OnInit {
-    destinations: TelegramRelayDestination[] = [];
-    rules: TelegramRelayRule[] = [];
+    endpoints: MessageRelayEndpoint[] = [];
+    routes: MessageRelayRoute[] = [];
+    loading = false;
+    error = '';
+    runtimeWarning = '';
     readonly dialog = inject(MatDialog);
-
-    destinationColumns: string[] = ['id', 'name', 'type', 'enabled', 'actions'];
-    ruleColumns: string[] = ['id', 'name', 'priority', 'enabled', 'continue_on_match', 'is_preset', 'actions'];
+    endpointColumns: string[] = ['name', 'key', 'type', 'enabled', 'actions'];
 
     constructor(private relayService: TelegramRelayService) {}
 
@@ -57,61 +68,104 @@ export class TelegramRelayComponent implements OnInit {
     }
 
     load() {
-        this.relayService.getDestinations().subscribe(d => this.destinations = d);
-        this.relayService.getRules().subscribe(r => this.rules = r);
+        this.loading = true;
+        this.error = '';
+        forkJoin({
+            endpoints: this.relayService.getEndpoints(),
+            routes: this.relayService.getMessageRoutes(),
+        }).subscribe({
+            next: result => {
+                this.endpoints = result.endpoints;
+                this.routes = result.routes;
+                this.loading = false;
+            },
+            error: error => {
+                this.error = error?.error?.message ?? 'Could not load message routes.';
+                this.loading = false;
+            },
+        });
     }
 
-    // ── Destinations ────────────────────────────────────────
+    sourceLabel(route: MessageRelayRoute): string {
+        if (route.match_all_sources) return 'Everything';
+        return route.sources.map(source => source.name).join(', ') || 'No source';
+    }
 
-    addDestination() {
-        const ref = this.dialog.open(DestinationDialogComponent, {data: null, width: '1000px', maxWidth: '90vw'});
+    setRouteEnabled(route: MessageRelayRoute, enabled: boolean) {
+        this.relayService.setMessageRouteEnabled(route.key, enabled).subscribe({
+            next: result => {
+                this.checkActivation(result);
+                this.load();
+            },
+            error: () => this.load(),
+        });
+    }
+
+    setTargetEnabled(route: MessageRelayRoute, endpoint: MessageRelayEndpoint, enabled: boolean) {
+        this.relayService.setMessageRouteTargetEnabled(route.key, endpoint.key, enabled).subscribe({
+            next: result => {
+                this.checkActivation(result);
+                this.load();
+            },
+            error: () => this.load(),
+        });
+    }
+
+    private checkActivation(result: {runtime_applied?: boolean}) {
+        this.runtimeWarning = result.runtime_applied === false
+            ? 'Saved, but the running connector did not accept the update. Check its service status.'
+            : '';
+    }
+
+    addEndpoint() {
+        const ref = this.dialog.open(DestinationDialogComponent, {
+            data: null, width: '760px', maxWidth: '90vw'
+        });
         ref.afterClosed().subscribe(result => { if (result) this.load(); });
     }
 
-    editDestination(dest: TelegramRelayDestination) {
-        const ref = this.dialog.open(DestinationDialogComponent, {data: dest, width: '1000px', maxWidth: '90vw'});
+    editEndpoint(endpoint: MessageRelayEndpoint) {
+        const ref = this.dialog.open(DestinationDialogComponent, {
+            data: endpoint, width: '760px', maxWidth: '90vw'
+        });
         ref.afterClosed().subscribe(result => { if (result) this.load(); });
     }
 
-    confirmDeleteDestination(dest: TelegramRelayDestination) {
+    confirmDeleteEndpoint(endpoint: MessageRelayEndpoint) {
         const ref = this.dialog.open(ConfirmDialogComponent, {
-            data: {message: `Delete destination "${dest.name}"?`},
-            width: '500px',
-            maxWidth: '90vw',
+            data: {message: `Delete endpoint "${endpoint.name}"? It will be removed from every route.`},
+            width: '500px', maxWidth: '90vw',
         });
         ref.afterClosed().subscribe(confirmed => {
             if (confirmed) {
-                this.relayService.deleteDestination(dest.id).subscribe(() => this.load());
+                this.relayService.deleteEndpoint(endpoint.id).subscribe(() => this.load());
             }
         });
     }
 
-    // ── Rules ────────────────────────────────────────────────
-
-    addRule() {
-        const ref = this.dialog.open(RuleDialogComponent, {data: null, width: '1000px', maxWidth: '90vw'});
+    addRoute() {
+        const ref = this.dialog.open(RuleDialogComponent, {
+            data: {route: null, endpoints: this.endpoints}, width: '900px', maxWidth: '90vw'
+        });
         ref.afterClosed().subscribe(result => { if (result) this.load(); });
     }
 
-    editRule(rule: TelegramRelayRule) {
-        const ref = this.dialog.open(RuleDialogComponent, {data: rule, width: '1000px', maxWidth: '90vw'});
+    editRoute(route: MessageRelayRoute) {
+        const ref = this.dialog.open(RuleDialogComponent, {
+            data: {route, endpoints: this.endpoints}, width: '900px', maxWidth: '90vw'
+        });
         ref.afterClosed().subscribe(result => { if (result) this.load(); });
     }
 
-    confirmDeleteRule(rule: TelegramRelayRule) {
+    confirmDeleteRoute(route: MessageRelayRoute) {
         const ref = this.dialog.open(ConfirmDialogComponent, {
-            data: {message: `Delete rule "${rule.name}"?`},
-            width: '500px',
-            maxWidth: '90vw',
+            data: {message: `Delete route "${route.name}"?`},
+            width: '500px', maxWidth: '90vw',
         });
         ref.afterClosed().subscribe(confirmed => {
             if (confirmed) {
-                this.relayService.deleteRule(rule.id).subscribe(() => this.load());
+                this.relayService.deleteMessageRoute(route.id).subscribe(() => this.load());
             }
         });
-    }
-
-    setPreset(enabled: boolean) {
-        this.relayService.setPresetEnabled(enabled).subscribe(() => this.load());
     }
 }

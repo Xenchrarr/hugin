@@ -3,17 +3,17 @@ from __future__ import annotations
 import logging
 import os
 import traceback
+from datetime import datetime, timezone
 
 import requests
 
 from src.models.orchestrator.Reminder import Reminder
 from src.persistence.ReminderStorage import ReminderStorage
+from src.services.core.message_hub_service import MessageHubService
 
 log = logging.getLogger(__name__)
 
-SMS_BOT_URL = os.environ.get("SMS_BOT_URL", "http://sms-hub:5050")
 TELEGRAM_BOT_URL = os.environ.get("TELEGRAM_BOT_URL", "http://overlia-power-bot:5060")
-_SERVICE_KEY = os.environ.get("SERVICE_KEY", "")
 
 _TIMEOUT = (5, 15)
 
@@ -37,18 +37,20 @@ def dispatch_reminder(reminder: Reminder) -> bool:
     for channel, config in channels:
         try:
             if channel == "sms":
-                _send_sms(config.get("phone_number"), message)
+                delivery_status = _send_sms(config.get("phone_number"), message, reminder)
             elif channel == "telegram":
                 _send_telegram(config.get("chat_id"), message)
+                delivery_status = "sent"
             elif channel == "teams":
                 _send_teams(config.get("webhook_url"), message)
+                delivery_status = "sent"
             else:
                 log.warning("Unknown notification channel: %s", channel)
                 continue
 
             any_success = True
-            storage.add_reminder_history(reminder.id, "sent", channel=channel)
-            log.info("Reminder %s sent via %s", reminder.id, channel)
+            storage.add_reminder_history(reminder.id, delivery_status, channel=channel)
+            log.info("Reminder %s %s via %s", reminder.id, delivery_status, channel)
 
         except Exception as e:
             tb = "".join(traceback.format_exception(e))
@@ -75,7 +77,7 @@ def _resolve_channels(reminder: Reminder, storage: ReminderStorage) -> list[tupl
             log.warning("No notification settings found for user_id %s", reminder.user_id)
         return [(s.channel, s.config) for s in settings]
 
-    # Legacy: per-reminder explicit recipient override
+    # Per-reminder explicit recipient override
     if reminder.recipient_ids:
         all_settings = storage.get_notification_settings()
         ids_set = set(reminder.recipient_ids)
@@ -84,7 +86,7 @@ def _resolve_channels(reminder: Reminder, storage: ReminderStorage) -> list[tupl
             log.warning("None of the requested recipient_ids %s are configured/enabled", reminder.recipient_ids)
         return result
 
-    # Legacy global fallback
+    # Global fallback
     all_settings = storage.get_notification_settings()
     return [(s.channel, s.config) for s in all_settings if s.enabled]
 
@@ -96,18 +98,21 @@ def _format_message(reminder: Reminder) -> str:
     return "\n".join(parts)
 
 
-def _send_sms(phone_number: str, message: str) -> None:
+def _send_sms(phone_number: str, message: str, reminder: Reminder) -> str:
     if not phone_number:
         raise ValueError("SMS phone_number not configured")
 
-    headers = {"X-Service-Key": _SERVICE_KEY} if _SERVICE_KEY else {}
-    resp = requests.post(
-        f"{SMS_BOT_URL}/api/sms/send",
-        json={"phone": phone_number, "message": message},
-        headers=headers,
-        timeout=_TIMEOUT,
+    occurrence = datetime.now(timezone.utc).strftime("%Y%m%d%H%M")
+    MessageHubService.instance().submit_sms(
+        phone_number=phone_number,
+        message=message,
+        source_type="reminder",
+        source_key=str(reminder.id),
+        source_label="Reminders",
+        user_id=reminder.user_id,
+        idempotency_key=f"reminder:{reminder.id}:{occurrence}:{phone_number}",
     )
-    resp.raise_for_status()
+    return "queued"
 
 
 def _send_telegram(chat_id, message: str) -> None:

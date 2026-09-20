@@ -7,20 +7,25 @@ _orchestrator = OrchestratorClient()
 
 class RelayListCommand(BaseCommand):
     path = "relay/list"
-    aliases = ["relay/ls"]
-    description = "List all Telegram relay rules with their enabled state"
-    usage = "relay/list"
+    aliases = ["relay/ls", "relay"]
+    description = "Show message routes and their enabled targets"
+    usage = "relay"
 
     def execute(self, cmd: ParsedCommand) -> str:
-        rules = _orchestrator.get_relay_rules()
-        if rules is None:
-            return "ERR_INTERNAL: Could not fetch relay rules"
-        if not rules:
-            return "No relay rules configured."
+        routes = _orchestrator.get_message_routes()
+        if routes is None:
+            return "ERR_INTERNAL: Could not fetch message routes"
+        if not routes:
+            return "No message routes configured."
         lines = []
-        for i, rule in enumerate(rules, 1):
-            state = "ON " if rule.get("enabled") else "OFF"
-            name = rule.get("name", f"rule-{rule.get('id')}")
-            prio = rule.get("priority", "?")
-            lines.append(f"{i}. [{state}] {name} (prio {prio})")
+        for i, route in enumerate(routes, 1):
+            state = "ON" if route.get("enabled") else "OFF"
+            name = route.get("name", route.get("key", f"route-{route.get('id')}"))
+            targets = []
+            for target in route.get("targets", []):
+                endpoint = target.get("endpoint", {})
+                marker = "" if target.get("enabled", True) else " (off)"
+                targets.append(f"{endpoint.get('name', endpoint.get('key', '?'))}{marker}")
+            target_text = ", ".join(targets) or "no targets"
+            lines.append(f"{i}. [{state}] {name} -> {target_text}")
         return "\n".join(lines)

@@ -1,4 +1,4 @@
-"""Fetches telegram-relay destinations and rules from the orchestrator API."""
+"""Fetches message endpoints and routes from the orchestrator API."""
 from __future__ import annotations
 
 import logging
@@ -18,12 +18,18 @@ def _headers() -> dict[str, str]:
 
 
 def fetch_config() -> dict[str, Any]:
-    """Returns {'destinations': [...], 'rules': [...]} from the orchestrator.
+    """Return ``endpoints`` and ``routes`` from the orchestrator.
 
     Raises on any network or HTTP error so callers can decide whether to apply
     the result — preventing a failed fetch from wiping the live rule engine.
     """
     url = f"{_ORCHESTRATOR_URL}/api/telegram_relay/config"
     resp = requests.get(url, headers=_headers(), timeout=10)
-    resp.raise_for_status()
+    try:
+        resp.raise_for_status()
+    except requests.HTTPError as exc:
+        detail = (resp.text or "").strip()[:1000]
+        raise RuntimeError(
+            f"Orchestrator config request failed with HTTP {resp.status_code}: {detail}"
+        ) from exc
     return resp.json()
