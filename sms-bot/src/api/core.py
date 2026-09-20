@@ -64,8 +64,13 @@ class HuginCoreClient:
         return self._get("/api/energy/daily", days=days)
 
     # --- Weather ---
-    def get_weather_image_bytes(self, location_id: str) -> bytes | None:
-        return self._get_bytes(f"/api/weather/{location_id}")
+    def get_weather_image_bytes(
+        self, location_id: str, *, dark_mode: bool = True
+    ) -> bytes | None:
+        return self._get_bytes(
+            f"/api/weather/{location_id}",
+            dark="true" if dark_mode else "false",
+        )
 
     def get_weather_summary(self, location_id: str) -> dict | None:
         return self._get(f"/api/weather/{location_id}/summary")

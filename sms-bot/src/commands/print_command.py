@@ -32,7 +32,11 @@ class PrintCommand(BaseCommand):
             ok = bool(lines) and print_content(lines, title="SHOPPING")
         elif kind == "weather":
             location = cmd.user_config.get("weather_location_id", "")
-            image = _core.get_weather_image_bytes(location) if location else None
+            image = (
+                _core.get_weather_image_bytes(location, dark_mode=False)
+                if location
+                else None
+            )
             if not image:
                 return "Weather image unavailable"
             ok = print_image(image)
