@@ -95,8 +95,18 @@ class _FakeStorage:
         self.inbox_summary = {"total": 0, "sources": []}
         self.inbox_items = []
         self.acknowledged = []
+        self.bulk_updates = []
+        self.delivery_searches = []
+        self.group_searches = []
+        self.group_updates = []
+        self.filtered_updates = []
+        self.operations = []
+        self.undo_calls = []
+        self.resume_calls = []
         self.cleaned_with = []
         self.attachments = []
+        self.attachment_metadata = []
+        self.delivery_attempts = []
 
     def get_gateway(self, gateway_id):
         return self.gateway if gateway_id == self.gateway.id else None
@@ -140,6 +150,32 @@ class _FakeStorage:
 
     def get_attachments(self, message_id):
         return list(self.attachments)
+
+    def get_delivery(self, delivery_id):
+        return replace(_delivery(), id=delivery_id, status="held")
+
+    def get_message(self, message_id):
+        return HubMessage(
+            id=message_id,
+            direction="outbound",
+            kind="text",
+            source_gateway_id=None,
+            source_endpoint_id=None,
+            external_id=None,
+            conversation_key="family-chat",
+            payload={"text": "hello"},
+            metadata={"source_type": "telegram", "source_label": "Family"},
+            priority=50,
+            idempotency_key="message-20",
+            created_at=NOW,
+            expires_at=NOW + timedelta(days=1),
+        )
+
+    def get_attachment_metadata(self, message_id):
+        return list(self.attachment_metadata)
+
+    def get_delivery_attempts(self, delivery_id):
+        return list(self.delivery_attempts)
 
     def claim_next(self, lease_token):
         if self.claimed is None:
@@ -196,6 +232,53 @@ class _FakeStorage:
         self.acknowledged.append((recipient_key, delivery_ids))
         return len(delivery_ids)
 
+    def bulk_update_deliveries(self, delivery_ids, action, **audit):
+        self.bulk_updates.append((delivery_ids, action))
+        return {
+            "requested": len(delivery_ids),
+            "updated": len(delivery_ids),
+            "updated_ids": delivery_ids,
+            "skipped": [],
+        }
+
+    def search_deliveries(self, **filters):
+        self.delivery_searches.append(filters)
+        return {
+            "items": [replace(_delivery(), status="held")],
+            "total": 1,
+            "page": filters["page"],
+            "page_size": filters["page_size"],
+        }
+
+    def search_delivery_groups(self, **filters):
+        self.group_searches.append(filters)
+        return {"items": [], "total": 0, "page": 1, "page_size": 25}
+
+    def bulk_update_delivery_group(self, **group):
+        self.group_updates.append(group)
+        return {
+            "requested": 2, "updated": 2, "updated_ids": [10, 11], "skipped": [],
+            "matching": 2, "truncated": False,
+        }
+
+    def bulk_update_matching_deliveries(self, **filters):
+        self.filtered_updates.append(filters)
+        return {
+            "requested": 2, "updated": 2, "updated_ids": [10, 11], "skipped": [],
+            "matching": 2, "remaining": 0, "truncated": False,
+        }
+
+    def get_bulk_operations(self, limit):
+        return self.operations[:limit]
+
+    def undo_bulk_operation(self, operation_id):
+        self.undo_calls.append(operation_id)
+        return {"restored": 2}
+
+    def resume_bulk_operation(self, operation_id):
+        self.resume_calls.append(operation_id)
+        return {"updated": 3}
+
     def cleanup_terminal(self, retention_days):
         self.cleaned_with.append(retention_days)
         return {"messages": 2, "incidents": 1}
@@ -226,6 +309,25 @@ class MessageHubServiceTests(unittest.TestCase):
         self.storage = _FakeStorage()
         self.client = _FakeGatewayClient()
         self.service = MessageHubService(self.storage, self.client)
+
+    def test_messenger_delivery_validation_and_recipient_key(self):
+        gateway = replace(
+            _gateway(), key="messenger-main", name="Messenger", type="messenger"
+        )
+        spec = {"address": {"thread_id": "12345"}, "payload": None}
+
+        MessageHubService._validate_gateway_delivery(
+            gateway,
+            spec,
+            {"text": "hello"},
+            kind="text",
+            has_attachments=False,
+        )
+
+        self.assertEqual(
+            "messenger:12345",
+            MessageHubService._recipient_key(gateway, spec["address"]),
+        )
 
     def test_submit_normalizes_a_delivery_and_resolves_source_gateway(self):
         message, deliveries = self.service.submit(
@@ -395,6 +497,80 @@ class MessageHubServiceTests(unittest.TestCase):
             [("sms:+4712345678", [41, 42])], self.storage.acknowledged
         )
 
+    def test_bulk_delivery_action_is_delegated_to_storage(self):
+        result = self.service.bulk_update_deliveries([41, 42], "acknowledge")
+
+        self.assertEqual(2, result["updated"])
+        self.assertEqual([([41, 42], "acknowledge")], self.storage.bulk_updates)
+
+    def test_delivery_search_serializes_the_page(self):
+        result = self.service.search_deliveries(
+            statuses=["held"], page=2, page_size=25
+        )
+
+        self.assertEqual(1, result["total"])
+        self.assertEqual(10, result["items"][0]["id"])
+        self.assertEqual("held", result["items"][0]["status"])
+        self.assertEqual(
+            [{"statuses": ["held"], "page": 2, "page_size": 25}],
+            self.storage.delivery_searches,
+        )
+
+    def test_group_search_and_action_are_delegated_to_storage(self):
+        groups = self.service.search_delivery_groups(statuses=["held"], page=1)
+        result = self.service.bulk_update_delivery_group(
+            action="acknowledge",
+            statuses=["held"],
+            gateway_key="sms-main",
+            recipient_key="sms:+4712",
+            source_type="telegram",
+            source_label="Family",
+            conversation_key="family-chat",
+        )
+
+        self.assertEqual(0, groups["total"])
+        self.assertEqual(2, result["updated"])
+        self.assertEqual([{"statuses": ["held"], "page": 1}], self.storage.group_searches)
+        self.assertEqual("Family", self.storage.group_updates[0]["source_label"])
+
+    def test_filtered_bulk_action_is_delegated_to_storage(self):
+        result = self.service.bulk_update_matching_deliveries(
+            action="cancel",
+            statuses=["held"],
+            recipient="+4712",
+            created_before=NOW,
+        )
+
+        self.assertEqual(2, result["updated"])
+        self.assertEqual("cancel", self.storage.filtered_updates[0]["action"])
+        self.assertEqual("+4712", self.storage.filtered_updates[0]["recipient"])
+        self.assertEqual(NOW, self.storage.filtered_updates[0]["created_before"])
+
+    def test_bulk_operation_history_and_recovery_are_delegated(self):
+        self.storage.operations = [{"id": 9}]
+
+        operations = self.service.get_bulk_operations(10)
+        undone = self.service.undo_bulk_operation(9)
+        resumed = self.service.resume_bulk_operation(9)
+
+        self.assertEqual([{"id": 9}], operations)
+        self.assertEqual(2, undone["restored"])
+        self.assertEqual(3, resumed["updated"])
+        self.assertEqual([9], self.storage.undo_calls)
+        self.assertEqual([9], self.storage.resume_calls)
+
+    def test_delivery_details_combine_message_attachments_and_attempts(self):
+        self.storage.attachment_metadata = [{"id": 7, "filename": "photo.jpg"}]
+        self.storage.delivery_attempts = [{"id": 8, "outcome": "failed"}]
+
+        details = self.service.get_delivery_details(10)
+
+        self.assertEqual(10, details["delivery"]["id"])
+        self.assertEqual("Family", details["delivery"]["source_label"])
+        self.assertEqual("family-chat", details["message"]["conversation_key"])
+        self.assertEqual("photo.jpg", details["attachments"][0]["filename"])
+        self.assertEqual("failed", details["attempts"][0]["outcome"])
+
     def test_cleanup_queue_uses_configured_retention(self):
         with patch("src.services.core.message_hub_service.RETENTION_DAYS", 17):
             result = self.service.cleanup_queue()
@@ -510,6 +686,23 @@ class MessageHubModelTests(unittest.TestCase):
         self.assertEqual("+4712345678", delivery.address["phone"])
         self.assertEqual("sms-main", delivery.gateway_key)
         self.assertEqual("http://sms", delivery.gateway_config["base_url"])
+
+    def test_delivery_db_row_includes_source_context_when_selected(self):
+        row = (
+            10, 20, 1, None, None,
+            '{"phone":"+4712345678"}', '{"text":"hello"}',
+            "held", "inbox_only", 50, 0, 8, NOW,
+            None, None, None, None, None, None, "delivery-10", "dispatch-10", NOW, NOW,
+            "sms:+4712345678", None,
+            "sms-main", "sms", '{}',
+            "telegram", "Family", "family-chat",
+        )
+
+        delivery = MessageDelivery.from_db_row(row, include_gateway=True)
+
+        self.assertEqual("telegram", delivery.source_type)
+        self.assertEqual("Family", delivery.source_label)
+        self.assertEqual("family-chat", delivery.conversation_key)
 
 
 if __name__ == "__main__":

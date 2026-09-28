@@ -1,6 +1,7 @@
 import sys
 import types
 import unittest
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -79,6 +80,26 @@ class _UncertainResponse(_Response):
 
 
 class MessageGatewayClientTests(unittest.TestCase):
+    @patch("src.services.core.message_gateway_client.requests.post", return_value=_Response())
+    def test_messenger_delivery_uses_thread_endpoint(self, post):
+        delivery = replace(
+            _delivery(),
+            address={"thread_id": "123456"},
+            gateway_key="messenger-main",
+            gateway_type="messenger",
+            gateway_config={"base_url": "http://messenger-relay:8081"},
+        )
+
+        MessageGatewayClient().send(delivery, [])
+
+        self.assertEqual(
+            "http://messenger-relay:8081/api/messenger/send", post.call_args.args[0]
+        )
+        self.assertEqual(
+            {"thread_id": "123456", "text": "Weather forecast"},
+            post.call_args.kwargs["json"],
+        )
+
     @patch("src.services.core.message_gateway_client.requests.post", return_value=_Response())
     def test_sms_attachment_uses_mms_endpoint(self, post):
         attachment = MessageAttachment(

@@ -41,6 +41,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     selectedRange = '30d';
     autoRefresh = true;
     loading = false;
+    callInProgress = false;
+    callResult: string | null = null;
+    callError: string | null = null;
 
     // Charts
     statusChartData: {
@@ -112,6 +115,33 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     refresh(): void {
         this.fetchStats();
+    }
+
+    callMe(): void {
+        if (this.callInProgress) return;
+        this.callInProgress = true;
+        this.callResult = null;
+        this.callError = null;
+        this.dashboardService.callMe().subscribe({
+            next: result => {
+                this.callResult = this.callStatusLabel(result.status);
+                this.callInProgress = false;
+            },
+            error: error => {
+                this.callError = error?.error?.message ?? 'Could not start the call';
+                this.callInProgress = false;
+            },
+        });
+    }
+
+    private callStatusLabel(status: string): string {
+        switch (status) {
+            case 'answered': return 'Phone answered; call disconnected.';
+            case 'ring_timeout': return 'Phone rang for 20 seconds.';
+            case 'ringing': return 'Phone rang successfully.';
+            case 'ended': return 'Call started, then ended.';
+            default: return `Call finished: ${status}`;
+        }
     }
 
     get successRate(): number {

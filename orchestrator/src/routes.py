@@ -20,6 +20,8 @@ from src.controllers.ical_source_controller import ical_source_blueprint
 from src.controllers.bot_commands_controller import bot_commands_blueprint
 from src.controllers.checkin_controller import checkin_blueprint
 from src.controllers.message_hub_controller import message_hub_blueprint
+from src.controllers.call_controller import call_blueprint
+from src.controllers.alarm_controller import alarm_blueprint
 
 api = Blueprint('api', __name__)
 
@@ -60,3 +62,5 @@ api.register_blueprint(bot_commands_blueprint, url_prefix="/bot-commands")
 
 api.register_blueprint(checkin_blueprint, url_prefix="/checkins")
 api.register_blueprint(message_hub_blueprint, url_prefix="/message-hub")
+api.register_blueprint(call_blueprint, url_prefix="/calls")
+api.register_blueprint(alarm_blueprint, url_prefix="/alarms")

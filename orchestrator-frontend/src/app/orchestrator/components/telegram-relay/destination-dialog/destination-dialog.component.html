@@ -29,6 +29,7 @@
                             <mat-label>Type</mat-label>
                             <mat-select [(ngModel)]="endpoint.type">
                                 <mat-option value="telegram">Telegram</mat-option>
+                                <mat-option value="messenger">Messenger</mat-option>
                                 <mat-option value="sms">SMS</mat-option>
                                 <mat-option value="webhook">Webhook</mat-option>
                             </mat-select>
@@ -42,8 +43,27 @@
 
                 <ng-container *ngIf="endpoint.type === 'telegram'">
                     <tr>
-                        <th></th>
-                        <td>Telegram credentials are supplied to the connector through environment variables.</td>
+                        <th>Chat ID</th>
+                        <td>
+                            <mat-form-field>
+                                <mat-label>Target chat ID (optional)</mat-label>
+                                <input matInput [(ngModel)]="telegramChatId" placeholder="123456789">
+                                <mat-hint>Leave empty for the main source connector.</mat-hint>
+                            </mat-form-field>
+                        </td>
+                    </tr>
+                </ng-container>
+
+                <ng-container *ngIf="endpoint.type === 'messenger'">
+                    <tr>
+                        <th>Thread ID</th>
+                        <td>
+                            <mat-form-field>
+                                <mat-label>Target thread ID (optional)</mat-label>
+                                <input matInput [(ngModel)]="messengerThreadId" placeholder="1234567890123456">
+                                <mat-hint>Leave empty for the main source connector.</mat-hint>
+                            </mat-form-field>
+                        </td>
                     </tr>
                 </ng-container>
 

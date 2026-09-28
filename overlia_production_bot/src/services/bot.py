@@ -431,6 +431,51 @@ async def dismiss_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await update.message.reply_text(f"Reminder #{reminder_id} dismissed.")
 
 
+@restricted('telegram/alarm')
+async def alarm_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    args = context.args or []
+    user = context.user_data.get('resolved_user', {})
+    if not args:
+        await update.message.reply_text("Usage: /alarm 07:00 [label] or /alarm list")
+        return
+    if args[0].lower() == "list":
+        alarms = orchestrator.list_alarms(user.get("id"))
+        mine = [a for a in (alarms or []) if a.get("user_id") == user.get("id")]
+        text = "No alarms" if not mine else "\n".join(
+            f"#{a['id']} {'ON' if a['enabled'] else 'OFF'} {a['label']} {a.get('local_time') or a.get('scheduled_at')}" for a in mine[:10]
+        )
+        await update.message.reply_text(text)
+        return
+    action = args[0].lower()
+    if action in {"on", "off", "test", "snooze"}:
+        if len(args) < 2 or not args[1].isdigit():
+            await update.message.reply_text(f"Usage: /alarm {action} <id>" + (" [minutes]" if action == "snooze" else ""))
+            return
+        mapped = {"on": "enable", "off": "disable"}.get(action, action)
+        values = {"minutes": int(args[2])} if action == "snooze" and len(args) > 2 and args[2].isdigit() else {}
+        result = orchestrator.alarm_action(user.get("id"), int(args[1]), mapped, **values)
+        await update.message.reply_text(f"Alarm #{args[1]} {action}." if result else "Could not update alarm.")
+        return
+    parsed = dateparser.parse(args[0], settings={'PREFER_DATES_FROM': 'future', 'TIMEZONE': 'Europe/Oslo', 'RETURN_AS_TIMEZONE_AWARE': True})
+    if not parsed:
+        await update.message.reply_text("Could not parse alarm time.")
+        return
+    repeat = next((x.split('=', 1)[1] for x in args if x.startswith('repeat=')), 'once')
+    label = " ".join(x for x in args[1:] if not x.startswith('repeat=')) or "Wake up"
+    schedule = ({"schedule_type": repeat, "local_time": parsed.astimezone(_TZ).strftime('%H:%M'),
+                 **({"weekdays": [0,1,2,3,4]} if repeat == 'weekdays' else {})}
+                if repeat in {'daily', 'weekdays'} else {"schedule_type": "once", "scheduled_at": parsed.isoformat()})
+    result = orchestrator.create_alarm(user.get('id'), label, **schedule)
+    await update.message.reply_text(f"Alarm #{result['id']} set" if result else "Could not create alarm.")
+
+
+@restricted('telegram/callme')
+async def callme_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = context.user_data.get('resolved_user', {})
+    result = orchestrator.call_user(user.get('id'))
+    await update.message.reply_text("Calling now." if result else "Could not start call.")
+
+
 @restricted('telegram/register')
 async def register_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Register this chat for Telegram notifications: /register"""
@@ -549,6 +594,9 @@ def main() -> None:
     application.add_handler(CommandHandler("reminders", reminders_command))
     application.add_handler(CommandHandler("snooze", snooze_command))
     application.add_handler(CommandHandler("dismiss", dismiss_command))
+    application.add_handler(CommandHandler("alarm", alarm_command))
+    application.add_handler(CommandHandler("alarms", alarm_command))
+    application.add_handler(CommandHandler("callme", callme_command))
     application.add_handler(CommandHandler("register", register_command))
     application.add_handler(CommandHandler("registerphone", registerphone_command))
     application.add_handler(CallbackQueryHandler(reminder_callback))

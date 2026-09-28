@@ -90,6 +90,16 @@ def _escalate(checkin_id: int) -> None:
             return
         user = UserStorage().get_user(int(row[1]))
         name = (user.display_name or user.username) if user else f"user {row[1]}"
+        alarm_id = int((user.config or {}).get("checkin_alarm_id") or 0) if user else 0
+        if alarm_id:
+            try:
+                from src.persistence.AlarmStorage import AlarmStorage
+                from src.services.core.alarm_service import AlarmService
+                alarm = AlarmStorage().get(alarm_id)
+                if alarm and alarm.user_id == user.id:
+                    AlarmService.instance().trigger(alarm_id)
+            except Exception:
+                log.exception("Could not trigger check-in calling alarm %s", alarm_id)
         MessageHubService.instance().submit_sms(
             phone_number=row[3],
             message=f"CHECK-IN ALERT: {name} did not confirm safety by the agreed deadline.",

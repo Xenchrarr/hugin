@@ -76,6 +76,21 @@ class OrchestratorClient:
     def dismiss_reminder(self, reminder_id: int) -> dict | None:
         return self._post(f"/api/reminders/{reminder_id}/dismiss")
 
+    # ── Calling alarms ───────────────────────────────────────
+
+    def create_alarm(self, user_id: int, label: str, **schedule) -> dict | None:
+        return self._post("/api/alarms", json={"user_id": user_id, "label": label, **schedule})
+
+    def list_alarms(self, user_id: int) -> list | None:
+        result = self._get("/api/alarms", user_id=user_id)
+        return result if isinstance(result, list) else None
+
+    def alarm_action(self, user_id: int, alarm_id: int, action: str, **values) -> dict | None:
+        return self._post(f"/api/alarms/{alarm_id}/{action}", json={"user_id": user_id, **values})
+
+    def call_user(self, user_id: int) -> dict | None:
+        return self._post(f"/api/calls/user/{user_id}")
+
     # ── Calendar ──────────────────────────────────────────────
 
     def get_agenda(self, days: int = 7) -> list[dict] | None:

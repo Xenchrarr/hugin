@@ -21,7 +21,7 @@ def compile_routes(
     target_endpoints = [
         endpoint for endpoint in endpoints
         if "target" in (endpoint.get("capabilities") or [])
-        and endpoint.get("type") in {"sms", "webhook"}
+        and endpoint.get("type") in {"sms", "messenger", "webhook"}
     ]
     active_target_ids = {
         str(endpoint.get("id")) for endpoint in target_endpoints

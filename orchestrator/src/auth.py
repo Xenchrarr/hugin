@@ -82,3 +82,28 @@ def require_auth_or_service_key(f):
         g.jwt_payload = payload
         return f(*args, **kwargs)
     return decorated
+
+
+def require_admin_or_service_key(f):
+    """Accept the service key or an administrator JWT."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        key = request.headers.get("X-Service-Key", "")
+        if key:
+            if not SERVICE_KEY:
+                return jsonify({"message": "Service authentication not configured", "status": 503}), 503
+            if key == SERVICE_KEY:
+                return f(*args, **kwargs)
+            return jsonify({"message": "Invalid or missing service key", "status": 401}), 401
+
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"message": "Authorization required", "status": 401}), 401
+        payload = decode_token(auth_header[len("Bearer "):])
+        if payload is None:
+            return jsonify({"message": "Invalid or expired token", "status": 401}), 401
+        if not payload.get("is_admin", False):
+            return jsonify({"message": "Admin access required", "status": 403}), 403
+        g.jwt_payload = payload
+        return f(*args, **kwargs)
+    return decorated

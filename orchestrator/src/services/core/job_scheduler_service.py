@@ -116,6 +116,11 @@ class JobSchedulerService:
             ReminderSchedulerService.instance().load_active_reminders()
         except Exception:
             log.exception("Failed to reload reminder jobs after job reload")
+        from src.services.core.alarm_service import AlarmService
+        try:
+            AlarmService.instance().load()
+        except Exception:
+            log.exception("Failed to reload calling alarms after job reload")
 
     def _register_stale_job_reaper(self):
         from src.services.core.stale_job_reaper import reap_stale_job_runs

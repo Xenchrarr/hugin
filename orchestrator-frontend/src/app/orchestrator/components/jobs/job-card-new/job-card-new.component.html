@@ -109,6 +109,15 @@
                                     </mat-option>
                                 </mat-select>
                             </mat-form-field>
+                        } @else if (isPhoneCallJob()) {
+                            <mat-form-field>
+                                <mat-label>Call target</mat-label>
+                                <input matInput placeholder="User ID, name, or +4712345678" [(ngModel)]="phoneCallTarget">
+                            </mat-form-field>
+                            <mat-form-field class="time-input1">
+                                <mat-label>Ring seconds</mat-label>
+                                <input matInput type="number" min="5" max="60" [(ngModel)]="phoneCallRingSeconds">
+                            </mat-form-field>
                         } @else {
                             <mat-form-field>
                                 <textarea matInput placeholder="parameter" [(ngModel)]="job.param"> </textarea>

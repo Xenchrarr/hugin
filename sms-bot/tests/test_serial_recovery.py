@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from src.sms_handler import SMSHandler
+from src.call_handler import CallHandler
 
 
 class _FailedSerial:
@@ -22,14 +23,13 @@ class SerialRecoveryTests(unittest.TestCase):
         handler._port = "/dev/ttyUSB0"
         handler._baudrate = 115200
         handler._modem_lock = threading.RLock()
-        handler._last_call_by_number = {}
         failed_serial = _FailedSerial()
         replacement_serial = Mock()
         handler.ser = failed_serial
         handler.init_modem = Mock()
 
         with patch("src.sms_handler.serial.Serial", return_value=replacement_serial) as open_serial:
-            self.assertEqual([], handler.poll_incoming_calls())
+            self.assertEqual([], CallHandler(handler).poll_incoming_calls())
 
         self.assertTrue(failed_serial.closed)
         self.assertIs(handler.ser, replacement_serial)

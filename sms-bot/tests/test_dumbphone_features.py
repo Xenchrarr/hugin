@@ -8,6 +8,7 @@ from src.commands.news_command import _headlines
 from src.commands.today_command import format_today
 from src.services.dumbphone_session import DumbphoneSessionService
 from src.sms_handler import SMSHandler
+from src.call_handler import CallHandler
 
 
 class DumbphoneSessionTests(unittest.TestCase):
@@ -89,7 +90,7 @@ class MissedCallTests(unittest.TestCase):
     def test_incoming_call_is_returned_once_and_hung_up(self):
         handler = SMSHandler.__new__(SMSHandler)
         handler._modem_lock = threading.RLock()
-        handler._last_call_by_number = {}
+        calls = CallHandler(handler)
         commands = []
 
         def send_at(command, timeout=3):
@@ -99,9 +100,9 @@ class MissedCallTests(unittest.TestCase):
             return "OK"
 
         handler.send_at = send_at
-        self.assertEqual(["+4712345678"], handler.poll_incoming_calls())
+        self.assertEqual(["+4712345678"], calls.poll_incoming_calls())
         self.assertIn("ATH", commands)
-        self.assertEqual([], handler.poll_incoming_calls())
+        self.assertEqual([], calls.poll_incoming_calls())
 
 
 if __name__ == "__main__":

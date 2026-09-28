@@ -10,6 +10,7 @@ import {TelegramRelayComponent} from './components/telegram-relay/telegram-relay
 import {CalendarComponent} from './components/calendar/calendar.component';
 import {MessageHubComponent} from './components/message-hub/message-hub.component';
 import {adminGuard} from '../auth/admin.guard';
+import {AlarmsComponent} from './components/alarms/alarms.component';
 
 export const routes: Routes = [
     {
@@ -44,6 +45,10 @@ export const routes: Routes = [
     {
         path: 'reminders',
         component: RemindersComponent,
+    },
+    {
+        path: 'alarms',
+        component: AlarmsComponent,
     },
     {
         path: 'telegram-relay',

@@ -3,10 +3,16 @@ from __future__ import annotations
 import base64
 import binascii
 import re
+from datetime import datetime
 
-from flask import Blueprint, request
+from flask import Blueprint, g, request
 
-from src.auth import require_admin, require_auth_or_service_key, require_service_key
+from src.auth import (
+    require_admin,
+    require_admin_or_service_key,
+    require_auth_or_service_key,
+    require_service_key,
+)
 from src.services.core.message_hub_service import MessageHubService
 
 
@@ -25,7 +31,21 @@ _DELIVERY_STATUSES = {
     "cancelled",
 }
 _GATEWAY_KEY = re.compile(r"^[a-z0-9][a-z0-9-]{0,119}$")
-_GATEWAY_TYPES = {"sms", "telegram", "webhook"}
+_GATEWAY_TYPES = {"sms", "telegram", "messenger", "webhook"}
+_BULK_DELIVERY_ACTIONS = {"acknowledge", "cancel", "release", "retry"}
+
+
+def _admin_actor() -> dict:
+    payload = getattr(g, "jwt_payload", {}) or {}
+    raw_user_id = payload.get("sub")
+    try:
+        user_id = int(raw_user_id) if raw_user_id is not None else None
+    except (TypeError, ValueError):
+        user_id = None
+    return {
+        "actor_user_id": user_id,
+        "actor_username": str(payload.get("username") or "").strip() or None,
+    }
 
 
 @message_hub_blueprint.route("/messages", methods=["POST"])
@@ -115,6 +135,93 @@ def list_deliveries():
     return [delivery.to_dict() for delivery in deliveries]
 
 
+def _optional_datetime(name: str) -> datetime | None:
+    value = str(request.args.get(name) or "").strip()
+    if not value:
+        return None
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise ValueError(f"{name} must include a timezone")
+    return parsed
+
+
+@message_hub_blueprint.route("/deliveries/search", methods=["GET"])
+@require_auth_or_service_key
+def search_deliveries():
+    try:
+        filters = _delivery_search_filters()
+    except (TypeError, ValueError) as exc:
+        return {"message": str(exc) or "Invalid delivery search filters"}, 400
+    return MessageHubService.instance().search_deliveries(**filters)
+
+
+def _delivery_search_filters() -> dict:
+    raw_statuses = str(request.args.get("statuses") or "").strip().lower()
+    statuses = [item.strip() for item in raw_statuses.split(",") if item.strip()]
+    unsupported = sorted(set(statuses) - _DELIVERY_STATUSES)
+    if unsupported:
+        raise ValueError(f"Unsupported delivery status: {unsupported[0]}")
+    page = max(int(request.args.get("page", 1)), 1)
+    page_size = min(max(int(request.args.get("page_size", 25)), 1), 100)
+    created_after = _optional_datetime("created_after")
+    created_before = _optional_datetime("created_before")
+
+    query = str(request.args.get("query") or "").strip()
+    recipient = str(request.args.get("recipient") or "").strip()
+    source_type = str(request.args.get("source_type") or "").strip()
+    source_label = str(request.args.get("source_label") or "").strip()
+    source_label_exact = str(request.args.get("source_label_exact") or "").strip()
+    conversation_key = None
+    if "conversation_key" in request.args:
+        conversation_key = str(request.args.get("conversation_key") or "").strip()
+    sort = str(request.args.get("sort") or "desc").strip().lower()
+    if any((
+        len(query) > 200,
+        len(recipient) > 500,
+        len(source_type) > 100,
+        len(source_label) > 300,
+        len(source_label_exact) > 300,
+        len(conversation_key or "") > 300,
+    )):
+        raise ValueError("Search filters are too long")
+    if sort not in {"asc", "desc"}:
+        raise ValueError("sort must be asc or desc")
+    return {
+        "statuses": statuses or None,
+        "gateway_key": str(request.args.get("gateway_key") or "").strip() or None,
+        "recipient": recipient or None,
+        "query": query or None,
+        "created_after": created_after,
+        "created_before": created_before,
+        "source_type": source_type or None,
+        "source_label": source_label or None,
+        "source_label_exact": source_label_exact or None,
+        "conversation_key": conversation_key,
+        "sort": sort,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@message_hub_blueprint.route("/delivery-groups/search", methods=["GET"])
+@require_auth_or_service_key
+def search_delivery_groups():
+    try:
+        filters = _delivery_search_filters()
+    except (TypeError, ValueError) as exc:
+        return {"message": str(exc) or "Invalid delivery group filters"}, 400
+    return MessageHubService.instance().search_delivery_groups(**filters)
+
+
+@message_hub_blueprint.route("/deliveries/<int:delivery_id>", methods=["GET"])
+@require_admin_or_service_key
+def get_delivery_details(delivery_id: int):
+    details = MessageHubService.instance().get_delivery_details(delivery_id)
+    if details is None:
+        return {"message": "Delivery not found"}, 404
+    return details
+
+
 @message_hub_blueprint.route("/gateways", methods=["GET"])
 @require_auth_or_service_key
 def list_gateways():
@@ -169,6 +276,178 @@ def acknowledge_inbox():
 @require_auth_or_service_key
 def get_queue_stats():
     return MessageHubService.instance().get_queue_stats()
+
+
+@message_hub_blueprint.route("/deliveries/bulk-action", methods=["POST"])
+@require_admin
+def bulk_update_deliveries():
+    data = request.get_json(silent=True) or {}
+    action = str(data.get("action") or "").strip().lower()
+    delivery_ids = data.get("delivery_ids")
+    if action not in _BULK_DELIVERY_ACTIONS:
+        return {"message": f"Unsupported bulk delivery action: {action}"}, 400
+    if not isinstance(delivery_ids, list) or not delivery_ids:
+        return {"message": "delivery_ids must be a non-empty list"}, 400
+    try:
+        ids = sorted({int(item) for item in delivery_ids})
+    except (TypeError, ValueError):
+        return {"message": "delivery_ids must contain integers"}, 400
+    if any(item <= 0 for item in ids):
+        return {"message": "delivery_ids must contain positive integers"}, 400
+    if len(ids) > 500:
+        return {"message": "at most 500 delivery_ids can be updated at once"}, 400
+    return MessageHubService.instance().bulk_update_deliveries(
+        ids,
+        action,
+        **_admin_actor(),
+    )
+
+
+@message_hub_blueprint.route("/delivery-groups/bulk-action", methods=["POST"])
+@require_admin
+def bulk_update_delivery_group():
+    data = request.get_json(silent=True) or {}
+    action = str(data.get("action") or "").strip().lower()
+    if action not in _BULK_DELIVERY_ACTIONS:
+        return {"message": f"Unsupported bulk delivery action: {action}"}, 400
+    statuses = data.get("statuses")
+    if not isinstance(statuses, list) or not statuses:
+        return {"message": "statuses must be a non-empty list"}, 400
+    statuses = sorted({str(item).strip().lower() for item in statuses})
+    if any(status not in _DELIVERY_STATUSES for status in statuses):
+        return {"message": "statuses contains an unsupported delivery status"}, 400
+    required = {
+        name: str(data.get(name) or "").strip()
+        for name in ("gateway_key", "recipient_key", "source_type", "source_label")
+    }
+    if any(not value for value in required.values()):
+        return {"message": "gateway, recipient, source type, and source label are required"}, 400
+    if any(len(value) > 500 for value in required.values()):
+        return {"message": "Group identity is too long"}, 400
+    query = str(data.get("query") or "").strip()
+    conversation_key = str(data.get("conversation_key") or "").strip()
+    if len(query) > 200 or len(conversation_key) > 300:
+        return {"message": "Group filters are too long"}, 400
+    try:
+        created_after = _json_datetime(data.get("created_after"), "created_after")
+        created_before = _json_datetime(data.get("created_before"), "created_before")
+    except ValueError as exc:
+        return {"message": str(exc)}, 400
+    return MessageHubService.instance().bulk_update_delivery_group(
+        action=action,
+        statuses=statuses,
+        **required,
+        conversation_key=conversation_key,
+        query=query or None,
+        created_after=created_after,
+        created_before=created_before,
+        **_admin_actor(),
+    )
+
+
+@message_hub_blueprint.route("/deliveries/bulk-filter-action", methods=["POST"])
+@require_admin
+def bulk_update_matching_deliveries():
+    data = request.get_json(silent=True) or {}
+    action = str(data.get("action") or "").strip().lower()
+    if action not in _BULK_DELIVERY_ACTIONS:
+        return {"message": f"Unsupported bulk delivery action: {action}"}, 400
+    try:
+        filters = _json_delivery_filters(data.get("filters"))
+        operation_id = data.get("operation_id")
+        if operation_id is not None:
+            operation_id = int(operation_id)
+            if operation_id <= 0:
+                raise ValueError("operation_id must be a positive integer")
+    except (TypeError, ValueError) as exc:
+        return {"message": str(exc) or "Invalid delivery filters"}, 400
+    try:
+        return MessageHubService.instance().bulk_update_matching_deliveries(
+            action=action,
+            operation_id=operation_id,
+            **filters,
+            **_admin_actor(),
+        )
+    except KeyError as exc:
+        return {"message": str(exc)}, 404
+    except ValueError as exc:
+        return {"message": str(exc)}, 409
+
+
+@message_hub_blueprint.route("/bulk-operations", methods=["GET"])
+@require_admin
+def get_bulk_operations():
+    try:
+        limit = min(max(int(request.args.get("limit", 20)), 1), 100)
+    except (TypeError, ValueError):
+        return {"message": "limit must be an integer"}, 400
+    return MessageHubService.instance().get_bulk_operations(limit)
+
+
+@message_hub_blueprint.route("/bulk-operations/<int:operation_id>/undo", methods=["POST"])
+@require_admin
+def undo_bulk_operation(operation_id: int):
+    try:
+        return MessageHubService.instance().undo_bulk_operation(operation_id)
+    except KeyError as exc:
+        return {"message": str(exc)}, 404
+    except ValueError as exc:
+        return {"message": str(exc)}, 409
+
+
+@message_hub_blueprint.route("/bulk-operations/<int:operation_id>/resume", methods=["POST"])
+@require_admin
+def resume_bulk_operation(operation_id: int):
+    try:
+        return MessageHubService.instance().resume_bulk_operation(operation_id)
+    except KeyError as exc:
+        return {"message": str(exc)}, 404
+    except ValueError as exc:
+        return {"message": str(exc)}, 409
+
+
+def _json_datetime(value, name: str) -> datetime | None:
+    if value is None or value == "":
+        return None
+    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise ValueError(f"{name} must include a timezone")
+    return parsed
+
+
+def _json_delivery_filters(value) -> dict:
+    if not isinstance(value, dict):
+        raise ValueError("filters must be an object")
+    raw_statuses = value.get("statuses")
+    if not isinstance(raw_statuses, list) or not raw_statuses:
+        raise ValueError("filters.statuses must be a non-empty list")
+    statuses = sorted({str(item).strip().lower() for item in raw_statuses})
+    if any(status not in _DELIVERY_STATUSES for status in statuses):
+        raise ValueError("filters.statuses contains an unsupported delivery status")
+
+    def optional_text(name: str, limit: int) -> str | None:
+        result = str(value.get(name) or "").strip()
+        if len(result) > limit:
+            raise ValueError(f"filters.{name} is too long")
+        return result or None
+
+    conversation_key = None
+    if "conversation_key" in value:
+        conversation_key = str(value.get("conversation_key") or "").strip()
+        if len(conversation_key) > 300:
+            raise ValueError("filters.conversation_key is too long")
+    return {
+        "statuses": statuses,
+        "gateway_key": optional_text("gateway_key", 120),
+        "recipient": optional_text("recipient", 500),
+        "query": optional_text("query", 200),
+        "created_after": _json_datetime(value.get("created_after"), "created_after"),
+        "created_before": _json_datetime(value.get("created_before"), "created_before"),
+        "source_type": optional_text("source_type", 100),
+        "source_label": optional_text("source_label", 300),
+        "source_label_exact": optional_text("source_label_exact", 300),
+        "conversation_key": conversation_key,
+    }
 
 
 def _delivery_action(delivery_id: int, action: str):

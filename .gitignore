@@ -23,5 +23,6 @@ Thumbs.db
 # Logs
 *.log
 data/
+messenger_relay/runtime/
 powershell-runner/logs/
 powershell-runner/scripts/

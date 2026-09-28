@@ -184,10 +184,18 @@ def deye_webhook():
     )
 
     try:
+        message_id = body.get("message_id")
+        delivery_token = (
+            f"deye:{chat_id}:{message_id}" if message_id is not None else None
+        )
         resp = requests.post(
             f"{settings.TELEGRAM_BOT_URL}/api/telegram/send",
-            json={"chat_id": chat_id, "message": message},
-            timeout=10,
+            json={
+                "chat_id": chat_id,
+                "message": message,
+                "delivery_token": delivery_token,
+            },
+            timeout=(5, 35),
         )
         resp.raise_for_status()
     except Exception as e:

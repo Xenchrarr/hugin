@@ -24,6 +24,10 @@ from src.commands.tg.list import TgListCommand
 from src.commands.tg.send import TgSendCommand
 from src.commands.tg.reply import TgReplyCommand
 from src.commands.tg.use import TgUseCommand
+from src.commands.fb.list import FbListCommand
+from src.commands.fb.send import FbSendCommand
+from src.commands.fb.reply import FbReplyCommand
+from src.commands.fb.use import FbUseCommand
 from src.commands.relay.list import RelayListCommand
 from src.commands.relay.toggle import RelayStartCommand, RelayStopCommand
 from src.commands.relay.preset import RelayPresetOnCommand, RelayPresetOffCommand
@@ -42,6 +46,7 @@ from src.commands.run_command import RunCommand
 from src.commands.brief_command import BriefCommand
 from src.commands.quiet_command import QuietCommand
 from src.commands.checkin_command import CheckinCommand, CheckinOkCommand
+from src.commands.alarm_command import AlarmCommand, CallMeCommand
 from src.models.errors import (
     ERR_AUTH,
     ERR_AMBIG,
@@ -86,6 +91,10 @@ class CommandProcessor:
             TgSendCommand(),
             TgReplyCommand(),
             TgUseCommand(),
+            FbListCommand(),
+            FbSendCommand(),
+            FbReplyCommand(),
+            FbUseCommand(),
             RelayListCommand(),
             RelayStartCommand(),
             RelayStopCommand(),
@@ -106,6 +115,8 @@ class CommandProcessor:
             QuietCommand(),
             CheckinCommand(),
             CheckinOkCommand(),
+            AlarmCommand(),
+            CallMeCommand(),
         ]
 
         # Build command registry for NLU before AiCommand so it can be passed in

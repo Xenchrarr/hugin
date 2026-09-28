@@ -3,10 +3,11 @@
         <h1>Message Hub</h1>
         <p>Gateway health, queued deliveries, and controlled recovery actions.</p>
     </div>
-    <button mat-stroked-button (click)="load()" [disabled]="loading">Reload</button>
+    <button mat-stroked-button (click)="reload()" [disabled]="loading">Reload</button>
 </div>
 
 <p class="error" *ngIf="error">{{ error }}</p>
+<p class="notice" *ngIf="notice">{{ notice }}</p>
 <p *ngIf="loading">Loading queue status…</p>
 <p *ngIf="!loading && stats.attachments.count">
     Stored media: {{ stats.attachments.count }} attachment(s), {{ attachmentSize() }}
@@ -40,13 +41,178 @@
 </section>
 
 <section class="deliveries">
-    <h2>Actionable deliveries</h2>
-    <p class="empty" *ngIf="!loading && deliveries.length === 0">The active queue is empty.</p>
-    <div class="table-wrap" *ngIf="deliveries.length">
-        <table mat-table [dataSource]="deliveries">
+    <div class="delivery-heading">
+        <h2>{{ view === 'held' ? 'Held messages' : 'Actionable deliveries' }}</h2>
+        <div class="view-switcher">
+            <button mat-button [class.active]="view === 'held'" (click)="setView('held')">
+                Held ({{ heldCount }})
+            </button>
+            <button mat-button [class.active]="view === 'all'" (click)="setView('all')">
+                All actionable ({{ actionableCount }})
+            </button>
+        </div>
+    </div>
+    <div class="layout-switcher" *ngIf="view === 'held'">
+        <button mat-button [class.active]="layout === 'groups'" (click)="setLayout('groups')">
+            Grouped
+        </button>
+        <button mat-button [class.active]="layout === 'messages'" (click)="setLayout('messages')">
+            Individual messages
+        </button>
+    </div>
+    <div class="filters">
+        <mat-form-field appearance="outline">
+            <mat-label>Search message</mat-label>
+            <input matInput [(ngModel)]="searchText" (keyup.enter)="applyFilters()">
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+            <mat-label>Recipient</mat-label>
+            <input matInput [(ngModel)]="recipientFilter" (keyup.enter)="applyFilters()">
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+            <mat-label>Source type</mat-label>
+            <input matInput [(ngModel)]="sourceTypeFilter" (keyup.enter)="applyFilters()"
+                   placeholder="telegram">
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+            <mat-label>Source label</mat-label>
+            <input matInput [(ngModel)]="sourceLabelFilter" (keyup.enter)="applyFilters()"
+                   placeholder="Family">
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+            <mat-label>Gateway</mat-label>
+            <mat-select [(ngModel)]="gatewayFilter">
+                <mat-option value="">All gateways</mat-option>
+                <mat-option *ngFor="let gateway of stats.gateways" [value]="gateway.gateway_key">
+                    {{ gateway.name }}
+                </mat-option>
+            </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+            <mat-label>Created</mat-label>
+            <mat-select [(ngModel)]="ageFilter">
+                <mat-option value="">Any time</mat-option>
+                <mat-option value="1">Last 24 hours</mat-option>
+                <mat-option value="7">Last 7 days</mat-option>
+                <mat-option value="30">Last 30 days</mat-option>
+            </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+            <mat-label>Order</mat-label>
+            <mat-select [(ngModel)]="sortOrder">
+                <mat-option value="desc">Newest first</mat-option>
+                <mat-option value="asc">Oldest first</mat-option>
+            </mat-select>
+        </mat-form-field>
+        <div class="filter-actions">
+            <button mat-flat-button (click)="applyFilters()" [disabled]="loading">Apply</button>
+            <button mat-button (click)="clearFilters()" [disabled]="loading">Clear</button>
+        </div>
+    </div>
+    <p class="result-count" *ngIf="!loading">
+        {{ totalItems }} matching
+        {{ layout === 'groups' ? (totalItems === 1 ? 'group' : 'groups') : (totalItems === 1 ? 'delivery' : 'deliveries') }}
+    </p>
+    <div class="bulk-bar" *ngIf="selected.size || allMatchingSelected">
+        <strong *ngIf="!allMatchingSelected">{{ selected.size }} selected on this page</strong>
+        <strong *ngIf="allMatchingSelected">All {{ totalItems }} matching deliveries selected</strong>
+        <span *ngIf="bulkBusy && bulkProgressTotal">
+            Processing {{ bulkProgressUpdated }} / {{ bulkProgressTotal }}…
+        </span>
+        <button mat-button *ngIf="!allMatchingSelected && isAllVisibleSelected() && totalItems > selected.size"
+                [disabled]="bulkBusy" (click)="selectAllMatching()">
+            Select all {{ totalItems }} matching
+        </button>
+        <button mat-button *ngIf="canAcknowledgeSelection()" [disabled]="bulkBusy"
+                (click)="confirmBulkAction('acknowledge')">Mark as read</button>
+        <button mat-button *ngIf="canReleaseSelection()" [disabled]="bulkBusy"
+                (click)="confirmBulkAction('release')">Queue for sending</button>
+        <button mat-button *ngIf="canRetrySelection()" [disabled]="bulkBusy"
+                (click)="confirmBulkAction('retry')">Retry</button>
+        <button mat-button color="warn" [disabled]="bulkBusy"
+                (click)="confirmBulkAction('cancel')">
+            {{ allMatchingSelected ? 'Cancel all matching' : 'Cancel selected' }}
+        </button>
+        <button mat-button [disabled]="bulkBusy" (click)="clearSelection()">Clear selection</button>
+    </div>
+    <p class="empty" *ngIf="!loading && layout === 'messages' && visibleDeliveries.length === 0">
+        {{ view === 'held' ? 'There are no held messages.' : 'The active queue is empty.' }}
+    </p>
+    <p class="empty" *ngIf="!loading && layout === 'groups' && groups.length === 0">
+        There are no matching message groups.
+    </p>
+    <div class="group-list" *ngIf="layout === 'groups' && groups.length">
+        <article class="message-group" *ngFor="let group of groups">
+            <div class="group-summary">
+                <div>
+                    <div class="group-title">
+                        <strong>{{ group.source_label }}</strong>
+                        <span class="source-type">{{ group.source_type }}</span>
+                        <span class="group-count">{{ group.count }}</span>
+                    </div>
+                    <div class="group-meta">
+                        <code>{{ group.gateway_key }}</code>
+                        <span>{{ group.recipient_key }}</span>
+                        <span>{{ group.oldest_at | date:'short' }} – {{ group.newest_at | date:'short' }}</span>
+                    </div>
+                    <p class="group-preview">{{ group.preview }}</p>
+                </div>
+                <div class="group-actions">
+                    <button mat-button [disabled]="groupLoading.has(groupKey(group))"
+                            (click)="toggleGroup(group)">
+                        {{ expandedGroups.has(groupKey(group)) ? 'Collapse' : 'Review' }}
+                    </button>
+                    <button mat-button [disabled]="groupLoading.has(groupKey(group))"
+                            (click)="confirmGroupAction(group, 'acknowledge')">Mark group read</button>
+                    <button mat-button [disabled]="groupLoading.has(groupKey(group))"
+                            (click)="confirmGroupAction(group, 'release')">Queue group</button>
+                    <button mat-button color="warn" [disabled]="groupLoading.has(groupKey(group))"
+                            (click)="confirmGroupAction(group, 'cancel')">Cancel group</button>
+                </div>
+            </div>
+            <div class="group-detail" *ngIf="expandedGroups.has(groupKey(group))">
+                <p *ngIf="groupLoading.has(groupKey(group))">Loading messages…</p>
+                <div class="group-message" *ngFor="let item of groupMessages.get(groupKey(group))">
+                    <time>{{ item.created_at | date:'short' }}</time>
+                    <span>{{ messageText(item) }}</span>
+                    <div>
+                        <button mat-button (click)="openDetails(item)">Details</button>
+                        <button mat-button [disabled]="bulkBusy" (click)="acknowledge(item)">Mark read</button>
+                    </div>
+                </div>
+                <p class="empty" *ngIf="group.count > 100">
+                    Showing the newest 100 messages in this group.
+                </p>
+            </div>
+        </article>
+    </div>
+    <div class="table-wrap" *ngIf="layout === 'messages' && visibleDeliveries.length">
+        <table mat-table [dataSource]="visibleDeliveries">
+            <ng-container matColumnDef="select">
+                <th mat-header-cell *matHeaderCellDef>
+                    <mat-checkbox aria-label="Select visible deliveries"
+                                  [checked]="isAllVisibleSelected()"
+                                  [indeterminate]="isSomeVisibleSelected()"
+                                  [disabled]="bulkBusy || allMatchingSelected"
+                                  (change)="toggleAllVisible($event.checked)"></mat-checkbox>
+                </th>
+                <td mat-cell *matCellDef="let item">
+                    <mat-checkbox [attr.aria-label]="'Select delivery ' + item.id"
+                                  [checked]="selected.has(item.id)"
+                                  [disabled]="bulkBusy || allMatchingSelected || busy.has(item.id)"
+                                  (change)="toggleSelected(item, $event.checked)"></mat-checkbox>
+                </td>
+            </ng-container>
             <ng-container matColumnDef="created">
                 <th mat-header-cell *matHeaderCellDef>Created</th>
                 <td mat-cell *matCellDef="let item">{{ item.created_at | date:'short' }}</td>
+            </ng-container>
+            <ng-container matColumnDef="source">
+                <th mat-header-cell *matHeaderCellDef>Source</th>
+                <td mat-cell *matCellDef="let item">
+                    <strong>{{ item.source_label || 'Message Hub' }}</strong>
+                    <small class="source-detail">{{ item.source_type || 'other' }}</small>
+                </td>
             </ng-container>
             <ng-container matColumnDef="gateway">
                 <th mat-header-cell *matHeaderCellDef>Gateway</th>
@@ -65,7 +231,13 @@
             </ng-container>
             <ng-container matColumnDef="message">
                 <th mat-header-cell *matHeaderCellDef>Message</th>
-                <td mat-cell *matCellDef="let item" class="message">{{ messageText(item) }}</td>
+                <td mat-cell *matCellDef="let item" class="message">
+                    <span [class.collapsed]="!expanded.has(item.id)">{{ messageText(item) }}</span>
+                    <button mat-button class="show-more" *ngIf="messageText(item).length > 160"
+                            (click)="toggleExpanded(item)">
+                        {{ expanded.has(item.id) ? 'Show less' : 'Show more' }}
+                    </button>
+                </td>
             </ng-container>
             <ng-container matColumnDef="attempts">
                 <th mat-header-cell *matHeaderCellDef>Attempts</th>
@@ -74,13 +246,19 @@
             <ng-container matColumnDef="actions">
                 <th mat-header-cell *matHeaderCellDef></th>
                 <td mat-cell *matCellDef="let item" class="actions">
+                    <button mat-button (click)="openDetails(item)">Details</button>
                     <button mat-button *ngIf="item.status === 'dead' || item.status === 'retry_wait'"
-                            [disabled]="busy.has(item.id)" (click)="retry(item)">Retry</button>
+                            [disabled]="busy.has(item.id) || bulkBusy" (click)="retry(item)">Retry</button>
                     <button mat-button color="warn" *ngIf="item.status === 'uncertain'"
-                            [disabled]="busy.has(item.id)" (click)="confirmRetryAnyway(item)">Retry anyway</button>
+                            [disabled]="busy.has(item.id) || bulkBusy"
+                            (click)="confirmRetryAnyway(item)">Retry anyway</button>
                     <button mat-button *ngIf="item.status === 'held'"
-                            [disabled]="busy.has(item.id)" (click)="release(item)">Release</button>
-                    <button mat-button color="warn" [disabled]="busy.has(item.id)"
+                            [disabled]="busy.has(item.id) || bulkBusy"
+                            (click)="confirmRelease(item)">Queue for sending</button>
+                    <button mat-button *ngIf="item.status === 'held'"
+                            [disabled]="busy.has(item.id) || bulkBusy"
+                            (click)="acknowledge(item)">Mark read</button>
+                    <button mat-button color="warn" [disabled]="busy.has(item.id) || bulkBusy"
                             (click)="confirmCancel(item)">Cancel</button>
                 </td>
             </ng-container>
@@ -88,4 +266,39 @@
             <tr mat-row *matRowDef="let row; columns: columns"></tr>
         </table>
     </div>
+    <mat-paginator *ngIf="totalItems"
+                   [length]="totalItems"
+                   [pageIndex]="pageIndex"
+                   [pageSize]="pageSize"
+                   [pageSizeOptions]="[25, 50, 100]"
+                   [showFirstLastButtons]="true"
+                   [disabled]="loading || allMatchingSelected"
+                   (page)="pageChanged($event)"></mat-paginator>
+
+    <section class="deliveries" *ngIf="bulkOperations.length">
+        <h3>Recent bulk actions</h3>
+        <div class="message-group group-summary" *ngFor="let operation of bulkOperations">
+            <div>
+                <strong>{{ bulkActionLabel(operation.action) }} {{ operation.affected_count }} deliveries</strong>
+                <div class="group-meta">
+                    <span>{{ operation.actor_username || 'Administrator' }}</span>
+                    <span>{{ operation.created_at | date:'short' }}</span>
+                </div>
+                <small>
+                    {{ operation.status }}
+                    <ng-container *ngIf="operation.undone_count">
+                        · {{ operation.undone_count }} restored
+                    </ng-container>
+                </small>
+            </div>
+            <div class="group-actions">
+                <button mat-button *ngIf="operation.can_resume"
+                        [disabled]="operationBusy.has(operation.id)"
+                        (click)="resumeOperation(operation)">Resume</button>
+                <button mat-button *ngIf="operation.can_undo"
+                        [disabled]="operationBusy.has(operation.id)"
+                        (click)="confirmUndoOperation(operation)">Undo</button>
+            </div>
+        </div>
+    </section>
 </section>

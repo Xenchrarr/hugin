@@ -349,7 +349,6 @@ class SMSHandler:
         self._last_successful_send: float | None = None
         self._last_send_error: str = ""
         self._last_send_uncertain: bool = False
-        self._last_call_by_number: dict[str, float] = {}
         logger.info("Initializing modem")
         self.init_modem()
 
@@ -681,41 +680,6 @@ class SMSHandler:
         response = self.send_at(f"AT+CMGD={index}", timeout=5)
         logger.info("Delete response: %s", response.strip())
         return "OK" in response and "ERROR" not in response
-
-    def poll_incoming_calls(self) -> list[str]:
-        """Hang up configured one-ring triggers and return their caller numbers once."""
-        with self._modem_lock:
-            try:
-                response = self.send_at("AT+CLCC", timeout=3)
-            except (OSError, serial.SerialException):
-                logger.exception("Serial I/O failed while polling incoming calls")
-                self._recover_serial_locked()
-                return []
-            numbers: list[str] = []
-            now = time.time()
-            for line in response.splitlines():
-                # +CLCC: <id>,<dir>,<stat>,<mode>,<mpty>,"<number>",<type>
-                match = re.search(r'\+CLCC:\s*\d+\s*,\s*1\s*,\s*4\s*,[^\"]*"([^\"]+)"', line)
-                if not match:
-                    continue
-                number = match.group(1)
-                if re.fullmatch(r"[0-9A-Fa-f]+", number or "") and len(number) % 4 == 0:
-                    number = self._decode_ucs2(number)
-                if now - self._last_call_by_number.get(number, 0) < 60:
-                    continue
-                self._last_call_by_number[number] = now
-                numbers.append(number)
-            if numbers:
-                try:
-                    self.send_at("ATH", timeout=3)
-                except (OSError, serial.SerialException):
-                    logger.exception("Serial I/O failed while hanging up incoming call")
-                    self._recover_serial_locked()
-            self._last_call_by_number = {
-                number: seen for number, seen in self._last_call_by_number.items()
-                if now - seen < 300
-            }
-            return numbers
 
     # -----------------------------------------------------------------------
     # SMS send

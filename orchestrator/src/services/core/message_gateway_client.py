@@ -17,6 +17,9 @@ SMS_BOT_URL = os.environ.get("SMS_BOT_URL", "http://sms-hub:5050").rstrip("/")
 TELEGRAM_RELAY_URL = os.environ.get(
     "TELEGRAM_RELAY_URL", "http://telegram-relay:8080"
 ).rstrip("/")
+MESSENGER_RELAY_URL = os.environ.get(
+    "MESSENGER_RELAY_URL", "http://messenger-relay:8081"
+).rstrip("/")
 SERVICE_KEY = os.environ.get("SERVICE_KEY", "")
 
 
@@ -43,6 +46,8 @@ class MessageGatewayClient:
             raise ValueError(f"Attachments are not supported by {gateway_type} gateways")
         if gateway_type == "telegram":
             return self._send_telegram(delivery)
+        if gateway_type == "messenger":
+            return self._send_messenger(delivery)
         if gateway_type == "webhook":
             return self._send_webhook(delivery)
         raise ValueError(f"Unsupported gateway type: {gateway_type}")
@@ -64,6 +69,14 @@ class MessageGatewayClient:
                     headers=self._headers(),
                     timeout=(3, 10),
                 )
+                response.raise_for_status()
+                return True, ""
+
+            if gateway.type == "messenger":
+                base_url = str(
+                    gateway.config.get("base_url") or MESSENGER_RELAY_URL
+                ).rstrip("/")
+                response = requests.get(f"{base_url}/health", timeout=(3, 10))
                 response.raise_for_status()
                 return True, ""
         except Exception as exc:
@@ -165,3 +178,23 @@ class MessageGatewayClient:
         response = requests.post(url, json=delivery.payload, headers=headers, timeout=(5, timeout))
         response.raise_for_status()
         return response.headers.get("X-Request-Id")
+
+    def _send_messenger(self, delivery: MessageDelivery) -> str | None:
+        text = str(delivery.payload.get("text") or delivery.payload.get("message") or "").strip()
+        thread_id = str(delivery.address.get("thread_id") or "").strip()
+        if not text:
+            raise ValueError("Messenger delivery requires payload.text")
+        if not thread_id:
+            raise ValueError("Messenger delivery requires address.thread_id")
+        base_url = str(
+            (delivery.gateway_config or {}).get("base_url") or MESSENGER_RELAY_URL
+        ).rstrip("/")
+        response = requests.post(
+            f"{base_url}/api/messenger/send",
+            json={"thread_id": thread_id, "text": text},
+            headers=self._headers(),
+            timeout=(5, 60),
+        )
+        response.raise_for_status()
+        data = response.json() if response.content else {}
+        return str(data.get("message_id") or "") or None

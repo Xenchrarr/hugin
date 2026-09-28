@@ -163,6 +163,9 @@ class MessageDelivery:
     gateway_key: Optional[str] = None
     gateway_type: Optional[str] = None
     gateway_config: Optional[dict[str, Any]] = None
+    source_type: Optional[str] = None
+    source_label: Optional[str] = None
+    conversation_key: Optional[str] = None
 
     @staticmethod
     def from_db_row(row, include_gateway: bool = False) -> "MessageDelivery":
@@ -204,4 +207,7 @@ class MessageDelivery:
             "dispatch_token": self.dispatch_token,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
+            "source_type": self.source_type,
+            "source_label": self.source_label,
+            "conversation_key": self.conversation_key,
         }

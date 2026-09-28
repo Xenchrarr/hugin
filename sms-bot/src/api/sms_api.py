@@ -10,6 +10,7 @@ import threading
 from flask import Flask, request, jsonify
 
 from src.sms_handler import SMSHandler
+from src.call_handler import CallHandler
 from src.delivery_ledger import (
     DeliveryLedger,
     DispatchTokenConflict,
@@ -20,6 +21,7 @@ log = logging.getLogger(__name__)
 
 _app = Flask(__name__)
 _sms_handler: SMSHandler | None = None
+_call_handler: CallHandler | None = None
 _delivery_ledger: DeliveryLedger | None = None
 _SERVICE_KEY = os.environ.get("SERVICE_KEY", "")
 _MMS_UPLOAD_MAX_BYTES = max(
@@ -28,11 +30,14 @@ _MMS_UPLOAD_MAX_BYTES = max(
 )
 _MMS_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif"}
 _DELIVERY_TOKEN = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+_PHONE_NUMBER = re.compile(r"^\+[1-9][0-9]{7,14}$")
+_call_request_lock = threading.Lock()
 
 
-def set_sms_handler(handler: SMSHandler) -> None:
-    global _sms_handler
+def set_handlers(handler: SMSHandler, call_handler: CallHandler) -> None:
+    global _sms_handler, _call_handler
     _sms_handler = handler
+    _call_handler = call_handler
 
 
 def _ledger() -> DeliveryLedger:
@@ -148,6 +153,76 @@ def readiness():
     return jsonify(result), 200 if result.get('ready') else 503
 
 
+@_app.route('/api/calls/ring', methods=['POST'])
+def ring_call():
+    supplied_key = request.headers.get("X-Service-Key", "")
+    if not _SERVICE_KEY or not hmac.compare_digest(supplied_key, _SERVICE_KEY):
+        return jsonify({'error': 'Valid service key required'}), 401
+
+    data = request.get_json(silent=True) or {}
+    phone = str(data.get('phone') or '').strip()
+    if not _PHONE_NUMBER.fullmatch(phone):
+        return jsonify({'error': 'phone must be in E.164 format, for example +4712345678'}), 400
+
+    try:
+        ring_seconds = max(5, min(int(data.get('ring_seconds', 20)), 60))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'ring_seconds must be a number from 5 to 60'}), 400
+
+    if _call_handler is None:
+        return jsonify({'error': 'Call handler not initialized'}), 503
+    if not _call_request_lock.acquire(blocking=False):
+        return jsonify({'error': 'Another outgoing call is already in progress'}), 409
+
+    token = str(data.get('attempt_token') or '').strip()
+    try:
+        if token:
+            if not _DELIVERY_TOKEN.fullmatch(token):
+                return jsonify({'error': 'Invalid attempt_token'}), 400
+            _, replay = _begin_dispatch(token, _fingerprint('call', phone, str(ring_seconds)), 'call')
+            if replay:
+                return replay
+        result = _call_handler.ring_call(phone, ring_seconds)
+        if token:
+            _ledger().mark_accepted(token, result)
+    except Exception as exc:
+        log.exception("Failed to place ring-only call to %s", phone)
+        if token:
+            try:
+                _ledger().mark_failed(token, str(exc), uncertain=True)
+            except Exception:
+                log.exception("Failed to persist call receipt %s", token)
+        return jsonify({'error': str(exc), 'status': 'failed'}), 503
+    finally:
+        _call_request_lock.release()
+
+    # A completed attempt can legitimately be busy, unanswered, or rejected.
+    # Those are call outcomes rather than gateway failures, so return them to
+    # the orchestrator without turning them into an ambiguous HTTP retry.
+    return jsonify(result), 200
+
+
+@_app.route('/api/calls/cancel', methods=['POST'])
+def cancel_call():
+    supplied_key = request.headers.get("X-Service-Key", "")
+    if not _SERVICE_KEY or not hmac.compare_digest(supplied_key, _SERVICE_KEY):
+        return jsonify({'error': 'Valid service key required'}), 401
+    if _call_handler is None or not _call_handler.cancel():
+        return jsonify({'error': 'No active call'}), 409
+    return jsonify({'ok': True, 'status': 'cancelling'})
+
+
+@_app.route('/api/calls/health', methods=['GET'])
+def call_health():
+    supplied_key = request.headers.get("X-Service-Key", "")
+    if not _SERVICE_KEY or not hmac.compare_digest(supplied_key, _SERVICE_KEY):
+        return jsonify({'error': 'Valid service key required'}), 401
+    if _call_handler is None:
+        return jsonify({'ready': False}), 503
+    result = _call_handler.voice_health()
+    return jsonify(result), 200 if result['ready'] else 503
+
+
 @_app.route('/api/sms/mms/send', methods=['POST'])
 def send_mms():
     supplied_key = request.headers.get("X-Service-Key", "")
@@ -212,10 +287,10 @@ def send_mms():
             'delivery_state': 'uncertain' if uncertain else 'failed',
         }), 409 if uncertain else 500
 
-def start_api_server(handler: SMSHandler, port: int = 5050) -> None:
+def start_api_server(handler: SMSHandler, call_handler: CallHandler, port: int = 5050) -> None:
     """Start the Flask SMS API in a daemon thread."""
     _ledger()
-    set_sms_handler(handler)
+    set_handlers(handler, call_handler)
     thread = threading.Thread(
         target=lambda: _app.run(host='0.0.0.0', port=port, use_reloader=False),
         daemon=True,

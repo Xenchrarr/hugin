@@ -7,5 +7,6 @@
   "print_weather": "Print the yr.no weather meteogram on the thermal printer. Leave parameter empty to use the configured YR_ID, or pass a yr.no location ID string to override.",
   "print_today": "Print today's calendar events and active reminders on the thermal printer. No parameter needed.",
   "print_shopping": "Fetch the shopping list from hugin-core and print it on the thermal printer. No parameter needed.",
-  "sms_brief": "Send a compact daily agenda briefing by SMS."
+  "sms_brief": "Send a compact daily agenda briefing by SMS.",
+  "phone_call": "Place a ring-only call. Target can be a Hugin user ID, username/display name, or an E.164 phone number. Configure a 5–60 second ringing window."
 }

@@ -98,6 +98,8 @@ class MessageHubPostgresTests(unittest.TestCase):
                 "023_message_hub_delivery_ack_links.sql",
                 "024_message_hub_attachments.sql",
                 "025_message_gateway_dispatch_tokens.sql",
+                "026_prevent_deye_relay_loop.sql",
+                "027_message_hub_bulk_operations.sql",
             ):
                 connection.execute((migrations / filename).read_text(encoding="utf-8"))
             connection.commit()
@@ -172,17 +174,20 @@ class MessageHubPostgresTests(unittest.TestCase):
                 "SELECT COUNT(*) FROM message_relay_endpoints "
                 "WHERE name = 'Deye Solar Webhook'"
             ).fetchone()[0]
-            route_count = connection.execute(
-                "SELECT COUNT(*) FROM message_relay_routes "
+            route_row = connection.execute(
+                "SELECT COUNT(*), MIN(filter::text) FROM message_relay_routes "
                 "WHERE name = 'Deye solar query'"
-            ).fetchone()[0]
+            ).fetchone()
             old_tables = connection.execute(
                 "SELECT to_regclass('telegram_relay_destinations'), "
                 "to_regclass('telegram_relay_rules'), to_regclass('sms_outbox')"
             ).fetchone()
 
         self.assertEqual(1, endpoint_count)
-        self.assertEqual(1, route_count)
+        self.assertEqual(1, route_row[0])
+        self.assertIn("sender_is_bot", route_row[1])
+        self.assertIn("/deye", route_row[1])
+        self.assertIn("solar data", route_row[1])
         self.assertEqual((None, None, None), old_tables)
 
     def test_enqueue_is_idempotent(self):
@@ -278,6 +283,192 @@ class MessageHubPostgresTests(unittest.TestCase):
         self.assertEqual(1, count)
         self.assertEqual("acknowledged", statuses[first[0].id])
         self.assertEqual("held", statuses[second[0].id])
+
+    def test_bulk_acknowledgement_updates_only_held_deliveries(self):
+        with self._connect() as connection:
+            storage = self._storage(connection)
+            _, held = self._enqueue(storage, policy="inbox_only", key="bulk-held")
+            _, pending = self._enqueue(storage, policy="replay", key="bulk-pending")
+
+            result = storage.bulk_update_deliveries(
+                [held[0].id, pending[0].id, 999999], "acknowledge"
+            )
+            statuses = dict(connection.execute(
+                "SELECT id, status FROM message_hub_deliveries ORDER BY id"
+            ).fetchall())
+
+        self.assertEqual(3, result["requested"])
+        self.assertEqual([held[0].id], result["updated_ids"])
+        self.assertEqual("acknowledged", statuses[held[0].id])
+        self.assertEqual("pending", statuses[pending[0].id])
+        self.assertEqual(
+            {"status_changed", "not_found"},
+            {item["reason"] for item in result["skipped"]},
+        )
+
+    def test_bulk_release_queues_held_deliveries(self):
+        with self._connect() as connection:
+            storage = self._storage(connection)
+            _, held = self._enqueue(storage, policy="inbox_only", key="bulk-release")
+
+            result = storage.bulk_update_deliveries([held[0].id], "release")
+            released = storage.get_delivery(held[0].id)
+
+        self.assertEqual([held[0].id], result["updated_ids"])
+        self.assertEqual("pending", released.status)
+        self.assertIsNone(released.last_error)
+
+    def test_delivery_search_filters_and_paginates(self):
+        with self._connect() as connection:
+            storage = self._storage(connection)
+            self._enqueue(
+                storage, phone="+4711111111", policy="inbox_only", key="search-one"
+            )
+            self._enqueue(
+                storage, phone="+4722222222", policy="inbox_only", key="search-two"
+            )
+            self._enqueue(
+                storage, phone="+4711111111", policy="replay", key="search-pending"
+            )
+
+            result = storage.search_deliveries(
+                statuses=["held"],
+                gateway_key="sms-main",
+                recipient="+47",
+                query="hello",
+                page=2,
+                page_size=1,
+            )
+
+        self.assertEqual(2, result["total"])
+        self.assertEqual(2, result["page"])
+        self.assertEqual(1, len(result["items"]))
+        self.assertEqual("held", result["items"][0].status)
+
+    def test_delivery_group_search_and_bulk_acknowledgement(self):
+        with self._connect() as connection:
+            storage = self._storage(connection)
+            _, first = self._enqueue(
+                storage, phone="+4711111111", policy="inbox_only", key="group-one"
+            )
+            _, second = self._enqueue(
+                storage, phone="+4711111111", policy="inbox_only", key="group-two"
+            )
+            self._enqueue(
+                storage, phone="+4722222222", policy="inbox_only", key="group-other"
+            )
+
+            groups = storage.search_delivery_groups(
+                statuses=["held"], page=1, page_size=25
+            )
+            result = storage.bulk_update_delivery_group(
+                action="acknowledge",
+                statuses=["held"],
+                gateway_key="sms-main",
+                recipient_key="sms:+4711111111",
+                source_type="telegram",
+                source_label="Family",
+                conversation_key="",
+            )
+            statuses = dict(connection.execute(
+                "SELECT id, status FROM message_hub_deliveries ORDER BY id"
+            ).fetchall())
+
+        self.assertEqual(2, groups["total"])
+        family_group = next(
+            item for item in groups["items"]
+            if item["recipient_key"] == "sms:+4711111111"
+        )
+        self.assertEqual(2, family_group["count"])
+        self.assertEqual(2, result["updated"])
+        self.assertEqual("acknowledged", statuses[first[0].id])
+        self.assertEqual("acknowledged", statuses[second[0].id])
+
+    def test_filtered_bulk_action_updates_only_the_snapshot_matches(self):
+        with self._connect() as connection:
+            storage = self._storage(connection)
+            _, first = self._enqueue(
+                storage, phone="+4711111111", policy="inbox_only", key="filter-one"
+            )
+            _, second = self._enqueue(
+                storage, phone="+4711111111", policy="inbox_only", key="filter-two"
+            )
+            _, other = self._enqueue(
+                storage, phone="+4722222222", policy="inbox_only", key="filter-other"
+            )
+            snapshot = datetime.now(timezone.utc) + timedelta(seconds=1)
+
+            result = storage.bulk_update_matching_deliveries(
+                action="cancel",
+                statuses=["held"],
+                recipient="+4711111111",
+                source_type="telegram",
+                source_label="Family",
+                created_before=snapshot,
+            )
+            statuses = dict(connection.execute(
+                "SELECT id, status FROM message_hub_deliveries ORDER BY id"
+            ).fetchall())
+
+        self.assertEqual(2, result["matching"])
+        self.assertEqual(2, result["updated"])
+        self.assertEqual(0, result["remaining"])
+        self.assertFalse(result["truncated"])
+        self.assertEqual("cancelled", statuses[first[0].id])
+        self.assertEqual("cancelled", statuses[second[0].id])
+        self.assertEqual("held", statuses[other[0].id])
+
+    def test_bulk_action_history_can_restore_cancelled_deliveries(self):
+        with self._connect() as connection:
+            storage = self._storage(connection)
+            message, held = self._enqueue(
+                storage, phone="+4711111111", policy="inbox_only", key="undo-held"
+            )
+            connection.execute(
+                "UPDATE message_hub_messages SET created_at = NOW() - INTERVAL '2 days' "
+                "WHERE id = %s",
+                (message.id,),
+            )
+            connection.commit()
+
+            result = storage.bulk_update_deliveries(
+                [held[0].id],
+                "cancel",
+                actor_username="admin",
+            )
+            operation_id = result["operation"]["id"]
+            cancelled = storage.get_delivery(held[0].id)
+            cleanup = storage.cleanup_terminal(1)
+            undo = storage.undo_bulk_operation(operation_id)
+            restored = storage.get_delivery(held[0].id)
+            history = storage.get_bulk_operations()
+
+        self.assertEqual("cancelled", cancelled.status)
+        self.assertEqual(0, cleanup["messages"])
+        self.assertEqual(1, undo["restored"])
+        self.assertEqual("held", restored.status)
+        self.assertEqual("undone", undo["operation"]["status"])
+        self.assertEqual("admin", history[0]["actor_username"])
+
+    def test_delivery_attempt_history_is_ordered_and_serialized(self):
+        with self._connect() as connection:
+            storage = self._storage(connection)
+            _, deliveries = self._enqueue(storage, key="attempt-details")
+            delivery_id = deliveries[0].id
+            connection.execute(
+                "INSERT INTO message_delivery_attempts "
+                "(delivery_id, attempt_number, outcome, provider_reference, error) "
+                "VALUES (%s, 2, 'accepted', 'provider-2', NULL), "
+                "(%s, 1, 'failed', NULL, 'offline')",
+                (delivery_id, delivery_id),
+            )
+            connection.commit()
+
+            attempts = storage.get_delivery_attempts(delivery_id)
+
+        self.assertEqual([1, 2], [item["attempt_number"] for item in attempts])
+        self.assertEqual("offline", attempts[0]["error"])
+        self.assertEqual("provider-2", attempts[1]["provider_reference"])
 
     def test_response_acceptance_atomically_acknowledges_linked_inbox_items(self):
         with self._connect() as connection:

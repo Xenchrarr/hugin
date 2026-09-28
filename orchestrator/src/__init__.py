@@ -55,5 +55,7 @@ try:
         reminder_svc.load_active_reminders()
         from src.services.core.checkin_service import load_active_checkins
         load_active_checkins()
+        from src.services.core.alarm_service import AlarmService
+        AlarmService.instance().load()
 except Exception as exc:
     log.warning("Scheduler startup skipped: %s", exc)

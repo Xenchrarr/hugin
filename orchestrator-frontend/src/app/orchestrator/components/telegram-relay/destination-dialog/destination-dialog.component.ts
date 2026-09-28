@@ -59,6 +59,12 @@ export class DestinationDialogComponent {
     get smsPhone(): string { return this.endpoint.config['phone'] ?? ''; }
     set smsPhone(v: string) { this.endpoint.config['phone'] = v; }
 
+    get telegramChatId(): string { return String(this.endpoint.config['chat_id'] ?? ''); }
+    set telegramChatId(v: string) { this.endpoint.config['chat_id'] = v.trim(); }
+
+    get messengerThreadId(): string { return String(this.endpoint.config['thread_id'] ?? ''); }
+    set messengerThreadId(v: string) { this.endpoint.config['thread_id'] = v.trim(); }
+
     get smsRecoveryPolicy(): string {
         return this.endpoint.config['recovery_policy'] ?? 'digest_hold';
     }
@@ -97,9 +103,15 @@ export class DestinationDialogComponent {
     }
 
     save() {
-        this.endpoint.capabilities = this.endpoint.type === 'telegram'
-            ? ['source']
-            : ['target'];
+        if (this.endpoint.type === 'telegram') {
+            this.endpoint.capabilities = this.telegramChatId ? ['target'] : ['source'];
+        } else if (this.endpoint.type === 'messenger') {
+            this.endpoint.capabilities = this.messengerThreadId
+                ? ['target']
+                : ['source'];
+        } else {
+            this.endpoint.capabilities = ['target'];
+        }
         this.relayService.saveEndpoint(this.endpoint).subscribe(result => {
             this.dialogRef.close(result);
         });

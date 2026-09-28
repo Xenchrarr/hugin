@@ -6,6 +6,7 @@ from typing import Any
 from app.destinations.base import AbstractDestination
 from app.destinations.webhook import WebhookAdapter
 from app.destinations.sms import SmsAdapter
+from app.destinations.messenger import MessengerAdapter
 from app.config import DestinationConfig, RetryConfig
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,8 @@ def build_destinations(raw_destinations: list[dict[str, Any]]) -> dict[str, Abst
             result[dest_id] = WebhookAdapter(dest_cfg)
         elif dest_type == "sms":
             result[dest_id] = SmsAdapter(dest_id, config)
+        elif dest_type == "messenger":
+            result[dest_id] = MessengerAdapter(dest_id, config)
         else:
             logger.warning("Unknown destination type '%s' for '%s' — skipping", dest_type, dest_name)
 

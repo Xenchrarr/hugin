@@ -17,7 +17,7 @@ _storage = MessageRelayStorage()
 _logger = logging.getLogger(__name__)
 _RELAY_URL = os.environ.get("TELEGRAM_RELAY_URL", "http://telegram-relay:8080")
 _KEY_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,119}$")
-_SUPPORTED_ENDPOINT_TYPES = {"telegram", "sms", "webhook"}
+_SUPPORTED_ENDPOINT_TYPES = {"telegram", "messenger", "sms", "webhook"}
 
 
 def _notify_relay() -> bool:
@@ -74,7 +74,13 @@ def save_message_endpoint():
             if existing.key != data["key"]:
                 return {"message": "Endpoint keys cannot be changed", "status": 400}, 400
         if not data.get("capabilities"):
-            data["capabilities"] = ["source"] if endpoint_type == "telegram" else ["target"]
+            config = data.get("config") or {}
+            if endpoint_type == "telegram":
+                data["capabilities"] = ["target"] if config.get("chat_id") else ["source"]
+            elif endpoint_type == "messenger":
+                data["capabilities"] = ["target"] if config.get("thread_id") else ["source"]
+            else:
+                data["capabilities"] = ["target"]
         endpoint = _storage.save_endpoint(MessageRelayEndpoint.from_dict(data))
         return _activation_response(endpoint.to_dict(), _notify_relay())
     except ValueError as exc:

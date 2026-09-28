@@ -1,3 +1,4 @@
+import base64
 import logging
 import os
 
@@ -43,7 +44,7 @@ class SmsAdapter(AbstractDestination):
         text = payload.get("text") or payload.get("caption") or f"<{payload.get('media_type', 'media')}>"
 
         # For private chats chat_title IS the contact's name — same as sender_name.
-        # Showing both would produce "Alice | Alice: hi", so use a single label.
+        # Showing both would produce "Alice / Alice: hi", so use a single label.
         if chat_type == "private":
             label = sender_name or chat_title
             if label:
@@ -52,7 +53,11 @@ class SmsAdapter(AbstractDestination):
 
         # Groups: show chat name and, when available, who sent it
         if chat_title and sender_name:
-            return f"{chat_title} | {sender_name}: {text}"
+            # Keep the generated prefix in the GSM-7 basic alphabet. The EC25
+            # treats the escape byte used by GSM-7 extension characters such
+            # as "|" as cancellation of AT+CMGS, forcing the entire message to
+            # UCS-2 and reducing one-part capacity from 160 to 70 characters.
+            return f"{chat_title} / {sender_name}: {text}"
         if chat_title:
             return f"{chat_title}: {text}"
         if sender_name:
@@ -66,6 +71,9 @@ class SmsAdapter(AbstractDestination):
 
         body = self._format_message(payload)
         client = self._get_client()
+        media_data = payload.get("media_data")
+        media_mime_type = str(payload.get("media_mime_type") or "image/jpeg").lower()
+        is_mms = isinstance(media_data, bytes) and bool(media_data)
 
         chat_id = payload.get("chat_id")
         message_id = payload.get("message_id")
@@ -83,7 +91,7 @@ class SmsAdapter(AbstractDestination):
             delivery["target_endpoint_id"] = int(self._id)
         request_body = {
             "direction": "outbound",
-            "kind": "text",
+            "kind": "mms" if is_mms else "text",
             "source_gateway_key": "telegram-main",
             "external_id": f"{chat_id}:{message_id}",
             "conversation_key": str(chat_id) if chat_id is not None else None,
@@ -98,6 +106,17 @@ class SmsAdapter(AbstractDestination):
             "idempotency_key": idempotency_key,
             "deliveries": [delivery],
         }
+        if is_mms:
+            extension = {
+                "image/jpeg": "jpg",
+                "image/png": "png",
+                "image/gif": "gif",
+            }.get(media_mime_type, "bin")
+            request_body["attachments"] = [{
+                "data_base64": base64.b64encode(media_data).decode("ascii"),
+                "content_type": media_mime_type,
+                "filename": f"telegram-{message_id}.{extension}",
+            }]
         headers = {"X-Service-Key": _SERVICE_KEY} if _SERVICE_KEY else {}
         try:
             resp = await client.post(url, json=request_body, headers=headers)

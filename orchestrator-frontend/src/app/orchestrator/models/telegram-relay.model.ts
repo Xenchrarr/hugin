@@ -2,7 +2,7 @@ export interface MessageRelayEndpoint {
   id: number;
   key: string;
   name: string;
-  type: 'telegram' | 'sms' | 'webhook' | string;
+  type: 'telegram' | 'messenger' | 'sms' | 'webhook' | string;
   enabled: boolean;
   capabilities: string[];
   config: Record<string, any>;

@@ -71,13 +71,9 @@ def _resolve_channels(reminder: Reminder, storage: ReminderStorage) -> list[tupl
     2. reminder.recipient_ids → use specific notification_settings by ID.
     3. Fallback → all globally enabled settings (backwards compat only).
     """
-    if reminder.user_id is not None:
-        settings = storage.get_notification_settings_for_user(reminder.user_id)
-        if not settings:
-            log.warning("No notification settings found for user_id %s", reminder.user_id)
-        return [(s.channel, s.config) for s in settings]
-
-    # Per-reminder explicit recipient override
+    # Per-reminder explicit recipients always win, including for user-owned
+    # reminders. This prevents newly registered channels from unexpectedly
+    # changing existing reminder delivery.
     if reminder.recipient_ids:
         all_settings = storage.get_notification_settings()
         ids_set = set(reminder.recipient_ids)
@@ -85,6 +81,15 @@ def _resolve_channels(reminder: Reminder, storage: ReminderStorage) -> list[tupl
         if not result:
             log.warning("None of the requested recipient_ids %s are configured/enabled", reminder.recipient_ids)
         return result
+
+    if reminder.user_id is not None:
+        from src.persistence.UserStorage import UserStorage
+        settings = storage.get_notification_settings_for_user(reminder.user_id)
+        if not settings:
+            log.warning("No notification settings found for user_id %s", reminder.user_id)
+        user = UserStorage().get_user(reminder.user_id)
+        defaults = set((user.config or {}).get("default_channels") or []) if user else set()
+        return [(s.channel, s.config) for s in settings if s.enabled and (not defaults or s.channel in defaults)]
 
     # Global fallback
     all_settings = storage.get_notification_settings()

@@ -1,0 +1,1 @@
+"""Hugin Facebook Messenger relay."""

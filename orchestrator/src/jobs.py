@@ -8,6 +8,7 @@ from src.services.external.git_service import run_git_sync
 from src.services.external.power_aggregation_service import run_power_aggregation
 from src.services.external.printer_hub_service import run_print_news, run_print_weather, run_print_today, run_print_shopping
 from src.services.external.sms_brief_service import run_sms_brief
+from src.services.external.phone_call_job_service import run_phone_call
 
 from src.jobs_registry import job_type
 
@@ -94,4 +95,9 @@ def print_shopping_job(param: str = ""):
 @job_type('sms_brief', 'Send a compact daily agenda briefing by SMS')
 def sms_brief_job(param: str = ""):
     run_sms_brief(param)
+
+
+@job_type('phone_call', JOB_DESCRIPTIONS.get('phone_call', 'Place a ring-only phone call'))
+def phone_call_job(param: str = ""):
+    run_phone_call(param)
 

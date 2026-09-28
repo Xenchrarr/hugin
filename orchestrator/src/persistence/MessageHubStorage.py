@@ -42,6 +42,25 @@ _DELIVERY_WITH_GATEWAY_COLUMNS = (
     + ", gateway.key, gateway.type, gateway.config"
 )
 
+_SOURCE_TYPE_SQL = "COALESCE(NULLIF(message.metadata->>'source_type', ''), 'other')"
+_SOURCE_LABEL_SQL = (
+    "COALESCE(NULLIF(message.metadata->>'source_label', ''), "
+    "NULLIF(message.conversation_key, ''), 'Message Hub')"
+)
+_DELIVERY_WITH_SOURCE_COLUMNS = (
+    _DELIVERY_WITH_GATEWAY_COLUMNS
+    + f", {_SOURCE_TYPE_SQL}, {_SOURCE_LABEL_SQL}, message.conversation_key"
+)
+_BULK_DELIVERY_TRANSITIONS = {
+    "acknowledge": (("held",), "acknowledged"),
+    "cancel": (
+        ("pending", "retry_wait", "held", "dead", "uncertain"),
+        "cancelled",
+    ),
+    "release": (("held",), "pending"),
+    "retry": (("dead", "retry_wait"), "pending"),
+}
+
 
 class MessageHubStorage:
     """PostgreSQL persistence and leasing for the generic message queue."""
@@ -486,6 +505,24 @@ class MessageHubStorage:
         ).fetchone()
         return MessageDelivery.from_db_row(row, include_gateway=True) if row else None
 
+    def get_delivery_attempts(self, delivery_id: int) -> list[dict[str, Any]]:
+        rows = self._db.execute(
+            "SELECT id, delivery_id, attempt_number, outcome, provider_reference, "
+            "error, started_at, completed_at FROM message_delivery_attempts "
+            "WHERE delivery_id = %s ORDER BY attempt_number, id",
+            (delivery_id,),
+        ).fetchall()
+        return [{
+            "id": int(row[0]),
+            "delivery_id": int(row[1]),
+            "attempt_number": int(row[2]),
+            "outcome": row[3],
+            "provider_reference": row[4],
+            "error": row[5],
+            "started_at": row[6].isoformat(),
+            "completed_at": row[7].isoformat(),
+        } for row in rows]
+
     def list_deliveries(self, status: str | None = None, limit: int = 100) -> list[MessageDelivery]:
         params: list[Any] = []
         where = ""
@@ -502,6 +539,168 @@ class MessageHubStorage:
             params,
         ).fetchall()
         return [MessageDelivery.from_db_row(row, include_gateway=True) for row in rows]
+
+    @staticmethod
+    def _delivery_search_conditions(
+        *,
+        statuses: list[str] | None = None,
+        gateway_key: str | None = None,
+        recipient: str | None = None,
+        query: str | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+        source_type: str | None = None,
+        source_label: str | None = None,
+        source_label_exact: str | None = None,
+        conversation_key: str | None = None,
+    ) -> tuple[list[str], list[Any]]:
+        conditions: list[str] = []
+        params: list[Any] = []
+        if statuses:
+            conditions.append("delivery.status = ANY(%s)")
+            params.append(statuses)
+        if gateway_key:
+            conditions.append("gateway.key = %s")
+            params.append(gateway_key)
+        if recipient:
+            conditions.append("delivery.recipient_key ILIKE %s")
+            params.append(f"%{recipient}%")
+        if query:
+            conditions.append(
+                "COALESCE(delivery.payload->>'text', delivery.payload->>'message', '') ILIKE %s"
+            )
+            params.append(f"%{query}%")
+        if created_after:
+            conditions.append("delivery.created_at >= %s")
+            params.append(created_after)
+        if created_before:
+            conditions.append("delivery.created_at < %s")
+            params.append(created_before)
+        if source_type:
+            conditions.append(f"{_SOURCE_TYPE_SQL} = %s")
+            params.append(source_type)
+        if source_label:
+            conditions.append(f"{_SOURCE_LABEL_SQL} ILIKE %s")
+            params.append(f"%{source_label}%")
+        if source_label_exact:
+            conditions.append(f"{_SOURCE_LABEL_SQL} = %s")
+            params.append(source_label_exact)
+        if conversation_key is not None:
+            conditions.append("COALESCE(message.conversation_key, '') = %s")
+            params.append(conversation_key)
+        return conditions, params
+
+    def search_deliveries(
+        self,
+        *,
+        statuses: list[str] | None = None,
+        gateway_key: str | None = None,
+        recipient: str | None = None,
+        query: str | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+        source_type: str | None = None,
+        source_label: str | None = None,
+        source_label_exact: str | None = None,
+        conversation_key: str | None = None,
+        sort: str = "desc",
+        page: int = 1,
+        page_size: int = 25,
+    ) -> dict[str, Any]:
+        conditions, params = self._delivery_search_conditions(
+            statuses=statuses,
+            gateway_key=gateway_key,
+            recipient=recipient,
+            query=query,
+            created_after=created_after,
+            created_before=created_before,
+            source_type=source_type,
+            source_label=source_label,
+            source_label_exact=source_label_exact,
+            conversation_key=conversation_key,
+        )
+
+        where = " WHERE " + " AND ".join(conditions) if conditions else ""
+        safe_page = max(1, int(page))
+        safe_page_size = max(1, min(int(page_size), 100))
+        offset = (safe_page - 1) * safe_page_size
+        sort_direction = "ASC" if sort == "asc" else "DESC"
+        from_clause = (
+            " FROM message_hub_deliveries delivery "
+            "JOIN message_gateways gateway ON gateway.id = delivery.gateway_id "
+            "JOIN message_hub_messages message ON message.id = delivery.message_id"
+        )
+        total = int(self._db.execute(
+            "SELECT COUNT(*)" + from_clause + where,
+            params,
+        ).fetchone()[0])
+        rows = self._db.execute(
+            f"SELECT {_DELIVERY_WITH_SOURCE_COLUMNS}" + from_clause + where
+            + f" ORDER BY delivery.created_at {sort_direction}, delivery.id {sort_direction} "
+            "LIMIT %s OFFSET %s",
+            [*params, safe_page_size, offset],
+        ).fetchall()
+        return {
+            "items": [
+                MessageDelivery.from_db_row(row, include_gateway=True) for row in rows
+            ],
+            "total": total,
+            "page": safe_page,
+            "page_size": safe_page_size,
+        }
+
+    def search_delivery_groups(
+        self,
+        **filters: Any,
+    ) -> dict[str, Any]:
+        page = max(1, int(filters.pop("page", 1)))
+        page_size = max(1, min(int(filters.pop("page_size", 25)), 100))
+        sort = filters.pop("sort", "desc")
+        conditions, params = self._delivery_search_conditions(**filters)
+        where = " WHERE " + " AND ".join(conditions) if conditions else ""
+        from_clause = (
+            " FROM message_hub_deliveries delivery "
+            "JOIN message_gateways gateway ON gateway.id = delivery.gateway_id "
+            "JOIN message_hub_messages message ON message.id = delivery.message_id"
+        )
+        group_by = (
+            f" GROUP BY gateway.key, delivery.recipient_key, {_SOURCE_TYPE_SQL}, "
+            f"{_SOURCE_LABEL_SQL}, message.conversation_key"
+        )
+        total = int(self._db.execute(
+            "SELECT COUNT(*) FROM (SELECT 1" + from_clause + where + group_by + ") groups",
+            params,
+        ).fetchone()[0])
+        direction = "ASC" if sort == "asc" else "DESC"
+        offset = (page - 1) * page_size
+        rows = self._db.execute(
+            "SELECT gateway.key, delivery.recipient_key, "
+            f"{_SOURCE_TYPE_SQL}, {_SOURCE_LABEL_SQL}, message.conversation_key, "
+            "COUNT(*), MIN(delivery.created_at), MAX(delivery.created_at), "
+            "(ARRAY_AGG(COALESCE(delivery.payload->>'text', "
+            "delivery.payload->>'message', '<message>') "
+            "ORDER BY delivery.created_at DESC, delivery.id DESC))[1] "
+            + from_clause + where + group_by
+            + f" ORDER BY MAX(delivery.created_at) {direction}, "
+            f"MAX(delivery.id) {direction} LIMIT %s OFFSET %s",
+            [*params, page_size, offset],
+        ).fetchall()
+        return {
+            "items": [{
+                "gateway_key": row[0],
+                "recipient_key": row[1],
+                "source_type": row[2],
+                "source_label": row[3],
+                "conversation_key": row[4],
+                "count": int(row[5]),
+                "oldest_at": row[6].isoformat(),
+                "newest_at": row[7].isoformat(),
+                "preview": row[8],
+            } for row in rows],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
 
     def claim_next(self, lease_token: str, lease_seconds: int = 360) -> Optional[MessageDelivery]:
         row = self._db.execute(
@@ -800,6 +999,502 @@ class MessageHubStorage:
             new_status="cancelled",
         )
 
+    def bulk_update_deliveries(
+        self,
+        delivery_ids: list[int],
+        action: str,
+        *,
+        actor_user_id: int | None = None,
+        actor_username: str | None = None,
+        scope: str = "selection",
+        filter_snapshot: dict[str, Any] | None = None,
+        operation_id: int | None = None,
+        operation_complete: bool = True,
+    ) -> dict[str, Any]:
+        if action not in _BULK_DELIVERY_TRANSITIONS:
+            raise ValueError(f"unsupported bulk delivery action: {action}")
+
+        requested_ids = sorted(set(delivery_ids))
+        if not requested_ids:
+            operation = None
+            if operation_id and operation_complete:
+                self._complete_bulk_operation(operation_id)
+                operation = self.get_bulk_operation(operation_id)
+            return {
+                "requested": 0, "updated": 0, "updated_ids": [], "skipped": [],
+                "operation": operation,
+            }
+
+        allowed_statuses, new_status = _BULK_DELIVERY_TRANSITIONS[action]
+        try:
+            rows = self._db.execute(
+                "SELECT id, status, available_at, last_error, acknowledged_at, expired_at "
+                "FROM message_hub_deliveries "
+                "WHERE id = ANY(%s) ORDER BY id FOR UPDATE",
+                (requested_ids,),
+            ).fetchall()
+            statuses = {int(row[0]): row[1] for row in rows}
+            prior_state = {int(row[0]): row for row in rows}
+            eligible_ids = [
+                delivery_id for delivery_id in requested_ids
+                if statuses.get(delivery_id) in allowed_statuses
+            ]
+
+            updated_ids: list[int] = []
+            if eligible_ids:
+                updated_rows = self._db.execute(
+                    "UPDATE message_hub_deliveries SET status = %s, "
+                    "available_at = CASE WHEN %s = 'pending' THEN NOW() ELSE available_at END, "
+                    "lease_token = NULL, leased_until = NULL, "
+                    "acknowledged_at = CASE WHEN %s = 'acknowledged' THEN NOW() "
+                    "ELSE acknowledged_at END, "
+                    "expired_at = CASE WHEN %s = 'pending' THEN NULL ELSE expired_at END, "
+                    "last_error = NULL, updated_at = NOW() "
+                    "WHERE id = ANY(%s) RETURNING id",
+                    (
+                        new_status,
+                        new_status,
+                        new_status,
+                        new_status,
+                        eligible_ids,
+                    ),
+                ).fetchall()
+                updated_ids = sorted(int(row[0]) for row in updated_rows)
+
+            if updated_ids:
+                operation_id = self._record_bulk_operation(
+                    operation_id=operation_id,
+                    action=action,
+                    scope=scope,
+                    actor_user_id=actor_user_id,
+                    actor_username=actor_username,
+                    filter_snapshot=filter_snapshot or {"delivery_ids": requested_ids},
+                    prior_rows=[prior_state[item] for item in updated_ids],
+                    complete=operation_complete,
+                )
+            elif operation_id and operation_complete:
+                self._complete_bulk_operation(operation_id, commit=False)
+
+            updated_id_set = set(updated_ids)
+            skipped = []
+            for delivery_id in requested_ids:
+                if delivery_id in updated_id_set:
+                    continue
+                status = statuses.get(delivery_id)
+                skipped.append({
+                    "id": delivery_id,
+                    "reason": "not_found" if status is None else "status_changed",
+                    "status": status,
+                })
+
+            self._db.commit()
+            return {
+                "requested": len(requested_ids),
+                "updated": len(updated_ids),
+                "updated_ids": updated_ids,
+                "skipped": skipped,
+                "operation": self.get_bulk_operation(operation_id) if operation_id else None,
+            }
+        except Exception:
+            self._db.rollback()
+            raise
+
+    def bulk_update_delivery_group(
+        self,
+        *,
+        action: str,
+        statuses: list[str],
+        gateway_key: str,
+        recipient_key: str,
+        source_type: str,
+        source_label: str,
+        conversation_key: str,
+        query: str | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+        actor_user_id: int | None = None,
+        actor_username: str | None = None,
+    ) -> dict[str, Any]:
+        if action not in _BULK_DELIVERY_TRANSITIONS:
+            raise ValueError(f"unsupported bulk delivery action: {action}")
+        allowed_statuses, _ = _BULK_DELIVERY_TRANSITIONS[action]
+        eligible_statuses = sorted(set(statuses).intersection(allowed_statuses))
+        if not eligible_statuses:
+            return {
+                "requested": 0, "updated": 0, "updated_ids": [], "skipped": [],
+                "matching": 0, "truncated": False,
+            }
+        from_clause = (
+            " FROM message_hub_deliveries delivery "
+            "JOIN message_gateways gateway ON gateway.id = delivery.gateway_id "
+            "JOIN message_hub_messages message ON message.id = delivery.message_id "
+        )
+        where = (
+            "WHERE delivery.status = ANY(%s) AND gateway.key = %s "
+            "AND delivery.recipient_key = %s "
+            f"AND {_SOURCE_TYPE_SQL} = %s AND {_SOURCE_LABEL_SQL} = %s "
+            "AND COALESCE(message.conversation_key, '') = %s"
+        )
+        params = [
+            eligible_statuses, gateway_key, recipient_key, source_type,
+            source_label, conversation_key,
+        ]
+        if query:
+            where += (
+                " AND COALESCE(delivery.payload->>'text', "
+                "delivery.payload->>'message', '') ILIKE %s"
+            )
+            params.append(f"%{query}%")
+        if created_after:
+            where += " AND delivery.created_at >= %s"
+            params.append(created_after)
+        if created_before:
+            where += " AND delivery.created_at < %s"
+            params.append(created_before)
+        try:
+            matching = int(self._db.execute(
+                "SELECT COUNT(*)" + from_clause + where,
+                params,
+            ).fetchone()[0])
+            rows = self._db.execute(
+                "SELECT delivery.id" + from_clause + where
+                + " ORDER BY delivery.id FOR UPDATE OF delivery LIMIT 500",
+                params,
+            ).fetchall()
+            delivery_ids = [int(row[0]) for row in rows]
+            if not delivery_ids:
+                self._db.commit()
+                return {
+                    "requested": 0, "updated": 0, "updated_ids": [], "skipped": [],
+                    "matching": matching, "truncated": False,
+                }
+            result = self.bulk_update_deliveries(
+                delivery_ids,
+                action,
+                actor_user_id=actor_user_id,
+                actor_username=actor_username,
+                scope="group",
+                filter_snapshot={
+                    "statuses": statuses,
+                    "gateway_key": gateway_key,
+                    "recipient_key": recipient_key,
+                    "source_type": source_type,
+                    "source_label": source_label,
+                    "conversation_key": conversation_key,
+                    "query": query,
+                    "created_after": created_after,
+                    "created_before": created_before,
+                },
+            )
+            result["matching"] = matching
+            result["truncated"] = matching > len(delivery_ids)
+            return result
+        except Exception:
+            self._db.rollback()
+            raise
+
+    def bulk_update_matching_deliveries(
+        self,
+        *,
+        action: str,
+        statuses: list[str],
+        gateway_key: str | None = None,
+        recipient: str | None = None,
+        query: str | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+        source_type: str | None = None,
+        source_label: str | None = None,
+        source_label_exact: str | None = None,
+        conversation_key: str | None = None,
+        actor_user_id: int | None = None,
+        actor_username: str | None = None,
+        operation_id: int | None = None,
+    ) -> dict[str, Any]:
+        if action not in _BULK_DELIVERY_TRANSITIONS:
+            raise ValueError(f"unsupported bulk delivery action: {action}")
+        allowed_statuses, _ = _BULK_DELIVERY_TRANSITIONS[action]
+        eligible_statuses = sorted(set(statuses).intersection(allowed_statuses))
+        if not eligible_statuses:
+            return {
+                "requested": 0, "updated": 0, "updated_ids": [], "skipped": [],
+                "matching": 0, "remaining": 0, "truncated": False,
+            }
+
+        conditions, params = self._delivery_search_conditions(
+            statuses=eligible_statuses,
+            gateway_key=gateway_key,
+            recipient=recipient,
+            query=query,
+            created_after=created_after,
+            created_before=created_before,
+            source_type=source_type,
+            source_label=source_label,
+            source_label_exact=source_label_exact,
+            conversation_key=conversation_key,
+        )
+        where = " WHERE " + " AND ".join(conditions)
+        from_clause = (
+            " FROM message_hub_deliveries delivery "
+            "JOIN message_gateways gateway ON gateway.id = delivery.gateway_id "
+            "JOIN message_hub_messages message ON message.id = delivery.message_id"
+        )
+        try:
+            matching = int(self._db.execute(
+                "SELECT COUNT(*)" + from_clause + where,
+                params,
+            ).fetchone()[0])
+            rows = self._db.execute(
+                "SELECT delivery.id" + from_clause + where
+                + " ORDER BY delivery.id FOR UPDATE OF delivery LIMIT 500",
+                params,
+            ).fetchall()
+            delivery_ids = [int(row[0]) for row in rows]
+            truncated = matching > len(delivery_ids)
+            if not delivery_ids:
+                if operation_id:
+                    self._complete_bulk_operation(operation_id)
+                else:
+                    self._db.commit()
+                return {
+                    "requested": 0, "updated": 0, "updated_ids": [], "skipped": [],
+                    "matching": matching, "remaining": matching, "truncated": False,
+                    "operation": self.get_bulk_operation(operation_id) if operation_id else None,
+                }
+            filter_snapshot = {
+                "statuses": statuses,
+                "gateway_key": gateway_key,
+                "recipient": recipient,
+                "query": query,
+                "created_after": created_after,
+                "created_before": created_before,
+                "source_type": source_type,
+                "source_label": source_label,
+                "source_label_exact": source_label_exact,
+                "conversation_key": conversation_key,
+            }
+            result = self.bulk_update_deliveries(
+                delivery_ids,
+                action,
+                actor_user_id=actor_user_id,
+                actor_username=actor_username,
+                scope="filter",
+                filter_snapshot=filter_snapshot,
+                operation_id=operation_id,
+                operation_complete=not truncated,
+            )
+            result["matching"] = matching
+            result["remaining"] = max(0, matching - result["updated"])
+            result["truncated"] = truncated
+            return result
+        except Exception:
+            self._db.rollback()
+            raise
+
+    def _record_bulk_operation(
+        self,
+        *,
+        operation_id: int | None,
+        action: str,
+        scope: str,
+        actor_user_id: int | None,
+        actor_username: str | None,
+        filter_snapshot: dict[str, Any],
+        prior_rows: list[tuple],
+        complete: bool,
+    ) -> int:
+        if scope not in {"selection", "filter", "group"}:
+            raise ValueError(f"unsupported bulk operation scope: {scope}")
+        if operation_id:
+            row = self._db.execute(
+                "SELECT id, action, status FROM message_hub_bulk_operations "
+                "WHERE id = %s FOR UPDATE",
+                (operation_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError("Bulk operation not found")
+            if row[1] != action or row[2] != "in_progress":
+                raise ValueError("Bulk operation cannot accept another batch")
+        else:
+            operation_id = int(self._db.execute(
+                "INSERT INTO message_hub_bulk_operations "
+                "(action, scope, actor_user_id, actor_username, filter_snapshot, "
+                "undo_expires_at) VALUES (%s, %s, %s, %s, %s, "
+                "CASE WHEN %s = ANY(%s) THEN NOW() + INTERVAL '10 minutes' END) "
+                "RETURNING id",
+                (
+                    action,
+                    scope,
+                    actor_user_id,
+                    actor_username,
+                    json.dumps(
+                        filter_snapshot,
+                        default=lambda value: value.isoformat(),
+                    ),
+                    action,
+                    ["acknowledge", "cancel"],
+                ),
+            ).fetchone()[0])
+
+        self._db.execute(
+            "INSERT INTO message_hub_bulk_operation_items "
+            "(operation_id, delivery_id, previous_status, previous_available_at, "
+            "previous_last_error, previous_acknowledged_at, previous_expired_at) "
+            "SELECT %s, item.delivery_id, item.previous_status, "
+            "item.previous_available_at, item.previous_last_error, "
+            "item.previous_acknowledged_at, item.previous_expired_at "
+            "FROM UNNEST(%s::bigint[], %s::varchar[], %s::timestamptz[], "
+            "%s::text[], %s::timestamptz[], %s::timestamptz[]) AS item "
+            "(delivery_id, previous_status, previous_available_at, previous_last_error, "
+            "previous_acknowledged_at, previous_expired_at) "
+            "ON CONFLICT (operation_id, delivery_id) DO NOTHING",
+            (
+                operation_id,
+                [int(row[0]) for row in prior_rows],
+                [row[1] for row in prior_rows],
+                [row[2] for row in prior_rows],
+                [row[3] for row in prior_rows],
+                [row[4] for row in prior_rows],
+                [row[5] for row in prior_rows],
+            ),
+        )
+        self._db.execute(
+            "UPDATE message_hub_bulk_operations SET affected_count = affected_count + %s, "
+            "status = CASE WHEN %s THEN 'completed' ELSE 'in_progress' END, "
+            "completed_at = CASE WHEN %s THEN NOW() ELSE NULL END "
+            "WHERE id = %s",
+            (len(prior_rows), complete, complete, operation_id),
+        )
+        return operation_id
+
+    def _complete_bulk_operation(self, operation_id: int, *, commit: bool = True) -> None:
+        row = self._db.execute(
+            "UPDATE message_hub_bulk_operations SET status = 'completed', "
+            "completed_at = COALESCE(completed_at, NOW()) "
+            "WHERE id = %s AND status = 'in_progress' RETURNING id",
+            (operation_id,),
+        ).fetchone()
+        if row is None and self.get_bulk_operation(operation_id) is None:
+            raise KeyError("Bulk operation not found")
+        if commit:
+            self._db.commit()
+
+    @staticmethod
+    def _bulk_operation_dict(row) -> dict[str, Any]:
+        return {
+            "id": int(row[0]),
+            "action": row[1],
+            "scope": row[2],
+            "actor_user_id": int(row[3]) if row[3] is not None else None,
+            "actor_username": row[4],
+            "status": row[5],
+            "affected_count": int(row[6]),
+            "undone_count": int(row[7]),
+            "filter_snapshot": row[8] or {},
+            "created_at": row[9].isoformat(),
+            "completed_at": row[10].isoformat() if row[10] else None,
+            "undo_expires_at": row[11].isoformat() if row[11] else None,
+            "undone_at": row[12].isoformat() if row[12] else None,
+            "can_undo": bool(row[13]),
+            "can_resume": bool(row[14]),
+        }
+
+    def get_bulk_operation(self, operation_id: int) -> dict[str, Any] | None:
+        row = self._db.execute(
+            "SELECT id, action, scope, actor_user_id, actor_username, status, "
+            "affected_count, undone_count, filter_snapshot, created_at, completed_at, "
+            "undo_expires_at, undone_at, "
+            "(action = ANY(%s) AND undo_expires_at > NOW() "
+            "AND undone_count < affected_count) AS can_undo, "
+            "(scope = 'filter' AND status = 'in_progress') AS can_resume "
+            "FROM message_hub_bulk_operations WHERE id = %s",
+            (["acknowledge", "cancel"], operation_id),
+        ).fetchone()
+        return self._bulk_operation_dict(row) if row else None
+
+    def get_bulk_operations(self, limit: int = 20) -> list[dict[str, Any]]:
+        rows = self._db.execute(
+            "SELECT id, action, scope, actor_user_id, actor_username, status, "
+            "affected_count, undone_count, filter_snapshot, created_at, completed_at, "
+            "undo_expires_at, undone_at, "
+            "(action = ANY(%s) AND undo_expires_at > NOW() "
+            "AND undone_count < affected_count) AS can_undo, "
+            "(scope = 'filter' AND status = 'in_progress') AS can_resume "
+            "FROM message_hub_bulk_operations ORDER BY created_at DESC, id DESC LIMIT %s",
+            (["acknowledge", "cancel"], min(max(limit, 1), 100)),
+        ).fetchall()
+        return [self._bulk_operation_dict(row) for row in rows]
+
+    def undo_bulk_operation(self, operation_id: int) -> dict[str, Any]:
+        try:
+            row = self._db.execute(
+                "SELECT action, affected_count, undo_expires_at > NOW() "
+                "FROM message_hub_bulk_operations WHERE id = %s FOR UPDATE",
+                (operation_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError("Bulk operation not found")
+            action, affected_count, within_window = row
+            if action not in {"acknowledge", "cancel"}:
+                raise ValueError("This bulk action cannot be undone")
+            if not within_window:
+                raise ValueError("The undo window has expired")
+            resulting_status = _BULK_DELIVERY_TRANSITIONS[action][1]
+            restored_rows = self._db.execute(
+                "WITH restored AS ("
+                "  UPDATE message_hub_deliveries delivery SET "
+                "    status = item.previous_status, "
+                "    available_at = item.previous_available_at, "
+                "    lease_token = NULL, leased_until = NULL, "
+                "    last_error = item.previous_last_error, "
+                "    acknowledged_at = item.previous_acknowledged_at, "
+                "    expired_at = item.previous_expired_at, updated_at = NOW() "
+                "  FROM message_hub_bulk_operation_items item "
+                "  WHERE item.operation_id = %s AND item.undone_at IS NULL "
+                "    AND delivery.id = item.delivery_id AND delivery.status = %s "
+                "  RETURNING delivery.id"
+                ") UPDATE message_hub_bulk_operation_items item SET undone_at = NOW() "
+                "WHERE item.operation_id = %s AND item.delivery_id IN "
+                "(SELECT id FROM restored) RETURNING item.delivery_id",
+                (operation_id, resulting_status, operation_id),
+            ).fetchall()
+            restored_ids = sorted(int(item[0]) for item in restored_rows)
+            undone_count = int(self._db.execute(
+                "SELECT COUNT(*) FROM message_hub_bulk_operation_items "
+                "WHERE operation_id = %s AND undone_at IS NOT NULL",
+                (operation_id,),
+            ).fetchone()[0])
+            status = "undone" if undone_count == int(affected_count) else "partially_undone"
+            self._db.execute(
+                "UPDATE message_hub_bulk_operations SET status = %s, undone_count = %s, "
+                "undone_at = CASE WHEN %s = 'undone' THEN NOW() ELSE undone_at END "
+                "WHERE id = %s",
+                (status, undone_count, status, operation_id),
+            )
+            self._db.commit()
+            return {
+                "operation": self.get_bulk_operation(operation_id),
+                "restored": len(restored_ids),
+                "restored_ids": restored_ids,
+                "skipped": int(affected_count) - undone_count,
+            }
+        except Exception:
+            self._db.rollback()
+            raise
+
+    def resume_bulk_operation(self, operation_id: int) -> dict[str, Any]:
+        operation = self.get_bulk_operation(operation_id)
+        if operation is None:
+            raise KeyError("Bulk operation not found")
+        if not operation["can_resume"]:
+            raise ValueError("Bulk operation cannot be resumed")
+        snapshot = dict(operation["filter_snapshot"])
+        return self.bulk_update_matching_deliveries(
+            action=operation["action"],
+            operation_id=operation_id,
+            **snapshot,
+        )
+
     def _reset_delivery(
         self,
         delivery_id: int,
@@ -886,8 +1581,16 @@ class MessageHubStorage:
                 "AND NOT EXISTS ("
                 "  SELECT 1 FROM message_hub_deliveries delivery "
                 "  WHERE delivery.message_id = message.id "
-                "  AND delivery.status NOT IN "
-                "    ('accepted', 'acknowledged', 'expired', 'dead', 'cancelled')"
+                "  AND (delivery.status NOT IN "
+                "    ('accepted', 'acknowledged', 'expired', 'dead', 'cancelled') "
+                "    OR EXISTS ("
+                "      SELECT 1 FROM message_hub_bulk_operation_items item "
+                "      JOIN message_hub_bulk_operations operation "
+                "        ON operation.id = item.operation_id "
+                "      WHERE item.delivery_id = delivery.id AND item.undone_at IS NULL "
+                "        AND operation.undo_expires_at > NOW()"
+                "    )"
+                "  )"
                 ")",
                 (days,),
             ).rowcount

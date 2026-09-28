@@ -321,6 +321,13 @@ class MessageHubService:
                 raise ValueError("Telegram deliveries require address.chat_id or address.self")
             if not str(payload.get("text") or payload.get("message") or "").strip():
                 raise ValueError("Telegram deliveries require payload.text")
+        elif gateway.type == "messenger":
+            if has_attachments:
+                raise ValueError("Messenger media deliveries are not supported yet")
+            if not str(address.get("thread_id") or "").strip():
+                raise ValueError("Messenger deliveries require address.thread_id")
+            if not str(payload.get("text") or payload.get("message") or "").strip():
+                raise ValueError("Messenger deliveries require payload.text")
         elif gateway.type == "webhook":
             if has_attachments:
                 raise ValueError("Webhook media deliveries are not supported yet")
@@ -336,6 +343,8 @@ class MessageHubService:
         if gateway.type == "telegram":
             value = "self" if address.get("self") else str(address["chat_id"])
             return f"telegram:{value}"
+        if gateway.type == "messenger":
+            return f"messenger:{str(address['thread_id']).strip()}"
         if gateway.type == "webhook":
             digest = hashlib.sha256(str(address["url"]).encode("utf-8")).hexdigest()[:32]
             return f"webhook:{digest}"
@@ -412,10 +421,44 @@ class MessageHubService:
     def get_attachment_metadata(self, message_id: int) -> list[dict[str, Any]]:
         return self._storage.get_attachment_metadata(message_id)
 
+    def get_delivery_details(self, delivery_id: int) -> dict[str, Any] | None:
+        delivery = self._storage.get_delivery(delivery_id)
+        if delivery is None:
+            return None
+        message = self._storage.get_message(delivery.message_id)
+        if message is None:
+            return None
+        delivery_data = delivery.to_dict()
+        delivery_data["source_type"] = (
+            str(message.metadata.get("source_type") or "").strip() or "other"
+        )
+        delivery_data["source_label"] = (
+            str(message.metadata.get("source_label") or "").strip()
+            or message.conversation_key
+            or "Message Hub"
+        )
+        delivery_data["conversation_key"] = message.conversation_key
+        return {
+            "delivery": delivery_data,
+            "message": message.to_dict(),
+            "attachments": self._storage.get_attachment_metadata(message.id),
+            "attempts": self._storage.get_delivery_attempts(delivery.id),
+        }
+
     def list_deliveries(
         self, status: str | None = None, limit: int = 100
     ) -> list[MessageDelivery]:
         return self._storage.list_deliveries(status=status, limit=limit)
+
+    def search_deliveries(self, **filters: Any) -> dict[str, Any]:
+        result = self._storage.search_deliveries(**filters)
+        return {
+            **result,
+            "items": [delivery.to_dict() for delivery in result["items"]],
+        }
+
+    def search_delivery_groups(self, **filters: Any) -> dict[str, Any]:
+        return self._storage.search_delivery_groups(**filters)
 
     def get_inbox_summary(self, recipient_key: str) -> dict[str, Any]:
         return self._storage.get_inbox_summary(recipient_key)
@@ -463,6 +506,26 @@ class MessageHubService:
 
     def cancel_delivery(self, delivery_id: int) -> MessageDelivery | None:
         return self._storage.cancel_delivery(delivery_id)
+
+    def bulk_update_deliveries(
+        self, delivery_ids: list[int], action: str, **audit: Any
+    ) -> dict[str, Any]:
+        return self._storage.bulk_update_deliveries(delivery_ids, action, **audit)
+
+    def bulk_update_delivery_group(self, **group: Any) -> dict[str, Any]:
+        return self._storage.bulk_update_delivery_group(**group)
+
+    def bulk_update_matching_deliveries(self, **filters: Any) -> dict[str, Any]:
+        return self._storage.bulk_update_matching_deliveries(**filters)
+
+    def get_bulk_operations(self, limit: int = 20) -> list[dict[str, Any]]:
+        return self._storage.get_bulk_operations(limit)
+
+    def undo_bulk_operation(self, operation_id: int) -> dict[str, Any]:
+        return self._storage.undo_bulk_operation(operation_id)
+
+    def resume_bulk_operation(self, operation_id: int) -> dict[str, Any]:
+        return self._storage.resume_bulk_operation(operation_id)
 
     def maintain_queue(self) -> None:
         self._storage.release_stale_leases()

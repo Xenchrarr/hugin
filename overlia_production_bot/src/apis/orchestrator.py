@@ -8,6 +8,7 @@ from requests.exceptions import ConnectionError as RequestsConnectionError
 logger = logging.getLogger(__name__)
 
 ORCHESTRATOR_API_URL = os.environ.get("ORCHESTRATOR_API_URL", "http://orchestrator:6000")
+SERVICE_KEY = os.environ.get("SERVICE_KEY", "")
 
 
 class OrchestratorClient:
@@ -16,7 +17,8 @@ class OrchestratorClient:
 
     def _get(self, path: str, **params) -> dict | list | None:
         try:
-            resp = requests.get(f"{self._base_url}{path}", params=params, timeout=(5, 15))
+            headers = {"X-Service-Key": SERVICE_KEY} if SERVICE_KEY else {}
+            resp = requests.get(f"{self._base_url}{path}", params=params, headers=headers, timeout=(5, 15))
             resp.raise_for_status()
             return resp.json()
         except RequestsConnectionError as e:
@@ -28,7 +30,8 @@ class OrchestratorClient:
 
     def _post(self, path: str, json: dict | None = None) -> dict | None:
         try:
-            resp = requests.post(f"{self._base_url}{path}", json=json or {}, timeout=(5, 15))
+            headers = {"X-Service-Key": SERVICE_KEY} if SERVICE_KEY else {}
+            resp = requests.post(f"{self._base_url}{path}", json=json or {}, headers=headers, timeout=(5, 60))
             resp.raise_for_status()
             return resp.json()
         except RequestsConnectionError as e:
@@ -78,6 +81,19 @@ class OrchestratorClient:
 
     def register_bot_commands(self, channel: str, commands: list[str]) -> None:
         self._post("/api/bot-commands/register", json={"channel": channel, "commands": commands})
+
+    def create_alarm(self, user_id: int, label: str, **schedule) -> dict | None:
+        return self._post("/api/alarms", json={"user_id": user_id, "label": label, **schedule})
+
+    def list_alarms(self, user_id: int) -> list | None:
+        result = self._get("/api/alarms", user_id=user_id)
+        return result if isinstance(result, list) else None
+
+    def alarm_action(self, user_id: int, alarm_id: int, action: str, **values) -> dict | None:
+        return self._post(f"/api/alarms/{alarm_id}/{action}", json={"user_id": user_id, **values})
+
+    def call_user(self, user_id: int) -> dict | None:
+        return self._post(f"/api/calls/user/{user_id}")
 
     def lookup_user(self, channel: str, identifier: str) -> dict | None:
         return self._get("/api/users/lookup", channel=channel, identifier=identifier)

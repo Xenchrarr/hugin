@@ -1,0 +1,95 @@
+<h2 mat-dialog-title>
+    Delivery {{ deliveryId }}
+    <span class="status" *ngIf="details" [attr.data-status]="details.delivery.status">
+        {{ details.delivery.status }}
+    </span>
+</h2>
+
+<mat-dialog-content>
+    <p *ngIf="loading">Loading delivery details…</p>
+    <p class="error" *ngIf="error">{{ error }}</p>
+
+    <ng-container *ngIf="details as item">
+        <section>
+            <h3>Message</h3>
+            <div class="message-body">{{ messageText() }}</div>
+        </section>
+
+        <section class="summary-grid">
+            <div><span>Source</span><strong>{{ item.delivery.source_label || 'Message Hub' }}</strong></div>
+            <div><span>Source type</span><strong>{{ item.delivery.source_type || 'other' }}</strong></div>
+            <div><span>Gateway</span><code>{{ item.delivery.gateway_key }}</code></div>
+            <div><span>Recipient</span><code>{{ item.delivery.recipient_key }}</code></div>
+            <div><span>Recovery policy</span><strong>{{ item.delivery.recovery_policy }}</strong></div>
+            <div><span>Attempts</span><strong>{{ item.delivery.attempts }}/{{ item.delivery.max_attempts }}</strong></div>
+        </section>
+
+        <section>
+            <h3>Timeline</h3>
+            <dl class="timeline">
+                <dt>Created</dt><dd>{{ item.delivery.created_at | date:'medium' }}</dd>
+                <dt>Available</dt><dd>{{ item.delivery.available_at | date:'medium' }}</dd>
+                <dt>Updated</dt><dd>{{ item.delivery.updated_at | date:'medium' }}</dd>
+                <dt>Accepted</dt><dd>{{ item.delivery.accepted_at ? (item.delivery.accepted_at | date:'medium') : '—' }}</dd>
+                <dt>Acknowledged</dt><dd>{{ item.delivery.acknowledged_at ? (item.delivery.acknowledged_at | date:'medium') : '—' }}</dd>
+                <dt>Expired</dt><dd>{{ item.delivery.expired_at ? (item.delivery.expired_at | date:'medium') : '—' }}</dd>
+                <dt>Message expires</dt><dd>{{ item.message.expires_at | date:'medium' }}</dd>
+            </dl>
+            <p class="error-detail" *ngIf="item.delivery.last_error">{{ item.delivery.last_error }}</p>
+        </section>
+
+        <section>
+            <h3>Delivery attempts</h3>
+            <p class="empty" *ngIf="item.attempts.length === 0">No gateway attempts recorded.</p>
+            <div class="attempt" *ngFor="let attempt of item.attempts">
+                <strong>#{{ attempt.attempt_number }} · {{ attempt.outcome }}</strong>
+                <time>{{ attempt.completed_at | date:'medium' }}</time>
+                <span *ngIf="attempt.provider_reference">Provider: {{ attempt.provider_reference }}</span>
+                <span class="error-detail" *ngIf="attempt.error">{{ attempt.error }}</span>
+            </div>
+        </section>
+
+        <section *ngIf="item.attachments.length">
+            <h3>Attachments</h3>
+            <div class="attachment" *ngFor="let attachment of item.attachments">
+                <strong>{{ attachment.filename || 'Attachment ' + attachment.id }}</strong>
+                <span>{{ attachment.content_type }} · {{ formatBytes(attachment.size_bytes) }}</span>
+                <code>{{ attachment.sha256 }}</code>
+            </div>
+        </section>
+
+        <details>
+            <summary>Advanced details</summary>
+            <dl class="timeline">
+                <dt>Message ID</dt><dd>{{ item.message.id }}</dd>
+                <dt>Delivery ID</dt><dd>{{ item.delivery.id }}</dd>
+                <dt>Dispatch token</dt><dd><code>{{ item.delivery.dispatch_token }}</code></dd>
+                <dt>Conversation</dt><dd>{{ item.message.conversation_key || '—' }}</dd>
+                <dt>External ID</dt><dd>{{ item.message.external_id || '—' }}</dd>
+            </dl>
+            <h4>Delivery payload</h4>
+            <pre>{{ item.delivery.payload | json }}</pre>
+            <h4>Message metadata</h4>
+            <pre>{{ item.message.metadata | json }}</pre>
+            <h4>Address</h4>
+            <pre>{{ item.delivery.address | json }}</pre>
+        </details>
+    </ng-container>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+    <ng-container *ngIf="details as item">
+        <button mat-button *ngIf="item.delivery.status === 'held'"
+                (click)="choose('acknowledge')">Mark read</button>
+        <button mat-button *ngIf="item.delivery.status === 'held'"
+                (click)="choose('release')">Queue for sending</button>
+        <button mat-button *ngIf="item.delivery.status === 'dead' || item.delivery.status === 'retry_wait'"
+                (click)="choose('retry')">Retry</button>
+        <button mat-button color="warn" *ngIf="item.delivery.status === 'uncertain'"
+                (click)="choose('retry-anyway')">Retry anyway</button>
+        <button mat-button color="warn"
+                *ngIf="['pending', 'retry_wait', 'held', 'dead', 'uncertain'].includes(item.delivery.status)"
+                (click)="choose('cancel')">Cancel delivery</button>
+    </ng-container>
+    <button mat-button mat-dialog-close>Close</button>
+</mat-dialog-actions>

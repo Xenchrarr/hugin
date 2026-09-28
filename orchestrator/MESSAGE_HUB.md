@@ -87,6 +87,14 @@ Inspection endpoints accept either the service key or an administrator JWT:
 - `PATCH /api/message-hub/gateways/<key>/enabled` (administrator)
 - `GET /api/message-hub/messages/<id>`
 - `GET /api/message-hub/deliveries?status=pending&limit=100`
+- `GET /api/message-hub/deliveries/search?statuses=held&query=hello&page=1&page_size=25`
+  returns `{items, total, page, page_size}` and also accepts `gateway_key`,
+  `recipient`, `source_type`, `source_label`, `created_after`, `created_before`,
+  and `sort=asc|desc` filters
+- `GET /api/message-hub/delivery-groups/search?statuses=held` returns the same
+  pagination envelope with groups keyed by source, conversation, gateway, and recipient
+- `GET /api/message-hub/deliveries/<id>` returns delivery and parent-message
+  details, attachment metadata, and delivery-attempt history to administrators or services
 - `GET /api/message-hub/stats`
 
 Held deliveries can be retrieved without acknowledging them first. The caller
@@ -108,6 +116,22 @@ Administrator queue actions:
 - `POST /api/message-hub/deliveries/<id>/retry-anyway`
 - `POST /api/message-hub/deliveries/<id>/release`
 - `POST /api/message-hub/deliveries/<id>/cancel`
+- `POST /api/message-hub/deliveries/bulk-action` with up to 500 `delivery_ids`
+  and an action of `acknowledge`, `cancel`, `release`, or `retry`
+- `POST /api/message-hub/delivery-groups/bulk-action` applies one of those actions
+  to an exact group and filter snapshot, processing at most 500 messages per request
+- `POST /api/message-hub/deliveries/bulk-filter-action` applies an action to an
+  exact delivery-search snapshot in 500-message batches for “select all matching” workflows.
+  The UI fixes the snapshot's time bounds before confirmation, excludes later arrivals,
+  and reports completed batches if a later request fails.
+- `GET /api/message-hub/bulk-operations` returns the administrator audit history.
+- `POST /api/message-hub/bulk-operations/<id>/undo` restores unchanged deliveries for
+  cancel and mark-read operations during the ten-minute undo window.
+- `POST /api/message-hub/bulk-operations/<id>/resume` continues an interrupted filtered
+  operation from its original filter and time snapshot.
+
+Bulk operation records retain the administrator username, action, scope, filter snapshot,
+counts, and each delivery's prior state. Audit records remain after the undo window expires.
 
 Automatic retries keep the delivery's `dispatch_token`. The SMS gateway stores
 that token in a persistent SQLite receipt ledger before it writes to the modem.

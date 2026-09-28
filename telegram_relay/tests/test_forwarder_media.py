@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import sys
@@ -5,7 +6,7 @@ import tempfile
 import threading
 import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 # The production image provides python-telegram. Unit tests only need the
 # forwarder's protocol construction, so supply a minimal import stub when the
@@ -32,14 +33,9 @@ class _Placeholder:
     pass
 
 
-class _NormalizedMessage:
-    pass
-
-
 _stub_module("app.config", TelegramConfig=_Placeholder)
 _stub_module("app.destinations.base", AbstractDestination=_Placeholder)
 _stub_module("app.destinations.sms", SmsAdapter=type("SmsAdapter", (), {}))
-_stub_module("app.normalizer", MessageNormalizer=_Placeholder, NormalizedMessage=_NormalizedMessage)
 _stub_module("app.redactor", Redactor=_Placeholder)
 _stub_module("app.rules.engine", RuleEngine=_Placeholder)
 _stub_module(
@@ -51,6 +47,7 @@ _stub_module(
 )
 
 from app.forwarder import TelegramForwarder
+from app.normalizer import NormalizedMessage
 
 
 class _Result:
@@ -71,6 +68,18 @@ class _Client:
         return _Result()
 
 
+class _BotUserClient:
+    def call_method(self, method, params=None):
+        result = _Result()
+        if method == "getUser":
+            result.update = {
+                "first_name": "Solar",
+                "last_name": "Bot",
+                "type": {"@type": "userTypeBot"},
+            }
+        return result
+
+
 class ForwarderMediaTests(unittest.TestCase):
     def test_text_send_returns_tdlib_message_id(self):
         forwarder = TelegramForwarder.__new__(TelegramForwarder)
@@ -79,6 +88,28 @@ class ForwarderMediaTests(unittest.TestCase):
         message_id = forwarder.send_message(42, "Hello")
 
         self.assertEqual(123, message_id)
+
+    def test_enrichment_marks_bot_senders(self):
+        forwarder = TelegramForwarder.__new__(TelegramForwarder)
+        forwarder._client = _BotUserClient()
+        message = NormalizedMessage(
+            message_id=1,
+            chat_id=-42,
+            chat_title="Power chat",
+            chat_type="group",
+            sender_id=7,
+            sender_name=None,
+            text="Solar data",
+            media_type=None,
+            media_file_id=None,
+            caption=None,
+            timestamp=123,
+        )
+
+        enriched = forwarder._enrich_message(message)
+
+        self.assertEqual("Solar Bot", enriched.sender_name)
+        self.assertTrue(enriched.sender_is_bot)
 
     def test_reply_context_is_persisted_and_loaded(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -113,6 +144,50 @@ class ForwarderMediaTests(unittest.TestCase):
             self.assertEqual("inputMessagePhoto", content["@type"])
             self.assertEqual("Cabin", content["caption"]["text"])
             self.assertTrue(os.path.exists(content["photo"]["path"]))
+
+    def test_incoming_photo_is_downloaded_for_sms_destination(self):
+        sms_class = sys.modules["app.destinations.sms"].SmsAdapter
+        action_class = sys.modules["app.rules.models"].ForwardAction
+        destination = sms_class()
+        destination.phone = "+4712345678"
+        destination.payload = None
+
+        async def send(payload):
+            destination.payload = payload
+
+        destination.send = send
+        action = action_class()
+        action.destination = "sms"
+        action.redact = []
+        action.include_fields = None
+        action.exclude_fields = None
+        message = NormalizedMessage(
+            message_id=99,
+            chat_id=42,
+            chat_title="Alice",
+            chat_type="private",
+            sender_id=7,
+            sender_name="Alice",
+            text=None,
+            media_type="photo",
+            media_file_id=1234,
+            caption="Cabin",
+            timestamp=123,
+        )
+        forwarder = TelegramForwarder.__new__(TelegramForwarder)
+        forwarder._redactor = type(
+            "IdentityRedactor",
+            (),
+            {"apply": staticmethod(lambda msg, _patterns: msg)},
+        )()
+        forwarder._download_media = Mock(return_value=(b"jpeg-data", "image/jpeg"))
+        forwarder.set_reply_context = Mock()
+
+        asyncio.run(forwarder._dispatch(action, message, "photos", {"sms": destination}))
+
+        forwarder._download_media.assert_called_once_with(1234, "photo")
+        self.assertEqual(b"jpeg-data", destination.payload["media_data"])
+        self.assertEqual("image/jpeg", destination.payload["media_mime_type"])
 
 
 if __name__ == "__main__":

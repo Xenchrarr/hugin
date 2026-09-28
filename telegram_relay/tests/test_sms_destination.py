@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import importlib
 import unittest
 from pathlib import Path
@@ -57,7 +58,43 @@ class SmsDestinationTests(unittest.TestCase):
         self.assertEqual("-1001:99", body["external_id"])
         self.assertEqual("digest_hold", body["deliveries"][0]["recovery_policy"])
         self.assertEqual(17, body["deliveries"][0]["target_endpoint_id"])
-        self.assertEqual("Family | Alice: Hello", body["payload"]["text"])
+        self.assertEqual("Family / Alice: Hello", body["payload"]["text"])
+
+    def test_submits_telegram_photo_as_mms_attachment(self):
+        adapter = SmsAdapter("17", {"phone": "+4712345678"})
+        client = _Client()
+        adapter._client = client
+        image = b"\xff\xd8\xfftelegram-photo"
+        payload = {
+            "chat_id": 123,
+            "message_id": 99,
+            "chat_type": "private",
+            "sender_name": "Alice",
+            "media_type": "photo",
+            "caption": "Cabin",
+            "media_data": image,
+            "media_mime_type": "image/jpeg",
+        }
+
+        asyncio.run(adapter.send(payload))
+
+        _, body, _ = client.calls[0]
+        self.assertEqual("mms", body["kind"])
+        self.assertEqual("Alice: Cabin", body["payload"]["text"])
+        self.assertEqual("image/jpeg", body["attachments"][0]["content_type"])
+        self.assertEqual("telegram-99.jpg", body["attachments"][0]["filename"])
+        self.assertEqual(image, base64.b64decode(body["attachments"][0]["data_base64"]))
+
+    def test_group_prefix_uses_only_gsm7_basic_characters(self):
+        body = SmsAdapter._format_message({
+            "chat_type": "group",
+            "chat_title": "Family",
+            "sender_name": "Alice",
+            "text": "a" * 80,
+        })
+
+        self.assertEqual("Family / Alice: " + "a" * 80, body)
+        self.assertNotIn("|", body)
 
 if __name__ == "__main__":
     unittest.main()

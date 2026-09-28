@@ -27,6 +27,10 @@ A Docker Compose stack for home automation, energy monitoring, and task orchestr
 │ bot             │  │              │  │ :8080              │
 └─────────────────┘  └──────────────┘  └────────────────────┘
 
+Messenger bridge stack: private Synapse + Element + pinned `mautrix-meta` +
+`messenger-relay` on loopback ports 8008, 8088, and 8081. Generated bridge
+state is kept under `MESSENGER_CONFIG_ROOT` for Portainer deployments.
+
 ┌──────────────┐  ┌──────────────┐
 │ file-server  │  │              │
 │ (internal)   │  │              │
@@ -64,6 +68,7 @@ A Docker Compose stack for home automation, energy monitoring, and task orchestr
 | **orchestrator-frontend** | `xenchrarr/orchestrator-frontend` | 80 | Angular web UI for managing scheduled jobs |
 | **powershell-runner** | `xenchrarr/powershell-runner` | — | Executes PowerShell scripts on behalf of the orchestrator |
 | **telegram-relay** | `xenchrarr/telegram-relay` | 8080 | Telegram connector for the endpoint-and-route message router |
+| **messenger-relay** | `xenchrarr/messenger-relay` | 8081 (loopback) | Matrix adapter for the personal Messenger PoC |
 | **file-server** | `nginx:alpine` | — | Serves shared log files from orchestrator job runs (internal only) |
 
 ### SMS resilience
@@ -101,6 +106,7 @@ Key variables to set:
 - **Hugin Core** — `TIBBER_ACCESS_TOKEN`, `HA_URL`, `HA_TOKEN`, `SIMPLENOTE_EMAIL`, `SIMPLENOTE_PASSWORD`, `SERVICE_KEY`
 - **Telegram bot** — `TELEGRAM_API_KEY`, `ALLOWED_USER_IDS`
 - **Telegram connector** — `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_PHONE_NUMBER`, `DB_ENCRYPTION_KEY`; optionally `MESSAGE_RELAY_ENDPOINT_KEY`
+- **Messenger PoC** — follow `messenger_relay/README.md`, then set `MATRIX_USER_ID` and `MATRIX_ACCESS_TOKEN`
 - **SMS** — register the sender's phone number on an orchestrator user
 - **Orchestrator** — `TEAMS_WEBHOOK_URL`, `GIT_USERNAME`, `GIT_PASSWORD`, `GIT_REPO_URLS`
 
@@ -137,3 +143,4 @@ docker compose up -d
 | `shared_logs` | Job execution logs (shared between orchestrator and file-server) |
 | `powershell_scripts` | PowerShell scripts managed by the runner |
 | `telegram_tdlib` | TDLib session data for telegram-relay |
+| `messenger_relay_data` | Matrix sync cursor, conversation map, and SMS reply contexts |

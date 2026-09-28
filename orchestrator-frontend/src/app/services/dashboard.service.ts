@@ -20,4 +20,11 @@ export class DashboardService {
       })
       .pipe(map(({ status, ...stats }) => stats as DashboardStats));
   }
+
+  callMe(): Observable<{ ok: boolean; status: string }> {
+    return this.http.post<{ ok: boolean; status: string }>(
+      `${environment.apiOrchestratorUri}/calls/me`,
+      {},
+    );
+  }
 }

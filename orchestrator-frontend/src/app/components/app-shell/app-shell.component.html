@@ -84,6 +84,14 @@
                 <span>Message Hub</span>
                 }
             </a>
+
+            <a mat-list-item routerLink="/alarms" routerLinkActive="active">
+                <mat-icon matListItemIcon>alarm_on</mat-icon>
+                @if(!collapsed) {
+                <span>Calling Alarms</span>
+                }
+            </a>
+
             <a mat-list-item routerLink="/users/list" routerLinkActive="active">
                 <mat-icon matListItemIcon>admin_panel_settings</mat-icon>
                 @if(!collapsed) {

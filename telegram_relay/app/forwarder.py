@@ -157,19 +157,30 @@ class TelegramForwarder:
 
         # Resolve sender name
         sender_name = msg.sender_name
-        if not sender_name and msg.sender_id:
+        sender_is_bot = msg.sender_is_bot
+        if msg.sender_id and (not sender_name or sender_is_bot is None):
             try:
                 gu = self._client.call_method("getUser", params={"user_id": msg.sender_id})
                 gu.wait()
                 if not gu.error:
                     u = gu.update
                     sender_name = " ".join(filter(None, [u.get("first_name"), u.get("last_name")])) or None
+                    sender_is_bot = (u.get("type") or {}).get("@type") == "userTypeBot"
             except Exception:
                 logger.debug("_enrich_message: getUser(%s) failed", msg.sender_id)
 
-        if chat_title == msg.chat_title and sender_name == msg.sender_name:
+        if (
+            chat_title == msg.chat_title
+            and sender_name == msg.sender_name
+            and sender_is_bot == msg.sender_is_bot
+        ):
             return msg
-        return dc_replace(msg, chat_title=chat_title, sender_name=sender_name)
+        return dc_replace(
+            msg,
+            chat_title=chat_title,
+            sender_name=sender_name,
+            sender_is_bot=sender_is_bot,
+        )
 
     def _download_media(self, file_id: int, media_type: Optional[str]) -> tuple[Optional[bytes], str]:
         """Download a TDLib file synchronously and return (bytes, mime_type).
@@ -247,8 +258,19 @@ class TelegramForwarder:
                 payload["chat_title"] = msg.chat_title
                 payload["sender_name"] = msg.sender_name
                 payload["chat_type"] = msg.chat_type
-                # The durable queue is text-only here. Captions and the media
-                # type remain available, but binary media is not stored.
+                if msg.media_type == "photo" and msg.media_file_id is not None:
+                    media_data, media_mime_type = self._download_media(
+                        msg.media_file_id,
+                        msg.media_type,
+                    )
+                    if media_data:
+                        payload["media_data"] = media_data
+                        payload["media_mime_type"] = media_mime_type
+                    else:
+                        logger.warning(
+                            "Message %d photo could not be downloaded; forwarding text fallback",
+                            msg.message_id,
+                        )
             logger.info(
                 "Rule '%s': forwarding message %d → '%s'",
                 rule_name, msg.message_id, action.destination,

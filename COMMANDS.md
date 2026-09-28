@@ -59,6 +59,16 @@ rem snooze 7 30m
 rem dismiss 7
 ```
 
+### Calling alarms
+
+| Command | Aliases | Description | Parameters | PIN |
+|---|---|---|---|---|
+| `alarm <time> [label]` | `wake` | Create a calling alarm | `repeat=daily\|weekdays` optional | No |
+| `alarm list` | — | List calling alarms | — | No |
+| `alarm on\|off\|test <id>` | — | Manage an alarm | Alarm ID | No |
+| `alarm snooze <id> [minutes]` | — | Schedule another occurrence | Alarm ID and minutes | No |
+| `call me` | `ring me` | Call your registered phone immediately | — | No |
+
 ---
 
 ### Energy & Solar
@@ -317,10 +327,10 @@ Forwards the message to a phone number via the SMS bot.
 | `config.phone` | `""` | E.164 recipient phone number (e.g. `+46701234567`) |
 
 - Submits text to `POST {ORCHESTRATOR_API_URL}/api/message-hub/messages`; the orchestrator queues it durably and its SMS gateway consumer delivers it.
-- Message format: `"{chat_title} | {sender_name}: {text}"` (degrades gracefully if either is absent).
+- Message format: `"{chat_title} / {sender_name}: {text}"` (degrades gracefully if either is absent and keeps ordinary messages in GSM-7).
 - Stored messages retain the Telegram `chat_id` and title so they can be filtered by source with the SMS `inbox` command.
 - `inbox` reads recipient-scoped held deliveries and acknowledges them only after a successful SMS response.
-- Binary Telegram media is not queued; captions and media placeholders are retained as text.
+- Telegram photos are downloaded and queued as durable MMS attachments; if a download fails, the caption and media placeholder are retained as a text fallback.
 
 ---
 

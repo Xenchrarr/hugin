@@ -77,6 +77,8 @@ export class JobCardNewComponent {
     @Output() jobSaved = new EventEmitter<Job>();
     isNew = false
     editMode: boolean = true;
+    phoneCallTarget: string = '';
+    phoneCallRingSeconds: number = 20;
 
 
 
@@ -95,6 +97,7 @@ export class JobCardNewComponent {
             return;
         }
         this.job = data;
+        this.loadPhoneCallParam();
         if (this.job.job_type === 'git_sync') {
             this.loadRepos();
         }
@@ -102,6 +105,12 @@ export class JobCardNewComponent {
 
 
     saveJob() {
+        if (this.isPhoneCallJob()) {
+            this.job.param = JSON.stringify({
+                target: this.phoneCallTarget.trim(),
+                ring_seconds: this.phoneCallRingSeconds,
+            });
+        }
         this.jobService.saveJob(this.job).subscribe(job => {
             this.job = job;
             this.dialogRef.close(job); // Close the dialog
@@ -141,10 +150,30 @@ export class JobCardNewComponent {
         if (selectedJobType === 'git_sync') {
             this.loadRepos();
         }
+        if (selectedJobType === 'phone_call') {
+            this.loadPhoneCallParam();
+        }
     }
 
     isGitSyncJob(): boolean {
         return this.job.job_type === 'git_sync';
+    }
+
+    isPhoneCallJob(): boolean {
+        return this.job.job_type === 'phone_call';
+    }
+
+    loadPhoneCallParam(): void {
+        if (!this.isPhoneCallJob()) return;
+        const raw = (this.job.param || '').trim();
+        if (!raw) return;
+        try {
+            const value = JSON.parse(raw);
+            this.phoneCallTarget = String(value.target ?? value.user_id ?? value.user ?? value.phone ?? '');
+            this.phoneCallRingSeconds = Number(value.ring_seconds ?? 20);
+        } catch {
+            this.phoneCallTarget = raw;
+        }
     }
 
     loadRepos() {

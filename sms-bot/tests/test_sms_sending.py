@@ -66,6 +66,18 @@ class SmsSendingTests(unittest.TestCase):
         self.assertEqual(2, len(SMSHandler._gsm7_encode("[")))
 
     @patch("src.sms_handler.time.sleep", return_value=None)
+    def test_plain_telegram_group_message_stays_in_one_gsm7_part(self, _sleep):
+        handler = self._handler()
+        chunks = []
+        handler._send_sms_chunk = (
+            lambda _number, chunk, use_gsm7: chunks.append((chunk, use_gsm7)) or True
+        )
+        message = "Family / Alice: " + "a" * 80
+
+        self.assertTrue(handler._send_sms_locked("+4712345678", message))
+        self.assertEqual([(message, True)], chunks)
+
+    @patch("src.sms_handler.time.sleep", return_value=None)
     def test_gsm_extension_character_uses_ucs2_to_avoid_escape_cancelling_cmgs(
         self, _sleep
     ):

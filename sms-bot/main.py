@@ -8,6 +8,7 @@ load_dotenv()
 
 from src.config.logging import setup_logging
 from src.sms_handler import SMSHandler
+from src.call_handler import CallHandler
 from src.command_processor import CommandProcessor
 from src.api.sms_api import start_api_server
 from src.models.command_response import CommandResponse
@@ -80,11 +81,12 @@ def main():
     setup_logging()
 
     sms = SMSHandler()
+    calls = CallHandler(sms)
     processor = CommandProcessor()
     pending_responses: dict[str, PendingResponse] = {}
 
     # Start the outbound SMS REST API in a background thread
-    start_api_server(sms)
+    start_api_server(sms, calls)
 
     try:
         while True:
@@ -92,7 +94,7 @@ def main():
                 if _submit_pending_response(processor, sms, pending):
                     pending_responses.pop(key, None)
 
-            for caller in sms.poll_incoming_calls():
+            for caller in calls.poll_incoming_calls():
                 response = processor.process_missed_call(caller)
                 if isinstance(response, CommandResponse):
                     key = f"missed-call:{caller}:{int(time.time() // 60)}"

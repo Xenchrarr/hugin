@@ -15,6 +15,7 @@ class NormalizedMessage:
     media_file_id: Optional[int]  # TDLib file id for downloading (photo/document)
     caption: Optional[str]
     timestamp: int
+    sender_is_bot: Optional[bool] = None
     raw: dict = field(default_factory=dict)
 
     def to_payload(
@@ -29,6 +30,7 @@ class NormalizedMessage:
             "chat_type": self.chat_type,
             "sender_id": self.sender_id,
             "sender_name": self.sender_name,
+            "sender_is_bot": self.sender_is_bot,
             "text": self.text,
             "media_type": self.media_type,
             "caption": self.caption,
