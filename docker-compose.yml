@@ -123,6 +123,7 @@ services:
       CORE_API_URL: http://hugin-core:5100
       ORCHESTRATOR_API_URL: http://orchestrator:6000
       MESSENGER_RELAY_URL: http://messenger-relay:8081
+      RETICULUM_RELAY_URL: http://reticulum-relay:8082
       PRINTER_HUB_URL: http://printer-hub:6002
       SMS_DELIVERY_LEDGER_PATH: /data/sms-delivery-ledger.sqlite3
       SMS_DELIVERY_STALE_SECONDS: ${SMS_DELIVERY_STALE_SECONDS:-600}
@@ -163,7 +164,7 @@ services:
       POWERSHELL_API_ENDPOINT: http://powershell-runner:6001/api
       POWERSHELL_SCRIPT_TIMEOUT: ${POWERSHELL_SCRIPT_TIMEOUT:-900}
       POWERSHELL_LIST_TIMEOUT: ${POWERSHELL_LIST_TIMEOUT:-30}
-      STALE_JOB_THRESHOLD_MINUTES: ${STALE_JOB_THRESHOLD_MINUTES:-20}
+      STALE_JOB_THRESHOLD_MINUTES: ${STALE_JOB_THRESHOLD_MINUTES:-18}
       FILE_STORAGE_PATH: /data/logs
       FILE_STORAGE_URL: /logs
       TEAMS_WEBHOOK_URL: ${TEAMS_WEBHOOK_URL:-}
@@ -172,6 +173,7 @@ services:
       TELEGRAM_BOT_URL: http://overlia-power-bot:5060
       TELEGRAM_RELAY_URL: http://telegram-relay:8080
       MESSENGER_RELAY_URL: http://messenger-relay:8081
+      RETICULUM_RELAY_URL: http://reticulum-relay:8082
       PRINTER_HUB_URL: http://printer-hub:6002
       MESSAGE_HUB_POLL_SECONDS: ${MESSAGE_HUB_POLL_SECONDS:-1}
       MESSAGE_HUB_HEALTH_INTERVAL_SECONDS: ${MESSAGE_HUB_HEALTH_INTERVAL_SECONDS:-30}
@@ -305,6 +307,36 @@ services:
         limits:
           memory: 256M
 
+  # ── Reticulum / LXMF Node ─────────────────────────────────
+
+  reticulum-relay:
+    image: xenchrarr/reticulum-relay:latest
+    restart: unless-stopped
+    container_name: reticulum-relay
+    depends_on:
+      - orchestrator
+    ports:
+      - "${RETICULUM_TCP_LISTEN_PORT:-4242}:${RETICULUM_TCP_LISTEN_PORT:-4242}"
+    volumes:
+      - reticulum_data:/data
+    env_file:
+      - stack.env
+    environment:
+      ORCHESTRATOR_API_URL: http://orchestrator:6000
+      MESSAGE_RELAY_ENDPOINT_KEY: reticulum-main
+      RETICULUM_RNODE_PORT: /dev/ttyACM0
+      RETICULUM_PAGES_PATH: /app/pages
+    devices:
+      - ${RETICULUM_RNODE_DEVICE:-/dev/ttyACM0}:/dev/ttyACM0
+    group_add:
+      - "${RETICULUM_RNODE_GID:-20}"
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
   # ── Messenger Relay PoC (opt-in) ──────────────────────────
 
   matrix-synapse:
@@ -393,5 +425,6 @@ volumes:
   powershell_scripts:
   telegram_tdlib:
   messenger_relay_data:
+  reticulum_data:
   sms_hub_data:
   ollama_data:

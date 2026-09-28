@@ -65,6 +65,20 @@ export class DestinationDialogComponent {
     get messengerThreadId(): string { return String(this.endpoint.config['thread_id'] ?? ''); }
     set messengerThreadId(v: string) { this.endpoint.config['thread_id'] = v.trim(); }
 
+    get reticulumDestinationHash(): string {
+        return String(this.endpoint.config['destination_hash'] ?? '');
+    }
+    set reticulumDestinationHash(v: string) {
+        this.endpoint.config['destination_hash'] = v.trim().toLowerCase();
+    }
+
+    get reticulumDeliveryMethod(): string {
+        return String(this.endpoint.config['delivery_method'] ?? 'direct');
+    }
+    set reticulumDeliveryMethod(v: string) {
+        this.endpoint.config['delivery_method'] = v;
+    }
+
     get smsRecoveryPolicy(): string {
         return this.endpoint.config['recovery_policy'] ?? 'digest_hold';
     }
@@ -107,6 +121,10 @@ export class DestinationDialogComponent {
             this.endpoint.capabilities = this.telegramChatId ? ['target'] : ['source'];
         } else if (this.endpoint.type === 'messenger') {
             this.endpoint.capabilities = this.messengerThreadId
+                ? ['target']
+                : ['source'];
+        } else if (this.endpoint.type === 'reticulum') {
+            this.endpoint.capabilities = this.reticulumDestinationHash
                 ? ['target']
                 : ['source'];
         } else {

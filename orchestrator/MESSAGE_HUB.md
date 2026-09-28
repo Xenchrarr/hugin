@@ -1,8 +1,9 @@
 # Message Hub
 
-Message Hub is the single durable path for outbound SMS, Telegram, and webhook
-deliveries. Producers store a message plus one delivery per target; background
-workers claim those deliveries and call the corresponding gateway.
+Message Hub is the single durable path for outbound SMS, Telegram, Messenger,
+Reticulum, and webhook deliveries. Producers store a message plus one delivery
+per target; background workers claim those deliveries and call the
+corresponding gateway.
 
 ## Runtime
 
@@ -18,9 +19,9 @@ from queue JSON and removes it automatically with its parent message. Migration
 the terminal `uncertain` state used to prevent automatic duplicate sends.
 
 The delivery and gateway-health workers always start with the orchestrator.
-The initial gateways are `sms-main` and `telegram-main`. Their timing,
-thresholds, retention, and alert targets use the `MESSAGE_HUB_*` settings in
-`stack.env.example`.
+The built-in gateways are `sms-main`, `telegram-main`, `messenger-main`,
+`reticulum-main`, and `webhook-main`. Their timing, thresholds, retention, and
+alert targets use the `MESSAGE_HUB_*` settings in `stack.env.example`.
 
 Telegram-to-SMS routes default to `digest_hold`. Messages accumulated while the
 SMS gateway is down remain in the inbox, and recovery creates one summary

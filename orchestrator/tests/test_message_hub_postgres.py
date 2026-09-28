@@ -100,6 +100,8 @@ class MessageHubPostgresTests(unittest.TestCase):
                 "025_message_gateway_dispatch_tokens.sql",
                 "026_prevent_deye_relay_loop.sql",
                 "027_message_hub_bulk_operations.sql",
+                "029_messenger_relay_poc.sql",
+                "030_reticulum_relay.sql",
             ):
                 connection.execute((migrations / filename).read_text(encoding="utf-8"))
             connection.commit()

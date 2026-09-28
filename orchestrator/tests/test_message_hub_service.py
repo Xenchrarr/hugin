@@ -329,6 +329,31 @@ class MessageHubServiceTests(unittest.TestCase):
             MessageHubService._recipient_key(gateway, spec["address"]),
         )
 
+    def test_reticulum_delivery_validation_and_recipient_key(self):
+        gateway = replace(
+            _gateway(), key="reticulum-main", name="Reticulum", type="reticulum"
+        )
+        spec = {
+            "address": {
+                "destination_hash": "AB" * 16,
+                "delivery_method": "direct",
+            },
+            "payload": None,
+        }
+
+        MessageHubService._validate_gateway_delivery(
+            gateway,
+            spec,
+            {"text": "hello"},
+            kind="text",
+            has_attachments=False,
+        )
+
+        self.assertEqual(
+            f"reticulum:{'ab' * 16}",
+            MessageHubService._recipient_key(gateway, spec["address"]),
+        )
+
     def test_submit_normalizes_a_delivery_and_resolves_source_gateway(self):
         message, deliveries = self.service.submit(
             direction="outbound",

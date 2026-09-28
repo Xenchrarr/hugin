@@ -88,7 +88,7 @@ def compile_routes(raw: dict[str, Any], source_key: str) -> list[Route]:
             if not target_spec.get("enabled", True) or not endpoint.get("enabled", True):
                 continue
             endpoint_type = str(endpoint.get("type") or "")
-            if endpoint_type not in {"sms", "telegram", "webhook"}:
+            if endpoint_type not in {"sms", "telegram", "reticulum", "webhook"}:
                 continue
             targets.append(
                 Target(
@@ -155,6 +155,23 @@ class RouteDispatcher:
             delivery = {
                 "gateway_key": "telegram-main",
                 "address": {"chat_id": int(chat_id)},
+                "recovery_policy": target.config.get("recovery_policy", "replay"),
+            }
+            payload = {"text": self._display_text(transformed)}
+        elif target.endpoint_type == "reticulum":
+            destination_hash = str(
+                target.config.get("destination_hash") or ""
+            ).strip().lower()
+            if not destination_hash:
+                raise ValueError(
+                    f"Reticulum endpoint {target.endpoint_key!r} has no destination_hash"
+                )
+            delivery = {
+                "gateway_key": "reticulum-main",
+                "address": {
+                    "destination_hash": destination_hash,
+                    "delivery_method": target.config.get("delivery_method", "direct"),
+                },
                 "recovery_policy": target.config.get("recovery_policy", "replay"),
             }
             payload = {"text": self._display_text(transformed)}

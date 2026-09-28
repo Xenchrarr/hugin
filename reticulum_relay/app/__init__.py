@@ -1,0 +1,2 @@
+"""Hugin Reticulum/LXMF connector."""
+

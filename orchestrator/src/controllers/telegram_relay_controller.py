@@ -17,7 +17,7 @@ _storage = MessageRelayStorage()
 _logger = logging.getLogger(__name__)
 _RELAY_URL = os.environ.get("TELEGRAM_RELAY_URL", "http://telegram-relay:8080")
 _KEY_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,119}$")
-_SUPPORTED_ENDPOINT_TYPES = {"telegram", "messenger", "sms", "webhook"}
+_SUPPORTED_ENDPOINT_TYPES = {"telegram", "messenger", "reticulum", "sms", "webhook"}
 
 
 def _notify_relay() -> bool:
@@ -79,6 +79,10 @@ def save_message_endpoint():
                 data["capabilities"] = ["target"] if config.get("chat_id") else ["source"]
             elif endpoint_type == "messenger":
                 data["capabilities"] = ["target"] if config.get("thread_id") else ["source"]
+            elif endpoint_type == "reticulum":
+                data["capabilities"] = (
+                    ["target"] if config.get("destination_hash") else ["source"]
+                )
             else:
                 data["capabilities"] = ["target"]
         endpoint = _storage.save_endpoint(MessageRelayEndpoint.from_dict(data))

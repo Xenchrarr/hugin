@@ -28,6 +28,10 @@ from src.commands.fb.list import FbListCommand
 from src.commands.fb.send import FbSendCommand
 from src.commands.fb.reply import FbReplyCommand
 from src.commands.fb.use import FbUseCommand
+from src.commands.rns.list import RnsListCommand
+from src.commands.rns.send import RnsSendCommand
+from src.commands.rns.reply import RnsReplyCommand
+from src.commands.rns.use import RnsUseCommand
 from src.commands.relay.list import RelayListCommand
 from src.commands.relay.toggle import RelayStartCommand, RelayStopCommand
 from src.commands.relay.preset import RelayPresetOnCommand, RelayPresetOffCommand
@@ -95,6 +99,10 @@ class CommandProcessor:
             FbSendCommand(),
             FbReplyCommand(),
             FbUseCommand(),
+            RnsListCommand(),
+            RnsSendCommand(),
+            RnsReplyCommand(),
+            RnsUseCommand(),
             RelayListCommand(),
             RelayStartCommand(),
             RelayStopCommand(),

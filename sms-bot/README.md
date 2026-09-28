@@ -70,6 +70,10 @@ user configuration.
 | `inbox` | `messages` | Summarize messages stored while SMS delivery was unavailable |
 | `inbox sources` | | List the waiting-message sources |
 | `inbox telegram [group]` | `inbox tg [group]` | Retrieve up to five waiting Telegram messages, optionally from one group |
+| `rns/list` | `rns/convos` | List recent Reticulum/LXMF contacts |
+| `rns/send <num\|hash> <message>` | | Send an LXMF message and select its reply context |
+| `rns/use <num\|hash>` | `rns/target` | Select the contact used by `rns/reply` |
+| `rns/reply <message>` | `rns/r` | Reply to the selected Reticulum contact |
 | `inbox reminders` | `inbox rem` | Retrieve waiting reminder messages |
 | `inbox system` | | Retrieve waiting system messages |
 | `inbox next` | | Retrieve the next batch of waiting messages |

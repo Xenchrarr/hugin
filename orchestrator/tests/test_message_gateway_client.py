@@ -101,6 +101,35 @@ class MessageGatewayClientTests(unittest.TestCase):
         )
 
     @patch("src.services.core.message_gateway_client.requests.post", return_value=_Response())
+    def test_reticulum_delivery_uses_destination_and_dispatch_token(self, post):
+        delivery = replace(
+            _delivery(),
+            address={
+                "destination_hash": "ab" * 16,
+                "delivery_method": "opportunistic",
+            },
+            gateway_key="reticulum-main",
+            gateway_type="reticulum",
+            gateway_config={"base_url": "http://reticulum-relay:8082"},
+        )
+
+        MessageGatewayClient().send(delivery, [])
+
+        self.assertEqual(
+            "http://reticulum-relay:8082/api/reticulum/send", post.call_args.args[0]
+        )
+        self.assertEqual(
+            {
+                "destination_hash": "ab" * 16,
+                "text": "Weather forecast",
+                "title": "",
+                "delivery_method": "opportunistic",
+                "delivery_token": "dispatch-10",
+            },
+            post.call_args.kwargs["json"],
+        )
+
+    @patch("src.services.core.message_gateway_client.requests.post", return_value=_Response())
     def test_sms_attachment_uses_mms_endpoint(self, post):
         attachment = MessageAttachment(
             id=1,

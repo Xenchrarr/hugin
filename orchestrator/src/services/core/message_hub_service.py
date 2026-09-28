@@ -328,6 +328,25 @@ class MessageHubService:
                 raise ValueError("Messenger deliveries require address.thread_id")
             if not str(payload.get("text") or payload.get("message") or "").strip():
                 raise ValueError("Messenger deliveries require payload.text")
+        elif gateway.type == "reticulum":
+            if has_attachments:
+                raise ValueError("Reticulum media deliveries are not supported yet")
+            destination_hash = str(address.get("destination_hash") or "").strip().lower()
+            if len(destination_hash) != 32:
+                raise ValueError(
+                    "Reticulum deliveries require a 32-character address.destination_hash"
+                )
+            try:
+                bytes.fromhex(destination_hash)
+            except ValueError:
+                raise ValueError(
+                    "Reticulum address.destination_hash must be hexadecimal"
+                ) from None
+            method = str(address.get("delivery_method") or "direct").strip().lower()
+            if method not in {"direct", "opportunistic", "propagated"}:
+                raise ValueError("unsupported Reticulum delivery method")
+            if not str(payload.get("text") or payload.get("message") or "").strip():
+                raise ValueError("Reticulum deliveries require payload.text")
         elif gateway.type == "webhook":
             if has_attachments:
                 raise ValueError("Webhook media deliveries are not supported yet")
@@ -345,6 +364,8 @@ class MessageHubService:
             return f"telegram:{value}"
         if gateway.type == "messenger":
             return f"messenger:{str(address['thread_id']).strip()}"
+        if gateway.type == "reticulum":
+            return f"reticulum:{str(address['destination_hash']).strip().lower()}"
         if gateway.type == "webhook":
             digest = hashlib.sha256(str(address["url"]).encode("utf-8")).hexdigest()[:32]
             return f"webhook:{digest}"

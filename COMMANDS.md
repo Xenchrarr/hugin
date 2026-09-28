@@ -119,6 +119,20 @@ tg/use 2
 
 ---
 
+### Reticulum Conversations
+
+| Command | Aliases | Description | Parameters | PIN |
+|---|---|---|---|---|
+| `rns/list` | `rns/convos` | List recent LXMF contacts | — | No |
+| `rns/send <num> <message>` | — | Send to a listed contact or raw delivery hash and set reply context | index or 32-character hash; text | No |
+| `rns/reply <message>` | `rns/r` | Reply to the active Reticulum contact | message text | No |
+| `rns/use <num\|hash>` | `rns/target` | Select the contact used by `rns/reply` | index or 32-character hash | No |
+
+`rns/reply` deliberately has no global `reply` alias because that alias remains
+assigned to Telegram. Reticulum messages are text-only in the first release.
+
+---
+
 ### Message Routes
 
 | Command | Aliases | Description | Parameters | PIN |

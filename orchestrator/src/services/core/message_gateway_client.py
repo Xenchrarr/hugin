@@ -20,6 +20,9 @@ TELEGRAM_RELAY_URL = os.environ.get(
 MESSENGER_RELAY_URL = os.environ.get(
     "MESSENGER_RELAY_URL", "http://messenger-relay:8081"
 ).rstrip("/")
+RETICULUM_RELAY_URL = os.environ.get(
+    "RETICULUM_RELAY_URL", "http://reticulum-relay:8082"
+).rstrip("/")
 SERVICE_KEY = os.environ.get("SERVICE_KEY", "")
 
 
@@ -48,6 +51,8 @@ class MessageGatewayClient:
             return self._send_telegram(delivery)
         if gateway_type == "messenger":
             return self._send_messenger(delivery)
+        if gateway_type == "reticulum":
+            return self._send_reticulum(delivery)
         if gateway_type == "webhook":
             return self._send_webhook(delivery)
         raise ValueError(f"Unsupported gateway type: {gateway_type}")
@@ -79,6 +84,15 @@ class MessageGatewayClient:
                 response = requests.get(f"{base_url}/health", timeout=(3, 10))
                 response.raise_for_status()
                 return True, ""
+
+            if gateway.type == "reticulum":
+                base_url = str(
+                    gateway.config.get("base_url") or RETICULUM_RELAY_URL
+                ).rstrip("/")
+                response = requests.get(f"{base_url}/health", timeout=(3, 10))
+                data = response.json() if response.content else {}
+                ready = response.status_code == 200 and bool(data.get("ready"))
+                return ready, "" if ready else str(data.get("error") or response.status_code)
         except Exception as exc:
             return False, str(exc)
         return None
@@ -192,6 +206,34 @@ class MessageGatewayClient:
         response = requests.post(
             f"{base_url}/api/messenger/send",
             json={"thread_id": thread_id, "text": text},
+            headers=self._headers(),
+            timeout=(5, 60),
+        )
+        response.raise_for_status()
+        data = response.json() if response.content else {}
+        return str(data.get("message_id") or "") or None
+
+    def _send_reticulum(self, delivery: MessageDelivery) -> str | None:
+        text = str(delivery.payload.get("text") or delivery.payload.get("message") or "").strip()
+        destination_hash = str(delivery.address.get("destination_hash") or "").strip().lower()
+        if not text:
+            raise ValueError("Reticulum delivery requires payload.text")
+        if not destination_hash:
+            raise ValueError("Reticulum delivery requires address.destination_hash")
+        base_url = str(
+            (delivery.gateway_config or {}).get("base_url") or RETICULUM_RELAY_URL
+        ).rstrip("/")
+        response = requests.post(
+            f"{base_url}/api/reticulum/send",
+            json={
+                "destination_hash": destination_hash,
+                "text": text,
+                "title": str(delivery.payload.get("title") or ""),
+                "delivery_method": str(
+                    delivery.address.get("delivery_method") or "direct"
+                ),
+                "delivery_token": delivery.dispatch_token,
+            },
             headers=self._headers(),
             timeout=(5, 60),
         )

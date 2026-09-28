@@ -31,7 +31,7 @@ _DELIVERY_STATUSES = {
     "cancelled",
 }
 _GATEWAY_KEY = re.compile(r"^[a-z0-9][a-z0-9-]{0,119}$")
-_GATEWAY_TYPES = {"sms", "telegram", "messenger", "webhook"}
+_GATEWAY_TYPES = {"sms", "telegram", "messenger", "reticulum", "webhook"}
 _BULK_DELIVERY_ACTIONS = {"acknowledge", "cancel", "release", "retry"}
 
 

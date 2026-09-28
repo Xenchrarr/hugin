@@ -69,6 +69,7 @@ state is kept under `MESSENGER_CONFIG_ROOT` for Portainer deployments.
 | **powershell-runner** | `xenchrarr/powershell-runner` | — | Executes PowerShell scripts on behalf of the orchestrator |
 | **telegram-relay** | `xenchrarr/telegram-relay` | 8080 | Telegram connector for the endpoint-and-route message router |
 | **messenger-relay** | `xenchrarr/messenger-relay` | 8081 (loopback) | Matrix adapter for the personal Messenger PoC |
+| **reticulum-relay** | `xenchrarr/reticulum-relay` | 4242 | Reticulum transport, LXMF propagation, NomadNet site, and Message Hub connector |
 | **file-server** | `nginx:alpine` | — | Serves shared log files from orchestrator job runs (internal only) |
 
 ### SMS resilience
@@ -107,6 +108,7 @@ Key variables to set:
 - **Telegram bot** — `TELEGRAM_API_KEY`, `ALLOWED_USER_IDS`
 - **Telegram connector** — `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_PHONE_NUMBER`, `DB_ENCRYPTION_KEY`; optionally `MESSAGE_RELAY_ENDPOINT_KEY`
 - **Messenger PoC** — follow `messenger_relay/README.md`, then set `MATRIX_USER_ID` and `MATRIX_ACCESS_TOKEN`
+- **Reticulum** — review `reticulum_relay/README.md`; the included defaults reproduce the RNode `/dev/ttyACM0` and TCP `4242` server configuration
 - **SMS** — register the sender's phone number on an orchestrator user
 - **Orchestrator** — `TEAMS_WEBHOOK_URL`, `GIT_USERNAME`, `GIT_PASSWORD`, `GIT_REPO_URLS`
 
@@ -144,3 +146,4 @@ docker compose up -d
 | `powershell_scripts` | PowerShell scripts managed by the runner |
 | `telegram_tdlib` | TDLib session data for telegram-relay |
 | `messenger_relay_data` | Matrix sync cursor, conversation map, and SMS reply contexts |
+| `reticulum_data` | Reticulum identity/config, LXMF propagation store, and relay state |

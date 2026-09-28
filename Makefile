@@ -28,6 +28,9 @@ TELEGRAM_RELAY_IMAGE = telegram-relay
 MESSENGER_RELAY_DIR   = messenger_relay
 MESSENGER_RELAY_IMAGE = messenger-relay
 
+RETICULUM_RELAY_DIR   = reticulum_relay
+RETICULUM_RELAY_IMAGE = reticulum-relay
+
 PRINTER_HUB_DIR      = printer-hub
 PRINTER_HUB_IMAGE    = printer-hub
 
@@ -64,6 +67,9 @@ build-telegram-relay:
 build-messenger-relay:
 	docker build --tag ${DOCKER_USERNAME}/${MESSENGER_RELAY_IMAGE} -f ${MESSENGER_RELAY_DIR}/Dockerfile .
 
+build-reticulum-relay:
+	docker build --tag ${DOCKER_USERNAME}/${RETICULUM_RELAY_IMAGE} -f ${RETICULUM_RELAY_DIR}/Dockerfile .
+
 build-printer-hub:
 	docker build --tag ${DOCKER_USERNAME}/${PRINTER_HUB_IMAGE} ${PRINTER_HUB_DIR}
 
@@ -94,10 +100,13 @@ push-telegram-relay:
 push-messenger-relay:
 	docker push ${DOCKER_USERNAME}/${MESSENGER_RELAY_IMAGE}
 
+push-reticulum-relay:
+	docker push ${DOCKER_USERNAME}/${RETICULUM_RELAY_IMAGE}
+
 push-printer-hub:
 	docker push ${DOCKER_USERNAME}/${PRINTER_HUB_IMAGE}
 
 # Build and push all
-build: build-hugin-core build-ecoflow-monitor build-overlia build-sms-bot build-orchestrator build-orchestrator-frontend build-powershell-runner build-telegram-relay build-messenger-relay build-printer-hub
+build: build-hugin-core build-ecoflow-monitor build-overlia build-sms-bot build-orchestrator build-orchestrator-frontend build-powershell-runner build-telegram-relay build-messenger-relay build-reticulum-relay build-printer-hub
 
-push: push-hugin-core push-ecoflow-monitor push-overlia push-sms-bot push-orchestrator push-orchestrator-frontend push-powershell-runner push-telegram-relay push-messenger-relay push-printer-hub
+push: push-hugin-core push-ecoflow-monitor push-overlia push-sms-bot push-orchestrator push-orchestrator-frontend push-powershell-runner push-telegram-relay push-messenger-relay push-reticulum-relay push-printer-hub

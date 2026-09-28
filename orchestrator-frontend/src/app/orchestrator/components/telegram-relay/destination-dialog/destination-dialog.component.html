@@ -30,6 +30,7 @@
                             <mat-select [(ngModel)]="endpoint.type">
                                 <mat-option value="telegram">Telegram</mat-option>
                                 <mat-option value="messenger">Messenger</mat-option>
+                                <mat-option value="reticulum">Reticulum</mat-option>
                                 <mat-option value="sms">SMS</mat-option>
                                 <mat-option value="webhook">Webhook</mat-option>
                             </mat-select>
@@ -62,6 +63,33 @@
                                 <mat-label>Target thread ID (optional)</mat-label>
                                 <input matInput [(ngModel)]="messengerThreadId" placeholder="1234567890123456">
                                 <mat-hint>Leave empty for the main source connector.</mat-hint>
+                            </mat-form-field>
+                        </td>
+                    </tr>
+                </ng-container>
+
+                <ng-container *ngIf="endpoint.type === 'reticulum'">
+                    <tr>
+                        <th>Destination</th>
+                        <td>
+                            <mat-form-field class="wide-field">
+                                <mat-label>LXMF destination hash (optional)</mat-label>
+                                <input matInput [(ngModel)]="reticulumDestinationHash"
+                                       maxlength="32" placeholder="0123456789abcdef0123456789abcdef">
+                                <mat-hint>Leave empty for Hugin's source connector.</mat-hint>
+                            </mat-form-field>
+                        </td>
+                    </tr>
+                    <tr *ngIf="reticulumDestinationHash">
+                        <th>Delivery</th>
+                        <td>
+                            <mat-form-field>
+                                <mat-label>Method</mat-label>
+                                <mat-select [(ngModel)]="reticulumDeliveryMethod">
+                                    <mat-option value="direct">Direct</mat-option>
+                                    <mat-option value="opportunistic">Opportunistic</mat-option>
+                                    <mat-option value="propagated">Propagation node</mat-option>
+                                </mat-select>
                             </mat-form-field>
                         </td>
                     </tr>
