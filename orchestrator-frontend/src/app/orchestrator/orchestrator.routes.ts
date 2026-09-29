@@ -11,6 +11,7 @@ import {CalendarComponent} from './components/calendar/calendar.component';
 import {MessageHubComponent} from './components/message-hub/message-hub.component';
 import {adminGuard} from '../auth/admin.guard';
 import {AlarmsComponent} from './components/alarms/alarms.component';
+import {ReticulumChatComponent} from './components/reticulum-chat/reticulum-chat.component';
 
 export const routes: Routes = [
     {
@@ -49,6 +50,10 @@ export const routes: Routes = [
     {
         path: 'alarms',
         component: AlarmsComponent,
+    },
+    {
+        path: 'reticulum-chat',
+        component: ReticulumChatComponent,
     },
     {
         path: 'telegram-relay',

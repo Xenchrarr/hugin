@@ -48,8 +48,8 @@ class SmsAdapter(AbstractDestination):
         if chat_type == "private":
             label = sender_name or chat_title
             if label:
-                return f"{label}: {text}"
-            return text
+                return f"tg: {label}: {text}"
+            return f"tg: {text}"
 
         # Groups: show chat name and, when available, who sent it
         if chat_title and sender_name:
@@ -57,12 +57,12 @@ class SmsAdapter(AbstractDestination):
             # treats the escape byte used by GSM-7 extension characters such
             # as "|" as cancellation of AT+CMGS, forcing the entire message to
             # UCS-2 and reducing one-part capacity from 160 to 70 characters.
-            return f"{chat_title} / {sender_name}: {text}"
+            return f"tg: {chat_title} / {sender_name}: {text}"
         if chat_title:
-            return f"{chat_title}: {text}"
+            return f"tg: {chat_title}: {text}"
         if sender_name:
-            return f"{sender_name}: {text}"
-        return text
+            return f"tg: {sender_name}: {text}"
+        return f"tg: {text}"
 
     async def send(self, payload: dict) -> None:
         if not self._phone:

@@ -1,4 +1,4 @@
-import {Component, Inject} from '@angular/core';
+import {Component, Inject, OnInit} from '@angular/core';
 import {
     MAT_DIALOG_DATA,
     MatDialogActions,
@@ -14,9 +14,11 @@ import {MatFormField, MatHint, MatLabel} from '@angular/material/form-field';
 import {MatInput} from '@angular/material/input';
 import {MatOption, MatSelect} from '@angular/material/select';
 import {FormsModule} from '@angular/forms';
-import {NgIf} from '@angular/common';
+import {NgFor, NgIf} from '@angular/common';
 import {MessageRelayEndpoint} from '../../../models/telegram-relay.model';
 import {TelegramRelayService} from '../../../services/telegram-relay.service';
+import {ReticulumAnnounce} from '../../../models/reticulum-chat.model';
+import {ReticulumChatService} from '../../../services/reticulum-chat.service';
 
 @Component({
     selector: 'app-destination-dialog',
@@ -38,12 +40,14 @@ import {TelegramRelayService} from '../../../services/telegram-relay.service';
         MatOption,
         FormsModule,
         NgIf,
+        NgFor,
     ],
     templateUrl: './destination-dialog.component.html',
 })
-export class DestinationDialogComponent {
+export class DestinationDialogComponent implements OnInit {
     endpoint: MessageRelayEndpoint;
     isNew = false;
+    reticulumPeers: ReticulumAnnounce[] = [];
 
     get webhookUrl(): string { return this.endpoint.config['url'] ?? ''; }
     set webhookUrl(v: string) { this.endpoint.config['url'] = v; }
@@ -89,6 +93,7 @@ export class DestinationDialogComponent {
     constructor(
         @Inject(MAT_DIALOG_DATA) public data: MessageRelayEndpoint | null,
         private relayService: TelegramRelayService,
+        private reticulumChat: ReticulumChatService,
         private dialogRef: MatDialogRef<DestinationDialogComponent>,
     ) {
         if (!data) {
@@ -104,6 +109,22 @@ export class DestinationDialogComponent {
             this.isNew = true;
         } else {
             this.endpoint = {...data, config: {...(data.config || {})}};
+        }
+    }
+
+    ngOnInit(): void {
+        this.reticulumChat.announces(200, 'lxmf.delivery').subscribe({
+            next: peers => this.reticulumPeers = peers,
+            error: () => undefined,
+        });
+    }
+
+    selectReticulumPeer(destinationHash: string): void {
+        this.reticulumDestinationHash = destinationHash;
+        const peer = this.reticulumPeers.find(item => item.destination_hash === destinationHash);
+        if (this.isNew && !this.endpoint.name.trim() && peer?.display_name) {
+            this.endpoint.name = peer.display_name;
+            this.normalizeKey();
         }
     }
 

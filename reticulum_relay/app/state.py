@@ -54,6 +54,19 @@ class StateStore:
         contacts.sort(key=lambda item: item.get("timestamp", 0), reverse=True)
         return [{"index": index, **item} for index, item in enumerate(contacts[:limit], 1)]
 
+    def remember_contact_name(self, destination_hash: str, display_name: str) -> None:
+        """Apply newly learned announce metadata without creating an empty contact."""
+        with self._lock:
+            existing = self._data["contacts"].get(destination_hash)
+            if (
+                not existing
+                or not display_name
+                or existing.get("display_name") == display_name
+            ):
+                return
+            existing["display_name"] = display_name
+            self._save()
+
     def set_context(self, phone: str, destination_hash: str) -> None:
         with self._lock:
             self._data["contexts"][phone] = destination_hash
@@ -85,4 +98,3 @@ class StateStore:
                 oldest = next(iter(self._data["delivery_tokens"]))
                 self._data["delivery_tokens"].pop(oldest, None)
             self._save()
-

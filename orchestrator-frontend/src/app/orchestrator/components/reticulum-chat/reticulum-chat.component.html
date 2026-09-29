@@ -1,0 +1,144 @@
+<section class="chat-page">
+    <header class="chat-header">
+        <div>
+            <h1>Reticulum chat</h1>
+            <p>Private LXMF messages through Hugin's Reticulum identity.</p>
+        </div>
+        <div class="node-status" [class.online]="status?.ready">
+            <span class="status-dot"></span>
+            {{ status?.ready ? 'Node online' : 'Node unavailable' }}
+        </div>
+    </header>
+
+    @if (status?.delivery_hash) {
+        <div class="identity-bar">
+            <span>Your LXMF address</span>
+            <code>{{ status?.delivery_hash }}</code>
+        </div>
+    }
+
+    @if (error) {
+        <div class="error-banner">
+            <span>{{ error }}</span>
+            <button mat-icon-button aria-label="Dismiss error" (click)="error = ''">
+                <mat-icon>close</mat-icon>
+            </button>
+        </div>
+    }
+
+    <nav class="feature-tabs" aria-label="Reticulum features">
+        <button mat-button [class.active]="view === 'chat'" (click)="view = 'chat'">
+            <mat-icon>forum</mat-icon> Chat
+        </button>
+        <button mat-button [class.active]="view === 'announces'" (click)="view = 'announces'">
+            <mat-icon>cell_tower</mat-icon> Announce stream
+        </button>
+    </nav>
+
+    @if (view === 'chat') {
+    <div class="chat-shell">
+        <aside class="conversation-panel">
+            <form class="new-chat" (ngSubmit)="startConversation()">
+                <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                    <mat-label>Destination hash</mat-label>
+                    <input matInput name="destinationHash" [(ngModel)]="destinationHash"
+                           autocomplete="off" maxlength="32">
+                    <button mat-icon-button matSuffix type="submit" aria-label="Start conversation">
+                        <mat-icon>add_comment</mat-icon>
+                    </button>
+                </mat-form-field>
+            </form>
+
+            <div class="conversation-list">
+                @if (loading) {
+                    <p class="empty-state">Loading conversations…</p>
+                } @else if (!conversations.length) {
+                    <p class="empty-state">No messages yet. Enter an LXMF destination above.</p>
+                }
+                @for (conversation of conversations; track trackConversation($index, conversation)) {
+                    <button class="conversation" type="button"
+                            [class.active]="activeHash === conversation.destination_hash"
+                            (click)="selectConversation(conversation)">
+                        <span class="avatar">{{ conversation.display_name.slice(0, 1).toUpperCase() }}</span>
+                        <span class="conversation-copy">
+                            <span class="conversation-topline">
+                                <strong>{{ conversation.display_name }}</strong>
+                                <time>{{ timestamp(conversation.timestamp) | date:'shortTime' }}</time>
+                            </span>
+                            <span class="conversation-preview">{{ conversation.last_text || 'LXMF message' }}</span>
+                            <code>{{ conversation.destination_hash }}</code>
+                        </span>
+                        @if (conversation.unread_count) {
+                            <span class="unread">{{ conversation.unread_count }}</span>
+                        }
+                    </button>
+                }
+            </div>
+        </aside>
+
+        <main class="thread-panel">
+            @if (!activeHash) {
+                <div class="thread-empty">
+                    <mat-icon>forum</mat-icon>
+                    <h2>Start a conversation</h2>
+                    <p>Paste a peer's 32-character LXMF destination hash.</p>
+                </div>
+            } @else {
+                <header class="thread-header">
+                    <div>
+                        <strong>{{ activeName || activeHash.slice(0, 12) }}</strong>
+                        <code>{{ activeHash }}</code>
+                    </div>
+                    <span>LXMF</span>
+                </header>
+
+                <div class="message-list" #messageList>
+                    @if (!messages.length) {
+                        <p class="empty-state">No messages in this conversation yet.</p>
+                    }
+                    @for (message of messages; track trackMessage($index, message)) {
+                        <article class="message-row" [class.outbound]="message.direction === 'outbound'">
+                            <div class="bubble">
+                                @if (message.title) { <strong class="message-title">{{ message.title }}</strong> }
+                                <p>{{ message.text || message.title }}</p>
+                                <footer>
+                                    <time>{{ timestamp(message.timestamp) | date:'short' }}</time>
+                                    @if (message.direction === 'outbound') {
+                                        <span class="delivery-state" [attr.data-state]="message.state">
+                                            {{ message.state }}
+                                        </span>
+                                    }
+                                </footer>
+                            </div>
+                        </article>
+                    }
+                </div>
+
+                <form class="composer" (ngSubmit)="send()">
+                    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="method-field">
+                        <mat-label>Delivery</mat-label>
+                        <mat-select name="deliveryMethod" [(ngModel)]="deliveryMethod">
+                            <mat-option value="direct">Direct</mat-option>
+                            <mat-option value="opportunistic">Opportunistic</mat-option>
+                            <mat-option value="propagated">Propagated</mat-option>
+                        </mat-select>
+                    </mat-form-field>
+                    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="message-field">
+                        <mat-label>Message</mat-label>
+                        <textarea matInput name="draft" [(ngModel)]="draft" rows="2"
+                                  maxlength="16384" (keydown.enter)="sendOnEnter($event)"></textarea>
+                    </mat-form-field>
+                    <button mat-flat-button type="submit" [disabled]="!draft.trim() || sending || !status?.ready">
+                        <mat-icon>send</mat-icon>
+                        {{ sending ? 'Sending…' : 'Send' }}
+                    </button>
+                </form>
+            }
+        </main>
+    </div>
+    } @else {
+        <app-reticulum-announce-stream
+            [status]="status"
+            (messageDestination)="openFromAnnounce($event)" />
+    }
+</section>

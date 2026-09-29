@@ -6,6 +6,7 @@ import threading
 import time
 
 from app.api import create_app
+from app.chat import ChatStore
 from app.config import Config
 from app.node import ReticulumNode
 from app.routing import RouteDispatcher
@@ -22,11 +23,12 @@ def main() -> None:
     config = Config.from_env()
     config.ensure_directories()
     state = StateStore(config.state_path)
+    chat = ChatStore(config.chat_db_path)
     dispatcher = RouteDispatcher(
         config.orchestrator_url, config.service_key, config.endpoint_key, state
     )
-    node = ReticulumNode(config, state, dispatcher)
-    app = create_app(node, state, dispatcher, config.service_key)
+    node = ReticulumNode(config, state, dispatcher, chat)
+    app = create_app(node, state, dispatcher, config.service_key, chat)
 
     api_thread = threading.Thread(
         target=lambda: app.run(
@@ -65,4 +67,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

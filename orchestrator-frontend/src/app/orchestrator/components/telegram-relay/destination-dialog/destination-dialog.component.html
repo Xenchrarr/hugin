@@ -69,6 +69,22 @@
                 </ng-container>
 
                 <ng-container *ngIf="endpoint.type === 'reticulum'">
+                    <tr *ngIf="reticulumPeers.length">
+                        <th>Known peer</th>
+                        <td>
+                            <mat-form-field class="wide-field">
+                                <mat-label>Select an announced LXMF peer</mat-label>
+                                <mat-select [ngModel]="reticulumDestinationHash"
+                                            (selectionChange)="selectReticulumPeer($event.value)">
+                                    <mat-option *ngFor="let peer of reticulumPeers"
+                                                [value]="peer.destination_hash">
+                                        {{ peer.display_name || peer.destination_hash.slice(0, 12) }}
+                                        — {{ peer.destination_hash.slice(0, 8) }}…
+                                    </mat-option>
+                                </mat-select>
+                            </mat-form-field>
+                        </td>
+                    </tr>
                     <tr>
                         <th>Destination</th>
                         <td>

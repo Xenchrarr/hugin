@@ -1,0 +1,77 @@
+<section class="announce-page">
+    <header class="announce-toolbar">
+        <div>
+            <h2>Announce stream</h2>
+            <p>Destinations heard by this Reticulum node, newest first.</p>
+        </div>
+        <div class="announce-controls">
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                <mat-label>Show</mat-label>
+                <mat-select [(ngModel)]="aspect" (selectionChange)="load()">
+                    <mat-option value="">All announces</mat-option>
+                    <mat-option value="lxmf.delivery">LXMF peers</mat-option>
+                    <mat-option value="nomadnetwork.node">NomadNet sites</mat-option>
+                    <mat-option value="lxmf.propagation">Propagation nodes</mat-option>
+                    <mat-option value="unknown">Other</mat-option>
+                </mat-select>
+            </mat-form-field>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                <mat-label>Announce</mat-label>
+                <mat-select [(ngModel)]="announceTarget">
+                    <mat-option value="delivery">LXMF identity</mat-option>
+                    <mat-option value="site">NomadNet site</mat-option>
+                    <mat-option value="propagation" [disabled]="!status?.propagation_enabled">
+                        Propagation node
+                    </mat-option>
+                    <mat-option value="all">All Hugin destinations</mat-option>
+                </mat-select>
+            </mat-form-field>
+            <button mat-flat-button (click)="sendAnnounce()"
+                    [disabled]="!status?.ready || announcing">
+                <mat-icon>cell_tower</mat-icon>
+                {{ announcing ? 'Announcing…' : 'Announce now' }}
+            </button>
+        </div>
+    </header>
+
+    @if (error) { <p class="banner error">{{ error }}</p> }
+    @if (notice) { <p class="banner notice">{{ notice }}</p> }
+
+    @if (loading) {
+        <p class="empty">Listening for announces…</p>
+    } @else if (!announces.length) {
+        <div class="empty">
+            <mat-icon>cell_tower</mat-icon>
+            <strong>No announces heard yet</strong>
+            <span>New Reticulum announces will appear here automatically.</span>
+        </div>
+    } @else {
+        <div class="announce-list">
+            @for (item of announces; track trackAnnounce($index, item)) {
+                <article class="announce-item">
+                    <mat-icon class="announce-icon">{{ icon(item.aspect) }}</mat-icon>
+                    <div class="announce-copy">
+                        <div class="announce-title">
+                            <strong>{{ label(item) }}</strong>
+                            <span class="aspect">{{ aspectLabel(item.aspect) }}</span>
+                        </div>
+                        <code>{{ item.destination_hash }}</code>
+                        @if (item.app_data_text && item.app_data_text !== item.display_name) {
+                            <p>{{ item.app_data_text }}</p>
+                        }
+                    </div>
+                    <div class="announce-meta">
+                        <time>{{ timestamp(item.received_at) | date:'short' }}</time>
+                        <span>{{ item.hops === null ? 'Unknown route' : item.hops + ' hop' + (item.hops === 1 ? '' : 's') }}</span>
+                        <span>Seen {{ item.seen_count }}×</span>
+                        @if (item.aspect === 'lxmf.delivery') {
+                            <button mat-button (click)="messageDestination.emit(item)">
+                                Message
+                            </button>
+                        }
+                    </div>
+                </article>
+            }
+        </div>
+    }
+</section>

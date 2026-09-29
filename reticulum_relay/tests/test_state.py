@@ -12,16 +12,16 @@ class StateStoreTests(unittest.TestCase):
             store = StateStore(path)
             destination = "ab" * 16
             store.remember_contact(destination, "Alice", "hello")
+            store.remember_contact_name(destination, "Alice Radio")
             store.set_context("+47123", destination)
             store.record_delivery("token-1", "message-1")
 
             reopened = StateStore(path)
 
-            self.assertEqual("Alice", reopened.contacts()[0]["display_name"])
+            self.assertEqual("Alice Radio", reopened.contacts()[0]["display_name"])
             self.assertEqual(destination, reopened.get_context("+47123")["destination_hash"])
             self.assertEqual("message-1", reopened.delivery_result("token-1"))
 
 
 if __name__ == "__main__":
     unittest.main()
-

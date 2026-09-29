@@ -147,7 +147,7 @@ class RouteDispatcher:
                 "address": {"phone": phone},
                 "recovery_policy": target.config.get("recovery_policy", "digest_hold"),
             }
-            payload = {"text": self._display_text(transformed)}
+            payload = {"text": f"fb: {self._display_text(transformed)}"}
         elif target.endpoint_type == "telegram":
             chat_id = target.config.get("chat_id")
             if chat_id is None:

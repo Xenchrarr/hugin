@@ -10,6 +10,7 @@ every start. Runtime state remains in the `reticulum_data` Docker volume:
 - `/data/identity` — the stable identity used by LXMF, propagation and pages
 - `/data/lxmf` — propagation messages, peers, tickets and ratchets
 - `/data/state` — recent contacts, SMS reply contexts and delivery receipts
+- `/data/chat/chat.sqlite3` — durable LXMF conversation and delivery history
 
 The RNode defaults use coding rate `5` (LoRa 4/5). Reticulum requires an
 explicit coding rate from `5` through `8`; set `RETICULUM_RNODE_CODING_RATE`
@@ -61,3 +62,27 @@ usable outbound propagation hop for the local LXMF client.
 
 Text and titles are supported initially. Arbitrary LXMF fields and attachments
 are deliberately not bridged to other transports yet.
+
+## Hugin chat
+
+Signed-in Hugin users can open **Reticulum Chat** to send and receive LXMF
+messages from the node's shared identity. The browser talks to the orchestrator
+at `/api/reticulum-chat`; the orchestrator authenticates the user and forwards
+requests to this service with `SERVICE_KEY`.
+
+Conversation history, unread counts, transport metadata and outbound delivery
+states survive container restarts in the `reticulum_data` volume. The first UI
+supports text messages and direct, opportunistic or propagated delivery; LXMF
+titles received from other clients are retained and displayed.
+
+The **Announce stream** tab records the latest announce for up to 5,000
+destinations, including hop count and decoded names for LXMF peers, propagation
+nodes and NomadNet sites. It also allows signed-in users to announce Hugin's
+LXMF delivery identity, NomadNet site, propagation node, or all enabled
+destinations. Manual repeats are limited to one per destination every ten
+seconds; Reticulum's own interface announce controls still apply.
+
+Announced LXMF display names are reused throughout Hugin. Conversation lists,
+chat headers, SMS relay contacts, inbound Message Hub source labels and the
+Message Routes Reticulum destination picker show the name when one is known;
+the destination hash remains visible and is still used as the stable address.

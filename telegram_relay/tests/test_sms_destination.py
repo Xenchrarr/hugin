@@ -58,7 +58,7 @@ class SmsDestinationTests(unittest.TestCase):
         self.assertEqual("-1001:99", body["external_id"])
         self.assertEqual("digest_hold", body["deliveries"][0]["recovery_policy"])
         self.assertEqual(17, body["deliveries"][0]["target_endpoint_id"])
-        self.assertEqual("Family / Alice: Hello", body["payload"]["text"])
+        self.assertEqual("tg: Family / Alice: Hello", body["payload"]["text"])
 
     def test_submits_telegram_photo_as_mms_attachment(self):
         adapter = SmsAdapter("17", {"phone": "+4712345678"})
@@ -80,7 +80,7 @@ class SmsDestinationTests(unittest.TestCase):
 
         _, body, _ = client.calls[0]
         self.assertEqual("mms", body["kind"])
-        self.assertEqual("Alice: Cabin", body["payload"]["text"])
+        self.assertEqual("tg: Alice: Cabin", body["payload"]["text"])
         self.assertEqual("image/jpeg", body["attachments"][0]["content_type"])
         self.assertEqual("telegram-99.jpg", body["attachments"][0]["filename"])
         self.assertEqual(image, base64.b64decode(body["attachments"][0]["data_base64"]))
@@ -93,8 +93,13 @@ class SmsDestinationTests(unittest.TestCase):
             "text": "a" * 80,
         })
 
-        self.assertEqual("Family / Alice: " + "a" * 80, body)
+        self.assertEqual("tg: Family / Alice: " + "a" * 80, body)
         self.assertNotIn("|", body)
+
+    def test_source_prefix_is_present_without_chat_labels(self):
+        body = SmsAdapter._format_message({"text": "Hello"})
+
+        self.assertEqual("tg: Hello", body)
 
 if __name__ == "__main__":
     unittest.main()

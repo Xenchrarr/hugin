@@ -23,6 +23,7 @@ class Config:
     identity_path: Path
     lxmf_storage_path: Path
     state_path: Path
+    chat_db_path: Path
     pages_path: Path
     orchestrator_url: str
     service_key: str
@@ -61,6 +62,7 @@ class Config:
             identity_path=data_path / "identity",
             lxmf_storage_path=data_path / "lxmf",
             state_path=data_path / "state" / "relay.json",
+            chat_db_path=data_path / "chat" / "chat.sqlite3",
             pages_path=Path(os.environ.get("RETICULUM_PAGES_PATH", str(data_path / "pages"))),
             orchestrator_url=os.environ.get(
                 "ORCHESTRATOR_API_URL", "http://orchestrator:6000"
@@ -100,6 +102,7 @@ class Config:
             self.rns_config_path,
             self.lxmf_storage_path,
             self.state_path.parent,
+            self.chat_db_path.parent,
             self.pages_path,
         ):
             path.mkdir(parents=True, exist_ok=True)

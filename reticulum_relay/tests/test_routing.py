@@ -1,7 +1,8 @@
 import unittest
+from unittest.mock import Mock, patch
 
 from app.normalizer import NormalizedMessage
-from app.routing import compile_routes, matches_condition
+from app.routing import RouteDispatcher, Target, compile_routes, matches_condition
 
 
 class RoutingTests(unittest.TestCase):
@@ -61,7 +62,27 @@ class RoutingTests(unittest.TestCase):
             )
         )
 
+    @patch("app.routing.requests.post")
+    def test_sms_payload_includes_reticulum_source_prefix(self, post):
+        post.return_value.raise_for_status.return_value = None
+        target = Target(
+            endpoint_id=2,
+            endpoint_key="phone",
+            endpoint_type="sms",
+            config={"phone": "+47"},
+            transform={},
+            route_id=9,
+        )
+        dispatcher = RouteDispatcher.__new__(RouteDispatcher)
+        dispatcher._base = "http://orchestrator:6000"
+        dispatcher._headers = {}
+        dispatcher._state = Mock()
+
+        dispatcher._submit(self.message, target)
+
+        body = post.call_args.kwargs["json"]
+        self.assertEqual("rns: Alice: Cabin alarm", body["payload"]["text"])
+
 
 if __name__ == "__main__":
     unittest.main()
-
