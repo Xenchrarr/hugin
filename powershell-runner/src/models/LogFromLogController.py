@@ -2,11 +2,13 @@
 
 class LogFromLogController:
     def __init__(self,
-                 job_run_id: int,
+                 job_run_id: str,
                  log_text: str,
                  severity: str,
-                 stack_trace: str = ''):
+                 stack_trace: str = '',
+                 step_run_id=None):
         self.job_run_id = job_run_id
+        self.step_run_id = step_run_id
         self.log_text = log_text
         self.severity = severity
         self.stack_trace = stack_trace
@@ -17,12 +19,14 @@ class LogFromLogController:
             obj.get("job_run_id"),
             obj.get("log_text"),
             obj.get("severity"),
-            obj.get("stack_trace")
+            obj.get("stack_trace"),
+            obj.get("step_run_id")
         )
 
     def to_dict(self):
         result = {}
         result["job_run_id"] = self.job_run_id
+        result["step_run_id"] = self.step_run_id
         result["log_text"] = self.log_text
         result["severity"] = self.severity
         result["stack_trace"] = self.stack_trace

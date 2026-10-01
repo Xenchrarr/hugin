@@ -5,9 +5,7 @@ import { ScriptRunnerComponent } from '../jobs/script-runner/script-runner.compo
     selector: 'app-scripts-page',
     standalone: true,
     imports: [ScriptRunnerComponent],
-    template: `
-        <h1>Scripts</h1>
-        <app-script-runner></app-script-runner>
-    `,
+    templateUrl: './scripts-page.component.html',
+    styleUrl: './scripts-page.component.scss',
 })
 export class ScriptsPageComponent {}

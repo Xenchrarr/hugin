@@ -23,7 +23,7 @@ import {TimeService} from "../../../services/time.service";
 import {NgClass} from "@angular/common";
 import {FormsModule} from "@angular/forms";
 import {MatCheckbox} from "@angular/material/checkbox";
-import {Subscription, interval} from "rxjs";
+import {Subscription, finalize, interval} from "rxjs";
 import {JobRunService} from "../../../services/job-run.service";
 import {MatSnackBar} from "@angular/material/snack-bar";
 import {NotificationComponent} from "../../notification/notification.component";
@@ -66,6 +66,7 @@ export class JobRunLogComponent implements OnInit, OnDestroy, AfterViewChecked {
     reason: { selected: string | null; freeText: string | null } | null = null;
     private pollSubscription?: Subscription;
     private shouldScroll = false;
+    private loadingLogs = false;
     private _snackBar = inject(MatSnackBar);
 
     @ViewChild('scrollContainer') private scrollContainer!: ElementRef<HTMLElement>;
@@ -155,11 +156,14 @@ export class JobRunLogComponent implements OnInit, OnDestroy, AfterViewChecked {
     }
 
     reload_logs() {
-        this.jobLogService.getLogsForJob(this.data.id).subscribe(log => {
-            if (log.length !== this.jobLogs.length) {
+        if (this.loadingLogs) return;
+        this.loadingLogs = true;
+        const cursor = this.jobLogs.length ? this.jobLogs[this.jobLogs.length - 1].id : undefined;
+        this.jobLogService.getLogsForJob(this.data.id, cursor).pipe(finalize(() => this.loadingLogs = false)).subscribe(log => {
+            if (log.length) {
                 this.shouldScroll = true;
+                this.jobLogs = [...this.jobLogs, ...log];
             }
-            this.jobLogs = log;
         });
     }
 

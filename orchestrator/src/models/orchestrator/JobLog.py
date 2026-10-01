@@ -19,6 +19,7 @@ class JobLog:
     created_at: str
     message: str
     stack_trace: Optional[str] = None
+    step_run_id: Optional[str] = None
 
     def to_dict(self):
         return {
@@ -28,6 +29,7 @@ class JobLog:
             "created_at": self.created_at,
             "message": self.message,
             "stack_trace": self.stack_trace,
+            "step_run_id": str(self.step_run_id) if self.step_run_id else None,
         }
 
     @staticmethod
@@ -39,8 +41,9 @@ class JobLog:
         return JobLog(
             id=row[0],
             job_run_id=row[1],
-            log_level=LogLevel(row[2]),
-            created_at=row[3],
-            message=row[4],
-            stack_trace=row[5],
+            log_level=LogLevel(row[3]),
+            created_at=row[4],
+            message=row[5],
+            stack_trace=row[6],
+            step_run_id=row[2],
         )

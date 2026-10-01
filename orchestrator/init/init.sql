@@ -2,7 +2,7 @@ CREATE TABLE jobs (
                       id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
                       name VARCHAR(200),
                       enabled SMALLINT,
-                      job_type VARCHAR(40),
+                      job_type VARCHAR(120),
                       hour SMALLINT,
                       minute SMALLINT,
                       created TIMESTAMP,
@@ -11,7 +11,11 @@ CREATE TABLE jobs (
                       param VARCHAR(2000),
                       weekday VARCHAR(10),
                       description VARCHAR(2000),
-                      grouping_value VARCHAR(100)
+                      grouping_value VARCHAR(100),
+                      max_concurrent SMALLINT NOT NULL DEFAULT 1 CHECK (max_concurrent > 0),
+                      workflow_input JSONB NOT NULL DEFAULT '{}'::jsonb,
+                      run_at TIMESTAMPTZ,
+                      once_status VARCHAR(20)
 );
 
 CREATE TABLE job_runs (
@@ -20,11 +24,15 @@ CREATE TABLE job_runs (
                           start_time TIMESTAMP,
                           end_time TIMESTAMP,
                           status VARCHAR(50),
-                          job_type VARCHAR(100),
+                          job_type VARCHAR(120),
                           result VARCHAR(2000),
                           job_id BIGINT,
                           parameter VARCHAR(2000),
-                          run_by VARCHAR(255)
+                          run_by VARCHAR(255),
+                          workflow_version INTEGER,
+                          workflow_input JSONB NOT NULL DEFAULT '{}'::jsonb,
+                          workflow_definition JSONB NOT NULL DEFAULT '{}'::jsonb,
+                          last_activity_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE job_logs (
@@ -38,6 +46,41 @@ CREATE TABLE job_logs (
 
 CREATE INDEX job_logs_idx1
     ON job_logs (job_run_id);
+
+CREATE TABLE workflow_step_runs (
+    id UUID PRIMARY KEY,
+    job_run_id UUID NOT NULL REFERENCES job_runs(id) ON DELETE CASCADE,
+    step_key VARCHAR(64) NOT NULL,
+    step_type VARCHAR(120) NOT NULL,
+    attempt INTEGER NOT NULL DEFAULT 1 CHECK (attempt > 0),
+    status VARCHAR(50) NOT NULL,
+    resolved_input JSONB NOT NULL DEFAULT '{}'::jsonb,
+    output JSONB NOT NULL DEFAULT '{}'::jsonb,
+    error JSONB NOT NULL DEFAULT '{}'::jsonb,
+    summary TEXT NOT NULL DEFAULT '',
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    heartbeat_at TIMESTAMPTZ,
+    UNIQUE (job_run_id, step_key, attempt),
+    UNIQUE (job_run_id, id)
+);
+
+ALTER TABLE job_logs ADD COLUMN step_run_id UUID;
+ALTER TABLE job_logs ADD CONSTRAINT job_logs_workflow_step_run_fk
+    FOREIGN KEY (job_run_id, step_run_id)
+    REFERENCES workflow_step_runs (job_run_id, id) ON DELETE CASCADE;
+
+CREATE TABLE job_run_files (
+    id BIGSERIAL PRIMARY KEY,
+    job_run_id UUID NOT NULL REFERENCES job_runs(id) ON DELETE CASCADE,
+    step_run_id UUID,
+    original_filename VARCHAR(500) NOT NULL,
+    storage_path VARCHAR(1000) NOT NULL,
+    download_url VARCHAR(1000) NOT NULL,
+    uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT job_run_files_step_fk FOREIGN KEY (job_run_id, step_run_id)
+        REFERENCES workflow_step_runs (job_run_id, id) ON DELETE CASCADE
+);
 
 CREATE TABLE request_log (
                              id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

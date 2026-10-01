@@ -1,7 +1,9 @@
 from datetime import datetime
 import logging
+import os
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.executors.pool import ThreadPoolExecutor as APThreadPoolExecutor
 
 log = logging.getLogger(__name__)
 
@@ -17,6 +19,11 @@ import src.jobs  # noqa: F401 — imported for side-effect: registers @job_type 
 
 
 def get_job_func(job: Job, job_run_id=None):
+    from src.services.workflows.workflow_service import run_workflow_job
+    return lambda: run_workflow_job(job, job_run_id=job_run_id)
+
+
+def _legacy_get_job_func(job: Job, job_run_id=None):
     from src.services.core.job_service import run_job
     job_function = jobs_registry.get(job.job_type)
     if job_function is None:
@@ -30,6 +37,8 @@ def get_trigger(job: Job):
     if job.trigger == 'interval':
         return 'interval'
     if job.trigger == 'once':
+        return 'date'
+    if job.trigger == 'once_at':
         return 'date'
     if job.trigger == 'weekly':
         return 'cron'
@@ -50,6 +59,9 @@ class JobSchedulerService:
             cls._instance.scheduler = BackgroundScheduler(
                 daemon=True,
                 timezone=_SCHEDULER_TZ,
+                executors={'default': APThreadPoolExecutor(
+                    max_workers=max(1, int(os.environ.get('JOB_WORKER_THREADS', '20')))
+                )},
             )
         return cls._instance
 
@@ -135,7 +147,22 @@ class JobSchedulerService:
         log.info("Registered stale job reaper (runs every 5 minutes)")
 
     def add_job(self, job: Job):
-        if not job.enabled:
+        if not job.enabled or job.trigger == 'once':
+            return
+
+        if job.trigger == 'once_at':
+            if job.once_status != 'pending' or job.run_at is None:
+                return
+            self.scheduler.add_job(
+                self._run_scheduled_once,
+                'date',
+                run_date=max(job.run_at, datetime.now(_SCHEDULER_TZ)),
+                args=[job.id, job.run_at],
+                id=str(job.id),
+                name=job.name,
+                replace_existing=True,
+                misfire_grace_time=None,
+            )
             return
 
         job_func = get_job_func(job)
@@ -154,6 +181,7 @@ class JobSchedulerService:
                 minutes=job.minute,
                 id=str(job.id),
                 replace_existing=True,
+                max_instances=job.max_concurrent,
             )
         elif job.trigger == 'daily':
             self.scheduler.add_job(
@@ -163,6 +191,7 @@ class JobSchedulerService:
                 minute=job.minute,
                 id=str(job.id),
                 replace_existing=True,
+                max_instances=job.max_concurrent,
             )
         elif job.trigger == 'weekly':
             self.scheduler.add_job(
@@ -173,7 +202,28 @@ class JobSchedulerService:
                 minute=job.minute,
                 id=str(job.id),
                 replace_existing=True,
+                max_instances=job.max_concurrent,
             )
+
+    def _run_scheduled_once(self, job_id: int, run_at):
+        storage = JobStorage()
+        claimed = None
+        try:
+            grace = max(1, int(os.environ.get('JOB_ONCE_GRACE_SECONDS', '300')))
+            claimed = storage.claim_one_time_job(job_id, run_at, grace)
+            if claimed is None or claimed.once_status == 'missed':
+                return
+            if self.check_if_job_is_running(claimed):
+                raise RuntimeError('Maximum concurrent executions already reached')
+            get_job_func(claimed)()
+        except Exception:
+            JobDb.instance().rollback()
+            if claimed is not None:
+                storage.fail_one_time_job(claimed)
+            log.exception('One-time job %s could not execute', job_id)
+            raise
+        finally:
+            JobDb.instance().close_connection()
 
     def add_job_for_running_once(self, job: Job, job_run_id=None):
         if not self.scheduler.running:
@@ -181,7 +231,7 @@ class JobSchedulerService:
             raise Exception('Job scheduler service not running')
 
         job_func = get_job_func(job, job_run_id=job_run_id)
-        job_id = f"{job.id}_once"
+        job_id = f"{job.id}_once_{job_run_id}"
 
         log.info("Adding job %s with trigger once | Running now", job.name)
 
@@ -195,12 +245,7 @@ class JobSchedulerService:
 
     def check_if_job_is_running(self, job: Job) -> bool:
         job_storage = JobStorage()
-        running_job = job_storage.get_job_runs_by_job_type_id(job.id)
-
-        if running_job is None:
-            return False
-
-        return running_job.status == 'Started'
+        return job_storage.count_running_job_runs_by_job_id(job.id) >= job.max_concurrent
 
     def get_jobs_for_api(self) -> list[JobForApi]:
         local_tz = pytz.timezone("Europe/Oslo")

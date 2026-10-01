@@ -12,7 +12,11 @@ SELECT
     j.weekday,
     j.description,
     j.grouping_value,
-    jr.end_time AS last_ran
+    jr.end_time AS last_ran,
+    j.max_concurrent,
+    j.workflow_input,
+    j.run_at,
+    j.once_status
 FROM jobs j
 LEFT JOIN (
     SELECT DISTINCT ON (job_id)

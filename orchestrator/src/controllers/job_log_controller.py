@@ -1,4 +1,5 @@
 from flask import Blueprint, request
+from src.auth import require_auth
 
 from src.services.core.job_log_service import (
     get_logs_for_job_run,
@@ -10,6 +11,7 @@ job_log_blueprint = Blueprint('job_log', __name__)
 
 
 @job_log_blueprint.route('/getforjob', methods=['GET'])
+@require_auth
 def get_job_logs():
     try:
         job_run_id = request.args.get('job_run_id')
@@ -19,7 +21,10 @@ def get_job_logs():
                 'status': 400,
             }, 400
 
-        logs = get_logs_for_job_run(job_run_id)
+        step_run_id = request.args.get('step_run_id')
+        after_id = request.args.get('after_id', type=int)
+        limit = max(1, min(request.args.get('limit', default=1000, type=int), 5000))
+        logs = get_logs_for_job_run(job_run_id, step_run_id, after_id, limit)
         return [log.to_dict() for log in logs]
 
     except Exception as e:
@@ -31,6 +36,7 @@ def get_job_logs():
 
 
 @job_log_blueprint.route('/requests', methods=['GET'])
+@require_auth
 def get_job_requests():
     try:
         job_run_id = request.args.get('job_run_id')
@@ -61,6 +67,7 @@ def get_job_requests():
 
 
 @job_log_blueprint.route('/requests_total_count', methods=['GET'])
+@require_auth
 def count_total_runs():
     try:
         job_run_id = request.args.get('job_run_id')

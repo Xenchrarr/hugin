@@ -1,0 +1,18 @@
+<div class="parameter">
+  @if (schema.enum?.length) {
+    <mat-form-field appearance="outline"><mat-label>{{ label }}{{ required ? ' *' : '' }}</mat-label><mat-select [ngModel]="value" [ngModelOptions]="{standalone:true}" (ngModelChange)="change($event)">@for (option of schema.enum; track $index) { <mat-option [value]="option">{{ option }}</mat-option> }</mat-select></mat-form-field>
+  } @else if (type === 'string') {
+    <mat-form-field appearance="outline"><mat-label>{{ label }}{{ required ? ' *' : '' }}</mat-label><input matInput [ngModel]="value ?? ''" [ngModelOptions]="{standalone:true}" (ngModelChange)="change($event)"></mat-form-field>
+  } @else if (type === 'integer' || type === 'number') {
+    <mat-form-field appearance="outline"><mat-label>{{ label }}{{ required ? ' *' : '' }}</mat-label><input matInput type="number" [value]="value ?? ''" [step]="type === 'integer' ? 1 : 'any'" (input)="numberChanged($event)"></mat-form-field>
+  } @else if (type === 'boolean') {
+    <mat-checkbox [checked]="value === true" [indeterminate]="value === undefined" (change)="change($event.checked)">{{ label }}{{ required ? ' *' : '' }}</mat-checkbox>
+  } @else if (type === 'object' && properties.length) {
+    <fieldset><legend>{{ label }}{{ required ? ' *' : '' }}</legend>@if (value === undefined) { <button mat-button type="button" (click)="initialize()">Configure</button> } @else { @for (property of properties; track property[0]) { <app-workflow-input-field [name]="property[0]" [schema]="property[1]" [value]="objectValue[property[0]]" [required]="schema.required?.includes(property[0]) ?? false" (valueChange)="setProperty(property[0], $event)" /> } }</fieldset>
+  } @else if (type === 'array' && schema.items) {
+    <fieldset><legend>{{ label }}{{ required ? ' *' : '' }}</legend>@for (item of arrayValue; track $index) { <div class="array-item"><app-workflow-input-field [name]="'Value ' + ($index + 1)" [schema]="schema.items" [value]="item" [required]="true" (valueChange)="setItem($index, $event)" /><button mat-button type="button" (click)="removeItem($index)">Remove</button></div> }<button mat-button type="button" (click)="addItem()">Add value</button></fieldset>
+  } @else { <p>{{ label }} uses a complex schema; use Advanced JSON.</p> }
+  @if (schema.description) { <small>{{ schema.description }}</small> }
+  @if (!required && value !== undefined) { <button mat-button type="button" (click)="change(undefined)">Unset</button> }
+  @if (error) { <p class="error">{{ error }}</p> }
+</div>

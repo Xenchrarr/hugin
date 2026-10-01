@@ -125,6 +125,7 @@
                         <span class="example-element-description-attribution">
                             <button mat-stroked-button color="warn" (click)="cancelJobRun(element); $event.stopPropagation()" *ngIf="element.status === 'Started'">Cancel</button>
                             <button mat-stroked-button (click)="openLogs(element)">Logs</button>
+                            <a mat-stroked-button *ngIf="element.workflow_version" [routerLink]="['/executions', element.id]" (click)="$event.stopPropagation()">Workflow</a>
                             <button mat-stroked-button (click)="openRequests(element)">Requests</button>
                             <button mat-stroked-button color="warn" class="delete-btn" (click)="confirmDeleteJobRun(element); $event.stopPropagation()">Delete</button>
 

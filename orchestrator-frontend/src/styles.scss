@@ -55,6 +55,9 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
   --app-slate-600: #475569;
   --app-slate-500: #64748b;
   --app-slate-100: #f1f5f9;
+  --app-slate-50: #f8fafc;
+  --app-slate-200: #e2e8f0;
+  --app-slate-300: #cbd5e1;
 
   --app-accent: #1a73e8;
   --app-success: #2e7d32;
@@ -69,7 +72,16 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
   --app-radius-sm: 4px;
   --app-radius-md: 6px;
   --app-radius-lg: 8px;
+  --app-radius-xl: 14px;
+  --app-surface: #ffffff;
+  --app-canvas: #f6f8fb;
+  --app-purple: #6d28d9;
+  --app-purple-soft: #f5f3ff;
 }
+
+body { background: var(--app-canvas); }
+* { box-sizing: border-box; }
+a { color: var(--app-accent); }
 
 /* Global mat-toolbar override — slate gradient like orchestrator nav */
 .mat-toolbar {
@@ -86,6 +98,28 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
 .mat-mdc-icon-button {
   border-radius: var(--app-radius-md) !important;
 }
+
+.mat-mdc-card {
+  border-color: var(--app-slate-200) !important;
+  border-radius: var(--app-radius-xl) !important;
+  background: var(--app-surface) !important;
+  box-shadow: 0 5px 20px rgba(15, 23, 42, 0.045) !important;
+}
+
+.mat-mdc-table,
+.mat-mdc-paginator { background: var(--app-surface) !important; }
+
+.mat-mdc-header-cell {
+  background: var(--app-slate-50) !important;
+  color: var(--app-slate-600) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase;
+}
+
+.mat-mdc-row:hover { background: #f8fafc !important; }
+.mat-mdc-dialog-surface { border-radius: var(--app-radius-xl) !important; }
 
 /* ERROR snackbar */
 .mat-mdc-snack-bar-container.snack-error .mdc-snackbar__surface {
@@ -137,4 +171,16 @@ mat-icon.material-icons {
 
 .mat-drawer-side {
     border-right: 1px solid var(--app-border) !important;
+}
+
+.content > router-outlet + * { display: block; min-height: 100%; }
+.content > router-outlet + * > h1:first-child,
+.content > router-outlet + * > header:first-child h1 {
+  color: var(--app-slate-900);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+@media (max-width: 700px) {
+  .mat-mdc-dialog-container { max-width: calc(100vw - 24px) !important; }
 }

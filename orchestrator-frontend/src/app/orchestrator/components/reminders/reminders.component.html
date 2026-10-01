@@ -1,6 +1,6 @@
-<h1>Reminders</h1>
+<header class="page-heading"><div><span>Communication</span><h1>Reminders</h1><p>Schedule recurring and one-time notifications for configured recipients.</p></div><div class="heading-actions"><button mat-stroked-button (click)="loadReminders()">Reload</button><button mat-flat-button color="primary" (click)="addReminder()">Add reminder</button></div></header>
 
-<p>
+<div class="filter-bar">
     <mat-button-toggle-group [value]="statusFilter" (change)="onStatusFilterChange($event.value)">
         <mat-button-toggle value="active">Active</mat-button-toggle>
         <mat-button-toggle value="snoozed">Snoozed</mat-button-toggle>
@@ -8,12 +8,7 @@
         <mat-button-toggle value="dismissed">Dismissed</mat-button-toggle>
         <mat-button-toggle value="">All</mat-button-toggle>
     </mat-button-toggle-group>
-</p>
-
-<p>
-    <button mat-stroked-button (click)="loadReminders()">Reload</button>
-    <button mat-flat-button color="primary" (click)="addReminder()">Add reminder</button>
-</p>
+</div>
 
 <div class="mat-elevation-z8">
     <table mat-table [dataSource]="reminders" class="mat-elevation-z8">

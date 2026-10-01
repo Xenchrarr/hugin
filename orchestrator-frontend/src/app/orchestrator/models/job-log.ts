@@ -6,6 +6,7 @@ export class JobLog {
     created_at: string = '';
     message: string = '';
     stack_trace: string = '';
+    step_run_id: string|null = null;
 
     constructor(init?: Partial<JobLog>) {
         Object.assign(this, init);

@@ -23,6 +23,9 @@ from src.controllers.message_hub_controller import message_hub_blueprint
 from src.controllers.call_controller import call_blueprint
 from src.controllers.alarm_controller import alarm_blueprint
 from src.controllers.reticulum_chat_controller import reticulum_chat_blueprint
+from src.controllers.workflow_controller import workflow_blueprint
+from src.controllers.monitor_controller import monitor_blueprint
+from src.controllers.powershell_controller import powershell_blueprint
 
 api = Blueprint('api', __name__)
 
@@ -66,3 +69,6 @@ api.register_blueprint(message_hub_blueprint, url_prefix="/message-hub")
 api.register_blueprint(call_blueprint, url_prefix="/calls")
 api.register_blueprint(alarm_blueprint, url_prefix="/alarms")
 api.register_blueprint(reticulum_chat_blueprint, url_prefix="/reticulum-chat")
+api.register_blueprint(workflow_blueprint, url_prefix="/workflows")
+api.register_blueprint(monitor_blueprint, url_prefix="/monitors")
+api.register_blueprint(powershell_blueprint, url_prefix="/powershell")

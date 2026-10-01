@@ -1,3 +1,9 @@
+.page-heading { margin-bottom: 18px; }
+.page-heading span { color: var(--app-purple); font-size: 10px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.page-heading h1 { margin: 3px 0 4px; font-size: 34px; }
+.page-heading p { margin: 0; color: var(--app-slate-500); }
+:host { display: block; max-width: 1500px; margin: 0 auto; padding: 28px 24px 48px; }
 .new_settings {
   padding-bottom: 40px;
 }
+@media (max-width: 700px) { :host { padding: 20px 12px 36px; } }

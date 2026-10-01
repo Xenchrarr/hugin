@@ -10,6 +10,10 @@ SELECT
     parameter,
     run_by,
     run_by_group,
-    metadata
+    metadata,
+    workflow_version,
+    workflow_input,
+    workflow_definition,
+    last_activity_at
 FROM job_runs
 WHERE id = %s;

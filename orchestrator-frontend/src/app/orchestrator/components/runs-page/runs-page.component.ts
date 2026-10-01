@@ -5,9 +5,7 @@ import { JobRunsComponent } from '../jobs/job-runs/job-runs.component';
     selector: 'app-runs-page',
     standalone: true,
     imports: [JobRunsComponent],
-    template: `
-        <h1>Runs</h1>
-        <app-job-runs></app-job-runs>
-    `,
+    templateUrl: './runs-page.component.html',
+    styleUrl: './runs-page.component.scss',
 })
 export class RunsPageComponent {}

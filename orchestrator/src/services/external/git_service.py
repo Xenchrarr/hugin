@@ -31,5 +31,6 @@ def run_git_sync(param: str = ""):
                 logger.log_info(f"Repo '{repo_name}' updated: {info.get('old_commit', '?')[:8]} -> {info.get('new_commit', '?')[:8]}")
             else:
                 logger.log_info(f"Repo '{repo_name}' already up to date (commit: {info.get('commit', '?')[:8]})")
+        return result
     else:
         raise Exception(f"Git sync failed: {resp.status_code}: {resp.text}")

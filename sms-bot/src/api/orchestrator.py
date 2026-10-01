@@ -1,5 +1,4 @@
 import base64
-import json
 import logging
 import os
 from typing import Optional
@@ -142,7 +141,8 @@ class OrchestratorClient:
             "hour": hour,
             "minute": minute,
             "trigger": "daily",
-            "param": json.dumps({"user_id": user_id, "phone": phone}),
+            "param": "",
+            "input": {"user_id": user_id, "phone": phone},
             "weekday": "",
             "description": "Compact daily SMS briefing",
             "grouping_value": "sms",

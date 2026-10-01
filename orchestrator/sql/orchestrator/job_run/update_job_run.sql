@@ -4,5 +4,6 @@ SET
     end_time = NOW(),
     status = %s,
     result = %s,
-    job_id = %s
+    job_id = %s,
+    last_activity_at = NOW()
 WHERE id = %s;

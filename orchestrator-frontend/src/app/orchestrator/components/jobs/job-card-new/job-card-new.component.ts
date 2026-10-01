@@ -1,4 +1,4 @@
-import {Component, EventEmitter, Inject, Input, Output} from '@angular/core';
+import {Component, EventEmitter, Inject, Input, Output, ViewChild} from '@angular/core';
 import {MatButton} from "@angular/material/button";
 import {
     MatCell,
@@ -29,8 +29,8 @@ import {FormsModule, ReactiveFormsModule} from "@angular/forms";
 import {TimeService} from "../../../services/time.service";
 import {MatOption, MatSelect, MatSelectModule} from "@angular/material/select";
 import {NgForOf} from "@angular/common";
-import {GitRepo} from "../../../models/git-repo";
-import {GitRepoService} from "../../../services/git-repo.service";
+import {WorkflowInputEditorComponent} from '../../workflows/shared/workflow-input-editor.component';
+import {exampleInput} from '../../workflows/shared/workflow-format';
 
 @Component({
     selector: 'app-job-card-new',
@@ -64,28 +64,28 @@ import {GitRepoService} from "../../../services/git-repo.service";
         ReactiveFormsModule,
         FormsModule,
         MatOption,
-        NgForOf
+        NgForOf,
+        WorkflowInputEditorComponent
     ],
     templateUrl: './job-card-new.component.html',
     styleUrl: './job-card-new.component.css'
 })
 export class JobCardNewComponent {
+    @ViewChild(WorkflowInputEditorComponent) inputEditor?: WorkflowInputEditorComponent;
     @Input() job: Job;
     job_types: JobType[] = [];
-    repos: GitRepo[] = [];
 
     @Output() jobSaved = new EventEmitter<Job>();
     isNew = false
     editMode: boolean = true;
-    phoneCallTarget: string = '';
-    phoneCallRingSeconds: number = 20;
+    workflowInputText: string = '{}';
+    formError: string = '';
 
 
 
     constructor(@Inject(MAT_DIALOG_DATA) public data: Job,
                 private jobService: JobService,
                 private timeService: TimeService,
-                private repoService: GitRepoService,
                 private dialogRef: MatDialogRef<JobCardNewComponent> // Inject MatDialogRef
 
     ) {
@@ -93,28 +93,36 @@ export class JobCardNewComponent {
 
         if (!data) {
             this.job = new Job();
+            this.workflowInputText = '{}';
             this.isNew = true;
             return;
         }
         this.job = data;
-        this.loadPhoneCallParam();
-        if (this.job.job_type === 'git_sync') {
-            this.loadRepos();
-        }
+        if (this.job.run_at) this.job.run_at = this.localDateTime(this.job.run_at);
+        this.workflowInputText = JSON.stringify(this.job.input || {}, null, 2);
     }
 
 
     saveJob() {
-        if (this.isPhoneCallJob()) {
-            this.job.param = JSON.stringify({
-                target: this.phoneCallTarget.trim(),
-                ring_seconds: this.phoneCallRingSeconds,
-            });
+        if (this.inputEditor && !this.inputEditor.validate()) return;
+        try {
+            const parsed = JSON.parse(this.workflowInputText || '{}');
+            if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+                throw new Error('Workflow input must be a JSON object');
+            }
+            this.job.input = parsed;
+            this.formError = '';
+        } catch (error) {
+            this.formError = error instanceof Error ? error.message : 'Workflow input must be valid JSON';
+            return;
         }
-        this.jobService.saveJob(this.job).subscribe(job => {
-            this.job = job;
-            this.dialogRef.close(job); // Close the dialog
-            this.jobSaved.emit(this.job);
+        this.jobService.saveJob(this.job).subscribe({
+            next: job => {
+                this.job = job;
+                this.dialogRef.close(job);
+                this.jobSaved.emit(this.job);
+            },
+            error: response => this.formError = response.error?.message || 'Job could not be saved.',
         })
 
 
@@ -146,39 +154,17 @@ export class JobCardNewComponent {
         const selectedType = this.job_types.find(type => type.job_type === selectedJobType);
         if (selectedType) {
             this.job.description = selectedType.description;
-        }
-        if (selectedJobType === 'git_sync') {
-            this.loadRepos();
-        }
-        if (selectedJobType === 'phone_call') {
-            this.loadPhoneCallParam();
+            this.workflowInputText = JSON.stringify(exampleInput(selectedType.input_schema), null, 2);
         }
     }
 
-    isGitSyncJob(): boolean {
-        return this.job.job_type === 'git_sync';
+    get selectedType(): JobType | undefined {
+        return this.job_types.find(type => type.job_type === this.job.job_type);
     }
 
-    isPhoneCallJob(): boolean {
-        return this.job.job_type === 'phone_call';
-    }
-
-    loadPhoneCallParam(): void {
-        if (!this.isPhoneCallJob()) return;
-        const raw = (this.job.param || '').trim();
-        if (!raw) return;
-        try {
-            const value = JSON.parse(raw);
-            this.phoneCallTarget = String(value.target ?? value.user_id ?? value.user ?? value.phone ?? '');
-            this.phoneCallRingSeconds = Number(value.ring_seconds ?? 20);
-        } catch {
-            this.phoneCallTarget = raw;
-        }
-    }
-
-    loadRepos() {
-        this.repoService.getRepos().subscribe(repos => {
-            this.repos = repos;
-        });
+    private localDateTime(value: string): string {
+        const date = new Date(value);
+        const part = (number: number) => String(number).padStart(2, '0');
+        return `${date.getFullYear()}-${part(date.getMonth()+1)}-${part(date.getDate())}T${part(date.getHours())}:${part(date.getMinutes())}`;
     }
 }

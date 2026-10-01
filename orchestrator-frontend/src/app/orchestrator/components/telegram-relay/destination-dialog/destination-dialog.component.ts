@@ -43,6 +43,7 @@ import {ReticulumChatService} from '../../../services/reticulum-chat.service';
         NgFor,
     ],
     templateUrl: './destination-dialog.component.html',
+    styleUrl: './destination-dialog.component.scss',
 })
 export class DestinationDialogComponent implements OnInit {
     endpoint: MessageRelayEndpoint;

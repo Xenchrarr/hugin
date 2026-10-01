@@ -1,0 +1,17 @@
+<main class="execution-page"><a class="back" routerLink="/runs"><mat-icon>arrow_back</mat-icon>All runs</a>
+@if (detail) {
+  <header><div><span class="eyebrow">Workflow execution</span><h1>{{ detail.run.name }}</h1><code>{{ detail.run.id }}</code></div><div class="header-actions"><strong [attr.data-status]="detail.run.status.toLowerCase()">{{ detail.run.status }}</strong>@if (detail.run.status === 'Started') { <button mat-stroked-button (click)="cancel()"><mat-icon>stop_circle</mat-icon>Cancel</button> }</div></header>
+  <section class="summary"><article><span>Result</span><strong>{{ detail.run.result || 'Pending' }}</strong></article><article><span>Version</span><strong>{{ detail.run.workflow_version || '—' }}</strong></article><article><span>Steps</span><strong>{{ detail.steps.length }}</strong></article><article><span>Artifacts</span><strong>{{ detail.artifacts.length }}</strong></article></section>
+  <section class="surface"><div class="surface-title"><div><span>Progress</span><h2>Workflow steps</h2></div></div><div class="steps">
+    @for (step of detail.steps; track step.id; let index = $index) {
+      <article class="step-row"><div class="marker"><mat-icon>{{ icon(step.status) }}</mat-icon>@if (!$last) { <i></i> }</div><mat-card appearance="outlined"><mat-card-header><mat-card-title>{{ index + 1 }}. {{ step.step_key }}</mat-card-title><mat-card-subtitle>{{ step.step_type }} · attempt {{ step.attempt }}</mat-card-subtitle><span class="step-status" [attr.data-status]="step.status.toLowerCase()">{{ step.status }}</span></mat-card-header><mat-card-content>
+        @if (step.summary) { <p class="step-summary">{{ step.summary }}</p> }
+        <button mat-button (click)="loadLogs(step.id)"><mat-icon>notes</mat-icon>{{ logs[step.id] ? 'Refresh logs' : 'Load step logs' }}</button>
+        @if (logs[step.id]) { <div class="logs">@for (log of logs[step.id]; track log.id) { <p><small>{{ log.created_at }} · {{ log.log_level }}</small><span>{{ log.message }}</span></p> } @empty { <p>No step logs.</p> }</div> }
+        <details><summary>Input, output and error</summary><div class="json-grid"><section><h3>Resolved input</h3><pre>{{ step.resolved_input | json }}</pre></section><section><h3>Output</h3><pre>{{ step.output | json }}</pre></section>@if (hasKeys(step.error)) { <section class="json-error"><h3>Error</h3><pre>{{ step.error | json }}</pre></section> }</div></details>
+      </mat-card-content></mat-card></article>
+    } @empty { <div class="empty">Steps will appear as the workflow progresses.</div> }
+  </div></section>
+  @if (detail.artifacts.length) { <section class="surface artifacts"><div class="surface-title"><div><span>Output</span><h2>Artifacts</h2></div></div>@for (file of detail.artifacts; track file.download_url) { <a [href]="file.download_url"><mat-icon>description</mat-icon>{{ file.original_filename }}<mat-icon>download</mat-icon></a> }</section> }
+} @else { <div class="loading"><span></span>Loading execution…</div> }
+</main>

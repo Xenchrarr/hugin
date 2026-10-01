@@ -1,0 +1,8 @@
+<div class="toolbar"><span>{{ advanced ? 'Edit a JSON object.' : 'Configure typed workflow parameters.' }}</span><button mat-button type="button" (click)="toggle()">{{ advanced ? 'Show fields' : 'Advanced JSON' }}</button></div>
+@if (advanced) {
+  <textarea [ngModel]="text" [ngModelOptions]="{standalone:true}" (ngModelChange)="setText($event)" rows="10"></textarea>
+} @else {
+  @for (property of properties; track property[0]) { <app-workflow-input-field [name]="property[0]" [schema]="property[1]" [value]="value[property[0]]" [required]="schema.required?.includes(property[0]) ?? false" (valueChange)="setField(property[0], $event)" /> }
+  @empty { <p class="empty">No parameters are defined for this workflow.</p> }
+}
+@if (error) { <p class="error">{{ error }}</p> }

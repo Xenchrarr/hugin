@@ -34,12 +34,17 @@ def get_enabled_jobs() -> list[Job]:
 
 
 def update_job(job: Job) -> Job | None:
+    previous = _job_storage.get_job(job.id)
+    if previous is None:
+        raise ValueError(f"Job not found: {job.id}")
+    _validate_job(job, previous)
     _job_storage.update_job(job)
     JobSchedulerService.instance().modify_job(job)
     return _job_storage.get_job(job.id)
 
 
 def create_job(job: Job) -> Job:
+    _validate_job(job)
     new_id = _job_storage.create_job(job)
     created_job = _job_storage.get_job(new_id)
 
@@ -48,6 +53,43 @@ def create_job(job: Job) -> Job:
 
     JobSchedulerService.instance().add_job(created_job)
     return created_job
+
+
+def _validate_job(job: Job, previous: Job | None = None) -> None:
+    from src.services.workflows.workflow_service import get_workflow, workflow_input_for_job
+    from src.services.workflows.workflow_definition_service import validate_value_against_schema
+
+    if not isinstance(job.name, str) or not job.name.strip():
+        raise ValueError("Job name is required")
+    if job.trigger not in {'daily', 'weekly', 'interval', 'once', 'once_at'}:
+        raise ValueError(f"Unsupported trigger: {job.trigger}")
+    if job.max_concurrent < 1:
+        raise ValueError("max_concurrent must be at least 1")
+    workflow = get_workflow(job.job_type)
+    if workflow is None:
+        raise ValueError(f"Unknown workflow: {job.job_type}")
+    validate_value_against_schema(
+        workflow_input_for_job(job),
+        workflow.input_schema,
+        "job.input",
+    )
+    if job.trigger == 'once_at':
+        if job.run_at is None:
+            raise ValueError("run_at is required for a once_at schedule")
+        if job.run_at.tzinfo is None or job.run_at.utcoffset() is None:
+            raise ValueError("run_at must include a timezone")
+        job.run_at = job.run_at.astimezone(datetime.timezone.utc)
+        terminal_unchanged = (
+            previous is not None and previous.trigger == 'once_at'
+            and previous.run_at == job.run_at
+            and previous.once_status in {'dispatched', 'missed', 'failed'}
+            and not job.enabled
+        )
+        if job.run_at <= datetime.datetime.now(datetime.timezone.utc) and not terminal_unchanged:
+            raise ValueError("run_at must be in the future")
+    else:
+        job.run_at = None
+        job.once_status = None
 
 def get_job(job_id: int) -> Job | None:
     return _job_storage.get_job(job_id)
@@ -59,7 +101,6 @@ def delete_job(job_id: int) -> None:
 
 
 def run_job_once(job: Job, run_by: str = "system", run_by_group: str = "system", metadata: dict | None = None) -> uuid.UUID:
-    job.trigger = 'once'
     log.info("Running job once")
 
     is_running = JobSchedulerService.instance().check_if_job_is_running(job)
@@ -67,24 +108,18 @@ def run_job_once(job: Job, run_by: str = "system", run_by_group: str = "system",
         log.warning("Job is already running")
         raise Exception("Job is already running")
 
-    param = job.param if job.param is not None else '0'
-    job_run = JobRun(
-        id="",
-        name=job.name,
-        start_time=datetime.datetime.now().isoformat(),
-        end_time=None,
-        status='Started',
-        job_type=job.job_type,
-        result='',
-        job_id=job.id,
-        parameter=param,
+    from src.services.workflows.workflow_service import (
+        create_workflow_run, submit_workflow_run, workflow_input_for_job,
+    )
+    job_run_id = create_workflow_run(
+        job.job_type,
+        workflow_input_for_job(job),
         run_by=run_by,
         run_by_group=run_by_group,
-        metadata=metadata or {},
+        job=job,
+        metadata=metadata,
     )
-    job_run_id = create_job_run(job_run)
-
-    JobSchedulerService.instance().add_job_for_running_once(job, job_run_id=job_run_id)
+    submit_workflow_run(job_run_id)
     return job_run_id
 
 

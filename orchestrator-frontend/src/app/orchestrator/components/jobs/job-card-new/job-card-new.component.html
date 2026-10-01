@@ -51,7 +51,8 @@
                                 <mat-option value="weekly">Weekly</mat-option>
                                 <mat-option value="daily">Daily</mat-option>
                                 <mat-option value="interval">Interval</mat-option>
-                                <mat-option value="once">Once</mat-option>
+                                <mat-option value="once">Manual only</mat-option>
+                                <mat-option value="once_at">Once at a specific time</mat-option>
                             </mat-select>
                         </mat-form-field>
                     </td>
@@ -78,6 +79,12 @@
                 </tr>
                 }
 
+                @if (job.trigger === 'once_at') {
+                <tr><th>Run at</th><td><mat-form-field><mat-label>Local date and time</mat-label>
+                    <input matInput type="datetime-local" [(ngModel)]="job.run_at">
+                </mat-form-field></td></tr>
+                }
+
 
                 <tr>
                     <th>Running at (h:m)</th>
@@ -96,44 +103,19 @@
                 </tr>
 
                 <tr>
-                    <th>Param</th>
-                    <td [hidden]="editMode"  class="scrollable-td">{{ job.param }}</td>
-                    <td [hidden]="!editMode">
-                        @if (isGitSyncJob()) {
-                            <mat-form-field>
-                                <mat-label>Repository</mat-label>
-                                <mat-select [(ngModel)]="job.param">
-                                    <mat-option value="">All repos</mat-option>
-                                    <mat-option *ngFor="let repo of repos" [value]="repo.name">
-                                        {{ repo.name }} ({{ repo.branch }})
-                                    </mat-option>
-                                </mat-select>
-                            </mat-form-field>
-                        } @else if (isPhoneCallJob()) {
-                            <mat-form-field>
-                                <mat-label>Call target</mat-label>
-                                <input matInput placeholder="User ID, name, or +4712345678" [(ngModel)]="phoneCallTarget">
-                            </mat-form-field>
-                            <mat-form-field class="time-input1">
-                                <mat-label>Ring seconds</mat-label>
-                                <input matInput type="number" min="5" max="60" [(ngModel)]="phoneCallRingSeconds">
-                            </mat-form-field>
-                        } @else {
-                            <mat-form-field>
-                                <textarea matInput placeholder="parameter" [(ngModel)]="job.param"> </textarea>
-                            </mat-form-field>
-                        }
-                    </td>
-                </tr>
-
-
-
-
-                <tr>
                     <th>Enabled</th>
                     <td><mat-checkbox [disabled]="!editMode" [checked]="job.enabled" [(ngModel)]="job.enabled"></mat-checkbox></td>
 
                 </tr>
+
+                <tr><th>Maximum concurrent</th><td><mat-form-field><mat-label>Runs</mat-label>
+                    <input matInput type="number" min="1" [(ngModel)]="job.max_concurrent">
+                </mat-form-field></td></tr>
+
+                <tr><th>Workflow input</th><td>
+                    <app-workflow-input-editor [schema]="selectedType?.input_schema ?? {}" [(text)]="workflowInputText" />
+                    <small>Validated structured input stored with every run snapshot.</small>
+                </td></tr>
 
                 <tr>
                         <th>Grouping value</th>
@@ -146,6 +128,7 @@
 
 
             </table>
+            @if (formError) { <p style="color:#b3261e">{{ formError }}</p> }
 
         </mat-card-content>
 <!--        <mat-card-actions align="end">-->

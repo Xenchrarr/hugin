@@ -13,6 +13,9 @@ export class JobRun {
     run_by: string = '';
     run_by_group: string = '';
     metadata: Record<string, any> = {};
+    workflow_version: number|null = null;
+    workflow_input: Record<string, unknown> = {};
+    last_activity_at: string|undefined = undefined;
 
 
 

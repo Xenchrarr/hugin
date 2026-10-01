@@ -1,4 +1,5 @@
 import logging
+import os
 import threading
 from contextlib import contextmanager
 from typing import Any
@@ -27,6 +28,8 @@ class JobDb:
                         database=JOB_DB,
                         user=JOB_DB_USER_NAME,
                         password=JOB_DB_PASSWORD,
+                        min_size=int(os.environ.get("DB_POOL_MIN_SIZE", "2")),
+                        max_size=int(os.environ.get("DB_POOL_MAX_SIZE", "20")),
                     )
                     cls._instance = obj
         return cls._instance
@@ -105,7 +108,23 @@ class JobDb:
         try:
             conn.execute(query, params)
             conn.commit()
-        except Exception as e:
+        except Exception:
             conn.rollback()
             logging.getLogger(__name__).exception("Error running query")
             raise
+        finally:
+            self.close_connection()
+
+    def run_query_many(self, query: str, params: list[tuple]) -> None:
+        """Execute a batch atomically and always return the pooled connection."""
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.executemany(query, params)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            logging.getLogger(__name__).exception("Error running query batch")
+            raise
+        finally:
+            self.close_connection()

@@ -10,7 +10,11 @@ SELECT
     runs.parameter,
     runs.run_by,
     runs.run_by_group,
-    runs.metadata
+    runs.metadata,
+    runs.workflow_version,
+    runs.workflow_input,
+    runs.workflow_definition,
+    runs.last_activity_at
 FROM job_runs runs
 WHERE runs.status = 'Started'
-  AND runs.start_time < NOW() - make_interval(mins => %s);
+  AND runs.last_activity_at < NOW() - make_interval(mins => %s);

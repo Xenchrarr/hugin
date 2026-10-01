@@ -1,7 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 from enum import IntEnum
+from zoneinfo import ZoneInfo
 
 
 class Weekday(IntEnum):
@@ -30,6 +31,10 @@ class Job:
     description: str = ''
     grouping_value: str = ''
     ran_last: Optional[datetime] = None
+    max_concurrent: int = 1
+    workflow_input: dict = field(default_factory=dict)
+    run_at: Optional[datetime] = None
+    once_status: Optional[str] = None
 
     def to_dict(self):
         return {
@@ -47,11 +52,17 @@ class Job:
             "description": self.description,
             "grouping_value": self.grouping_value,
             "ran_last": self._dt(self.ran_last),
+            "max_concurrent": self.max_concurrent,
+            "input": self.workflow_input or {},
+            "run_at": self._dt(self.run_at),
+            "once_status": self.once_status,
         }
 
     @staticmethod
     def _dt(value: Optional[datetime]):
-        return value.isoformat() if value else None
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
 
 
 
@@ -72,6 +83,10 @@ class Job:
             description=row[11],
             grouping_value=row[12],
             ran_last=row[13],
+            max_concurrent=row[14] if len(row) > 14 and row[14] else 1,
+            workflow_input=row[15] if len(row) > 15 and row[15] else {},
+            run_at=row[16] if len(row) > 16 else None,
+            once_status=row[17] if len(row) > 17 else None,
         )
 
     @staticmethod
@@ -83,6 +98,11 @@ class Job:
 
     @staticmethod
     def from_dict(obj: dict) -> 'Job':
+        run_at = obj.get("run_at")
+        if isinstance(run_at, str) and run_at:
+            run_at = datetime.fromisoformat(run_at.replace("Z", "+00:00"))
+            if run_at.tzinfo is None:
+                run_at = run_at.replace(tzinfo=ZoneInfo("Europe/Oslo"))
         return Job(
             obj.get("id", 0),
             obj.get("name"),
@@ -97,7 +117,11 @@ class Job:
             obj.get("weekday"),
             obj.get("description"),
             obj.get("grouping_value"),
-            obj.get("ran_last")
+            obj.get("ran_last"),
+            max(1, int(obj.get("max_concurrent", 1) or 1)),
+            obj.get("input", obj.get("workflow_input", {})) or {},
+            run_at,
+            obj.get("once_status"),
         )
 
 

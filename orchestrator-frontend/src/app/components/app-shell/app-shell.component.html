@@ -1,136 +1,48 @@
 <mat-sidenav-container class="shell">
-    <mat-sidenav
-        #sidenav
-        class="sidenav"
-        mode="side"
-        [opened]="true"
-        [fixedInViewport]="false"
-        [style.width.px]="collapsed ? 72 : 240"
-    >
+    <mat-sidenav class="sidenav" mode="side" [opened]="true" [fixedInViewport]="false" [style.width.px]="collapsed ? 72 : 240">
         <div class="sidenav-header">
             @if (!collapsed) {
-            <span class="env-badge" [class.env-prod]="isProd" [class.env-test]="!isProd">
-                {{ isProd ? 'PRODUCTION' : 'TESTING' }}
-            </span>
+                <div class="brand"><span class="brand-mark"><mat-icon>blur_on</mat-icon></span><span><strong>Hugin</strong><small>Operations</small></span></div>
             }
-            <button mat-icon-button (click)="toggleCollapsed()" aria-label="Toggle sidenav">
-                <mat-icon>{{ collapsed ? 'chevron_right' : 'chevron_left' }}</mat-icon>
-            </button>
+            <button mat-icon-button (click)="toggleCollapsed()" aria-label="Toggle navigation"><mat-icon>{{ collapsed ? 'chevron_right' : 'chevron_left' }}</mat-icon></button>
         </div>
 
         <mat-nav-list>
-            <a mat-list-item routerLink="/dashboard" routerLinkActive="active">
-                <mat-icon matListItemIcon>dashboard</mat-icon>
-                @if(!collapsed) {
-                <span>Dashboard</span>
-                }
-            </a>
+            @if (!collapsed) { <span class="nav-label">Overview</span> }
+            <a mat-list-item routerLink="/dashboard" routerLinkActive="active"><mat-icon matListItemIcon>dashboard</mat-icon>@if (!collapsed) { <span>Dashboard</span> }</a>
 
-            <a mat-list-item routerLink="/scripts" routerLinkActive="active">
-                <mat-icon matListItemIcon>code</mat-icon>
-                @if(!collapsed) {
-                <span>Scripts</span>
-                }
-            </a>
+            @if (!collapsed) { <span class="nav-label">Automation</span> }
+            <a mat-list-item routerLink="/scripts" routerLinkActive="active"><mat-icon matListItemIcon>code</mat-icon>@if (!collapsed) { <span>Scripts</span> }</a>
+            <a mat-list-item routerLink="/runs" routerLinkActive="active"><mat-icon matListItemIcon>history</mat-icon>@if (!collapsed) { <span>Runs</span> }</a>
+            <a mat-list-item routerLink="/jobs" routerLinkActive="active"><mat-icon matListItemIcon>schedule</mat-icon>@if (!collapsed) { <span>Jobs</span> }</a>
+            @if ((auth.user$ | async)?.is_admin) {
+                <a mat-list-item routerLink="/workflows" routerLinkActive="active"><mat-icon matListItemIcon>account_tree</mat-icon>@if (!collapsed) { <span>Workflows</span> }</a>
+                <a mat-list-item routerLink="/monitors" routerLinkActive="active"><mat-icon matListItemIcon>monitor_heart</mat-icon>@if (!collapsed) { <span>Monitors</span> }</a>
+            }
+            <a mat-list-item routerLink="/repos" routerLinkActive="active"><mat-icon matListItemIcon>source</mat-icon>@if (!collapsed) { <span>Repositories</span> }</a>
 
-            <a mat-list-item routerLink="/runs" routerLinkActive="active">
-                <mat-icon matListItemIcon>history</mat-icon>
-                @if(!collapsed) {
-                <span>Runs</span>
-                }
-            </a>
-
-            <a mat-list-item routerLink="/jobs" routerLinkActive="active">
-                <mat-icon matListItemIcon>schedule</mat-icon>
-                @if(!collapsed) {
-                <span>Jobs</span>
-                }
-            </a>
-
-            <a mat-list-item routerLink="/repos" routerLinkActive="active">
-                <mat-icon matListItemIcon>source</mat-icon>
-                @if(!collapsed) {
-                <span>Repos</span>
-                }
-            </a>
-
-            <a mat-list-item routerLink="/reminders" routerLinkActive="active">
-                <mat-icon matListItemIcon>alarm</mat-icon>
-                @if(!collapsed) {
-                <span>Reminders</span>
-                }
-            </a>
-
-            <a mat-list-item routerLink="/telegram-relay" routerLinkActive="active">
-                <mat-icon matListItemIcon>send</mat-icon>
-                @if(!collapsed) {
-                <span>Message Routes</span>
-                }
-            </a>
-
-            <a mat-list-item routerLink="/reticulum-chat" routerLinkActive="active">
-                <mat-icon matListItemIcon>forum</mat-icon>
-                @if(!collapsed) {
-                <span>Reticulum Chat</span>
-                }
-            </a>
-
-            <a mat-list-item routerLink="/calendar" routerLinkActive="active">
-                <mat-icon matListItemIcon>calendar_month</mat-icon>
-                @if(!collapsed) {
-                <span>Calendar</span>
-                }
-            </a>
-
-            <mat-divider></mat-divider>
+            @if (!collapsed) { <span class="nav-label">Communication</span> }
+            <a mat-list-item routerLink="/reminders" routerLinkActive="active"><mat-icon matListItemIcon>alarm</mat-icon>@if (!collapsed) { <span>Reminders</span> }</a>
+            <a mat-list-item routerLink="/telegram-relay" routerLinkActive="active"><mat-icon matListItemIcon>send</mat-icon>@if (!collapsed) { <span>Message Routes</span> }</a>
+            <a mat-list-item routerLink="/reticulum-chat" routerLinkActive="active"><mat-icon matListItemIcon>forum</mat-icon>@if (!collapsed) { <span>Reticulum Chat</span> }</a>
+            <a mat-list-item routerLink="/calendar" routerLinkActive="active"><mat-icon matListItemIcon>calendar_month</mat-icon>@if (!collapsed) { <span>Calendar</span> }</a>
 
             @if ((auth.user$ | async)?.is_admin) {
-            <a mat-list-item routerLink="/message-hub" routerLinkActive="active">
-                <mat-icon matListItemIcon>hub</mat-icon>
-                @if(!collapsed) {
-                <span>Message Hub</span>
-                }
-            </a>
-
-            <a mat-list-item routerLink="/alarms" routerLinkActive="active">
-                <mat-icon matListItemIcon>alarm_on</mat-icon>
-                @if(!collapsed) {
-                <span>Calling Alarms</span>
-                }
-            </a>
-
-            <a mat-list-item routerLink="/users/list" routerLinkActive="active">
-                <mat-icon matListItemIcon>admin_panel_settings</mat-icon>
-                @if(!collapsed) {
-                <span>Admin</span>
-                }
-            </a>
-            <a mat-list-item routerLink="/users/notification-settings" routerLinkActive="active">
-                <mat-icon matListItemIcon>notifications_active</mat-icon>
-                @if(!collapsed) {
-                <span>Notifications</span>
-                }
-            </a>
+                @if (!collapsed) { <span class="nav-label">Administration</span> }
+                <a mat-list-item routerLink="/message-hub" routerLinkActive="active"><mat-icon matListItemIcon>hub</mat-icon>@if (!collapsed) { <span>Message Hub</span> }</a>
+                <a mat-list-item routerLink="/alarms" routerLinkActive="active"><mat-icon matListItemIcon>alarm_on</mat-icon>@if (!collapsed) { <span>Calling Alarms</span> }</a>
+                <a mat-list-item routerLink="/users/list" routerLinkActive="active"><mat-icon matListItemIcon>admin_panel_settings</mat-icon>@if (!collapsed) { <span>Users</span> }</a>
+                <a mat-list-item routerLink="/users/notification-settings" routerLinkActive="active"><mat-icon matListItemIcon>notifications_active</mat-icon>@if (!collapsed) { <span>Notifications</span> }</a>
             }
         </mat-nav-list>
 
         <div class="sidenav-footer">
-            <mat-divider></mat-divider>
-            <div class="user-info">
-                <mat-icon>account_circle</mat-icon>
-                @if (!collapsed) {
-                <span class="username">{{ username }}</span>
-                }
-                <button mat-icon-button (click)="logout()" aria-label="Logout">
-                    <mat-icon>logout</mat-icon>
-                </button>
-            </div>
+            @if (!collapsed) { <span class="env-badge" [class.env-prod]="isProd" [class.env-test]="!isProd">{{ isProd ? 'Production' : 'Testing' }}</span> }
+            <div class="user-info"><mat-icon>account_circle</mat-icon>@if (!collapsed) { <span class="username">{{ username }}</span> }<button mat-icon-button (click)="logout()" aria-label="Log out"><mat-icon>logout</mat-icon></button></div>
         </div>
     </mat-sidenav>
 
-    <mat-sidenav-content class="main" [style.margin-left.px]="collapsed ? 72 : 240" [class.collapsed]="collapsed">
-        <div class="content">
-            <router-outlet />
-        </div>
+    <mat-sidenav-content class="main" [style.margin-left.px]="collapsed ? 72 : 240">
+        <div class="content"><router-outlet /></div>
     </mat-sidenav-content>
 </mat-sidenav-container>

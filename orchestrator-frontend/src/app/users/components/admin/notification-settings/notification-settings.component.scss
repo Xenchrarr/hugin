@@ -1,5 +1,6 @@
+:host { display: block; max-width: 1300px; margin: 0 auto; padding: 28px 24px 48px; }
 .subtitle {
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--app-slate-500);
     margin-bottom: 24px;
 }
 
@@ -13,7 +14,7 @@
 
 .empty-state {
     padding: 24px 0;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--app-slate-500);
 }
 
 h2 {

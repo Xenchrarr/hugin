@@ -57,5 +57,7 @@ try:
         load_active_checkins()
         from src.services.core.alarm_service import AlarmService
         AlarmService.instance().load()
+        from src.services.monitoring.monitor_scheduler_service import MonitorSchedulerService
+        MonitorSchedulerService.instance().start_all_monitors()
 except Exception as exc:
     log.warning("Scheduler startup skipped: %s", exc)

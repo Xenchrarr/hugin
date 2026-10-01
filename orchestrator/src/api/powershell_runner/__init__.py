@@ -2,12 +2,8 @@ import os
 
 import requests
 
-from src.api.RestCredentialMissingError import RestCredentialMissingError
-
-POWERSHELL_API_ENDPOINT = os.environ.get("POWERSHELL_API_ENDPOINT", "None")
-
-if POWERSHELL_API_ENDPOINT is None:
-    raise RestCredentialMissingError("Missing POWERSHELL_API_ENDPOINT environment variable")
+POWERSHELL_API_ENDPOINT = os.environ.get(
+    "POWERSHELL_API_ENDPOINT", "http://powershell-runner:6001/api")
 
 # Timeout (seconds) for HTTP calls to the powershell-runner service.
 # Scripts can be long-running, so the default is generous (15 min).

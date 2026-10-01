@@ -215,8 +215,11 @@ services:
       - powershell_scripts:/app/scripts
     environment:
       ORCHESTRATOR_API_URL: http://orchestrator:6000
+      SERVICE_KEY: ${SERVICE_KEY}
       SHOULD_LOG: ${SHOULD_LOG:-True}
       SCRIPT_PROCESS_TIMEOUT: ${SCRIPT_PROCESS_TIMEOUT:-840}
+      LOG_BATCH_SIZE: ${LOG_BATCH_SIZE:-50}
+      LOG_FLUSH_INTERVAL: ${LOG_FLUSH_INTERVAL:-2}
       GIT_USERNAME: ${GIT_USERNAME:-}
       GIT_PASSWORD: ${GIT_PASSWORD:-}
       GIT_BRANCH: ${GIT_BRANCH:-main}

@@ -25,6 +25,7 @@ import {MatCheckbox} from "@angular/material/checkbox";
 import {FormsModule} from "@angular/forms";
 import {MatSnackBar} from "@angular/material/snack-bar";
 import {NotificationComponent} from "../../notification/notification.component";
+import {RouterLink} from '@angular/router';
 
 @Component({
     selector: 'app-job-runs',
@@ -48,7 +49,8 @@ import {NotificationComponent} from "../../notification/notification.component";
         NgClass,
         NgIf,
         MatCheckbox,
-        FormsModule
+        FormsModule,
+        RouterLink
     ],
     templateUrl: './job-runs.component.html',
     styleUrl: './job-runs.component.css',

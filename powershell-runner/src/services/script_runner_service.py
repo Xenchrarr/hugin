@@ -4,7 +4,7 @@ import threading
 import os
 
 from src.ThreadLocalSingleton import ThreadLocalSingleton
-from src.services.log_service import log_info, log_error, log_warning
+from src.services.log_service import flush_all, log_info, log_error, log_warning
 
 _ANSI_RE = re.compile(r'\x1b\[[0-9;]*m')
 
@@ -18,8 +18,9 @@ SCRIPT_PROCESS_TIMEOUT = int(os.environ.get('SCRIPT_PROCESS_TIMEOUT', '840'))
 
 
 class ScriptRunnerService:
-    def __init__(self, job_run_id, script_name, stop_words=None, params=None):
+    def __init__(self, job_run_id, script_name, stop_words=None, params=None, step_run_id=None):
         self.job_run_id = job_run_id
+        self.step_run_id = step_run_id
         self.script_name = script_name
         self.stop_words = [w.lower() for w in (stop_words or [])]
         self.params = params or {}
@@ -28,6 +29,9 @@ class ScriptRunnerService:
         self._output_lines = []
 
     def run(self):
+        thread_local = ThreadLocalSingleton.instance().thread_local
+        thread_local.job_run_id = self.job_run_id
+        thread_local.step_run_id = self.step_run_id
         script_path = self._resolve_script_path()
         log_info(f"Starting script: {self.script_name}", job_run_id=self.job_run_id)
 
@@ -76,6 +80,7 @@ class ScriptRunnerService:
             msg = (f"Script '{self.script_name}' timed out after "
                    f"{SCRIPT_PROCESS_TIMEOUT}s – process killed")
             log_error(msg, stack_trace='', job_run_id=self.job_run_id)
+            flush_all()
             return {
                 'completed': False,
                 'exit_code': -1,
@@ -88,6 +93,7 @@ class ScriptRunnerService:
             msg = (f"Script '{self.script_name}' terminated – "
                    f"stop word '{self._stopped_by_word}' detected in output")
             log_warning(msg, job_run_id=self.job_run_id)
+            flush_all()
             return {
                 'completed': False,
                 'exit_code': exit_code,
@@ -104,6 +110,7 @@ class ScriptRunnerService:
         else:
             log_info(f"Script '{self.script_name}' completed successfully", job_run_id=self.job_run_id)
 
+        flush_all()
         return {
             'completed': exit_code == 0,
             'exit_code': exit_code,
@@ -114,6 +121,7 @@ class ScriptRunnerService:
     def _read_stream(self, stream):
         thread_local = ThreadLocalSingleton.instance().thread_local
         thread_local.job_run_id = self.job_run_id
+        thread_local.step_run_id = self.step_run_id
         try:
             while True:
                 line = stream.readline()

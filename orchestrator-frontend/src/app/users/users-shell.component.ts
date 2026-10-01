@@ -5,6 +5,7 @@ import { RouterModule } from '@angular/router';
   selector: 'app-users-shell',
   standalone: true,
   imports: [RouterModule],
-  template: `<router-outlet />`,
+  templateUrl: './users-shell.component.html',
+  styleUrl: './users-shell.component.scss',
 })
 export class UsersShellComponent {}

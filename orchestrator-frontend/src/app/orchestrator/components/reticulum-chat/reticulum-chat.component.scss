@@ -1,7 +1,8 @@
 :host {
     display: block;
-    height: calc(100vh - 32px);
+    height: 100vh;
     min-height: 580px;
+    padding: 20px 24px;
 }
 
 .chat-page {

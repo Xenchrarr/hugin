@@ -1,6 +1,7 @@
 
 
 from flask import Blueprint, request
+from src.auth import require_admin, require_auth
 
 from src.services.core.job_run_service import get_job_runs, get_total_job_runs, get_job_run_by_id
 from src.services.core.job_service import cancel_job_run
@@ -19,6 +20,7 @@ def _normalize_list_param(param_name: str) -> list[str]:
 
 
 @job_run_blueprint.route('/list', methods=['GET'])
+@require_auth
 def list_runs():
     try:
         page = int(request.args.get('page', 1))
@@ -45,6 +47,7 @@ def list_runs():
 
 
 @job_run_blueprint.route('/total_count', methods=['GET'])
+@require_auth
 def count_total_runs():
     try:
         grouping_values = _normalize_list_param('grouping')
@@ -64,6 +67,7 @@ def count_total_runs():
 
 
 @job_run_blueprint.route('/cancel', methods=['POST'])
+@require_auth
 def cancel_run():
     try:
         data = request.get_json(silent=True)
@@ -101,6 +105,7 @@ def cancel_run():
 
 
 @job_run_blueprint.route('/get', methods=['GET'])
+@require_auth
 def get_single_run():
     try:
         job_run_id = request.args.get('job_run_id')
@@ -129,6 +134,7 @@ def get_single_run():
 
 
 @job_run_blueprint.route('/delete', methods=['DELETE'])
+@require_admin
 def delete_run():
     try:
         data = request.get_json(silent=True)

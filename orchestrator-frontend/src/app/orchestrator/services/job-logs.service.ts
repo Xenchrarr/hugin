@@ -16,8 +16,11 @@ export class JobLogsService {
         this.baseUrl = environment.apiOrchestratorUri + '/joblog';
     }
 
-    getLogsForJob(jobId: number): Observable<any> {
-        return this.http.get<any[]>(this.baseUrl + '/getforjob?job_run_id=' + jobId).pipe(
+    getLogsForJob(jobId: number|string, afterId?: number, stepRunId?: string): Observable<JobLog[]> {
+        const query = new URLSearchParams({job_run_id: String(jobId), limit: '1000'});
+        if (afterId !== undefined) query.set('after_id', String(afterId));
+        if (stepRunId) query.set('step_run_id', stepRunId);
+        return this.http.get<any[]>(this.baseUrl + '/getforjob?' + query.toString()).pipe(
             map(data => data.map(item => new JobLog(item)))
         );
     }

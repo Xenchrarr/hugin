@@ -9,7 +9,11 @@ INSERT INTO jobs (
     param,
     weekday,
     description,
-    grouping_value
+    grouping_value,
+    max_concurrent,
+    workflow_input,
+    run_at,
+    once_status
 )
-VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s, %s, %s, %s)
+VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s)
 RETURNING id;

@@ -1,17 +1,26 @@
+:host { display: block; max-width: 1400px; margin: 0 auto; padding: 28px 24px 48px; }
 .page-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: 16px;
 
-    h2 {
+    span { color: var(--app-accent); font-size: 10px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+
+    h1 {
         margin: 0;
+        font-size: 34px;
     }
+
+    p { margin: 3px 0 0; color: var(--app-slate-500); }
 }
 
 .sources-table {
     width: 100%;
     margin-bottom: 24px;
+    overflow: hidden;
+    border: 1px solid var(--app-slate-200);
+    border-radius: 12px;
 
     .url-cell {
         font-size: 0.8rem;
@@ -44,3 +53,5 @@
     text-align: center;
     color: #aaa;
 }
+
+@media(max-width:700px){:host{padding:20px 12px 36px}.page-header{align-items:flex-start;flex-direction:column}}

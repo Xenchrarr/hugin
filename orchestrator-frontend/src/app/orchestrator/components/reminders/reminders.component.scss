@@ -1,7 +1,11 @@
+.page-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
+.page-heading span { color: #b45309; font-size: 10px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+.page-heading h1 { margin: 3px 0 4px; font-size: 34px; }.page-heading p { margin: 0; color: var(--app-slate-500); }.heading-actions { display: flex; gap: 8px; }.filter-bar { margin-bottom: 14px; padding: 10px; background: #fff; border: 1px solid var(--app-slate-200); border-radius: 12px; }
+:host { display: block; max-width: 1500px; margin: 0 auto; padding: 28px 24px 48px; }
 .empty-state {
     padding: 32px;
     text-align: center;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--app-slate-500);
 }
 
 table {
@@ -26,27 +30,27 @@ td.mat-mdc-cell button {
 }
 
 .status-active {
-    background: rgba(76, 175, 80, 0.2);
-    color: #81c784;
+    background: #dcfce7;
+    color: #166534;
 }
 
 .status-snoozed {
-    background: rgba(255, 193, 7, 0.2);
-    color: #ffd54f;
+    background: #fef3c7;
+    color: #92400e;
 }
 
 .status-completed {
-    background: rgba(158, 158, 158, 0.2);
-    color: #bdbdbd;
+    background: #e2e8f0;
+    color: #475569;
 }
 
 .status-dismissed {
-    background: rgba(244, 67, 54, 0.2);
-    color: #ef9a9a;
+    background: #fee2e2;
+    color: #991b1b;
 }
 
 .default-label {
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--app-slate-500);
     font-style: italic;
     font-size: 13px;
 }
@@ -54,3 +58,4 @@ td.mat-mdc-cell button {
 mat-button-toggle-group {
     margin-bottom: 8px;
 }
+@media(max-width:700px){:host{padding:20px 12px 36px}.page-heading{align-items:flex-start;flex-direction:column}}

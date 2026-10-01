@@ -1,0 +1,53 @@
+<main class="detail-page">
+    <a class="back-link" routerLink="/workflows"><mat-icon>arrow_back</mat-icon>All workflows</a>
+    @if (loading) {
+        <div class="page-message"><span class="spinner"></span>Loading workflow definition…</div>
+    } @else if (errorMessage || !workflow) {
+        <div class="page-message error"><mat-icon>error_outline</mat-icon><h2>Workflow unavailable</h2><p>{{ errorMessage }}</p><a mat-stroked-button routerLink="/workflows">Return to catalog</a></div>
+    } @else {
+        <header class="detail-header">
+            <div class="header-identity"><span class="workflow-icon"><mat-icon>account_tree</mat-icon></span><div><span class="technical-key">{{ workflow.key }}</span><h1>{{ title }}</h1><p>{{ workflow.description || 'No workflow description is available.' }}</p></div></div>
+            <div class="header-actions"><span class="version-badge">Version {{ workflow.version }}</span><button mat-flat-button type="button" (click)="runPanel.scrollIntoView({behavior: 'smooth'})"><mat-icon>play_arrow</mat-icon>Run workflow</button></div>
+        </header>
+
+        <section class="summary-grid">
+            <article><mat-icon>route</mat-icon><div><strong>{{ workflow.steps.length }}</strong><span>Pipeline steps</span></div></article>
+            <article><mat-icon>input</mat-icon><div><strong>{{ requiredInputCount }}</strong><span>Required inputs</span></div></article>
+            <article><mat-icon>alt_route</mat-icon><div><strong>{{ conditionalStepCount }}</strong><span>Conditional steps</span></div></article>
+            <article><mat-icon>shield</mat-icon><div><strong>{{ continueStepCount }}</strong><span>Continue on failure</span></div></article>
+        </section>
+
+        <div class="detail-layout">
+            <div class="main-column">
+                <section class="surface">
+                    <div class="surface-title"><div><span>Definition</span><h2>Execution pipeline</h2><p>Steps execute sequentially from top to bottom.</p></div><small><mat-icon>lock</mat-icon>Read only</small></div>
+                    <div class="step-list">
+                        @for (step of workflow.steps; track step.key; let index = $index) {
+                            <article class="pipeline-step">
+                                <div class="timeline"><span>{{ index + 1 }}</span>@if (!$last) { <i></i> }</div>
+                                <div class="step-card" [class.expanded]="expandedStep === index">
+                                    <button class="step-summary" type="button" (click)="toggleStep(index)"><span class="step-icon"><mat-icon>extension</mat-icon></span><span class="step-copy"><small>{{ step.key }}</small><strong>{{ formatKey(step.step) }}</strong><em>{{ step.step }}</em></span><span class="step-badges">@for (badge of stepBadges(step); track badge) { <span>{{ badge }}</span> }</span><mat-icon>{{ expandedStep === index ? 'expand_less' : 'expand_more' }}</mat-icon></button>
+                                    @if (expandedStep === index) {
+                                        <div class="step-detail"><section><h3>Input mapping</h3><pre>{{ step.inputs | json }}</pre></section><section><h3>Run condition</h3><pre>{{ step.run_if ? (step.run_if | json) : 'Always' }}</pre></section><dl><div><dt>Step type</dt><dd>{{ step.step }}</dd></div><div><dt>Failure policy</dt><dd>{{ step.on_failure }}</dd></div></dl></div>
+                                    }
+                                </div>
+                            </article>
+                        } @empty { <div class="empty">No steps are registered in this definition.</div> }
+                    </div>
+                </section>
+
+                <section class="surface">
+                    <div class="surface-title"><div><span>Contract</span><h2>Workflow input</h2><p>Values are validated before execution starts.</p></div></div>
+                    <div class="field-list">@for (field of inputFields; track field[0]) { <div class="field-row"><code>{{ field[0] }}</code><span>{{ schemaType(field[1]) }}</span><b [class.optional]="!workflow.input_schema.required?.includes(field[0])">{{ workflow.input_schema.required?.includes(field[0]) ? 'Required' : 'Optional' }}</b><p>{{ schemaDescription(field[1]) }}</p></div> } @empty { <div class="empty">This workflow accepts an empty input object.</div> }</div>
+                    <button mat-button class="schema-toggle" (click)="showRawSchema = !showRawSchema"><mat-icon>code</mat-icon>{{ showRawSchema ? 'Hide' : 'Show' }} raw schema</button>
+                    @if (showRawSchema) { <pre class="raw-schema">{{ workflow.input_schema | json }}</pre> }
+                </section>
+            </div>
+
+            <aside>
+                <section class="surface deployment-card"><div class="aside-title"><mat-icon>deployed_code</mat-icon><div><h2>Deployment</h2><p>Code-defined workflow</p></div></div><dl><div><dt>Definition key</dt><dd>{{ workflow.key }}</dd></div><div><dt>Version</dt><dd>{{ workflow.version }}</dd></div><div><dt>Composition</dt><dd>Immutable</dd></div></dl><p class="note"><mat-icon>info</mat-icon>Executions retain the definition version used when they started.</p></section>
+                <section class="surface run-card" #runPanel><div class="aside-title"><mat-icon>play_circle</mat-icon><div><h2>Run workflow</h2><p>Start an ad-hoc execution</p></div></div><app-workflow-input-editor [schema]="workflow.input_schema" [(text)]="inputText" />@if (runError) { <div class="run-error"><mat-icon>error</mat-icon>{{ runError }}</div> }<div class="run-actions"><button mat-button (click)="resetInput()">Reset example</button><button mat-flat-button (click)="run()" [disabled]="running"><mat-icon>play_arrow</mat-icon>{{ running ? 'Starting…' : 'Start execution' }}</button></div></section>
+            </aside>
+        </div>
+    }
+</main>

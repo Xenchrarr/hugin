@@ -1,4 +1,5 @@
 from flask import Blueprint, request
+from src.auth import require_admin_or_service_key
 
 from src.jobs_registry import jobs_registry
 from src.models.orchestrator.Job import Job
@@ -19,6 +20,7 @@ jobs_blueprint = Blueprint('jobs', __name__)
 
 
 @jobs_blueprint.route('/list', methods=['GET'])
+@require_admin_or_service_key
 def jobs():
     try:
         available_jobs = get_jobs()
@@ -32,6 +34,7 @@ def jobs():
 
 
 @jobs_blueprint.route('/enabled_list', methods=['GET'])
+@require_admin_or_service_key
 def enabled_jobs():
     try:
         available_jobs = get_enabled_jobs()
@@ -45,6 +48,7 @@ def enabled_jobs():
 
 
 @jobs_blueprint.route('/get_one', methods=['GET'])
+@require_admin_or_service_key
 def get_job_from_id():
     try:
         raw_job_id = request.args.get('job_id')
@@ -79,18 +83,16 @@ def get_job_from_id():
 
 
 @jobs_blueprint.route('/types', methods=['GET'])
+@require_admin_or_service_key
 def available_types():
-    return [
-        {
-            "job_type": key,
-            "function_name": value['function'].__name__,
-            "description": value['description'],
-        }
-        for key, value in jobs_registry.items()
-    ]
+    from src.services.workflows.workflow_service import get_workflows
+    return [{"job_type": item.key, "function_name": item.key,
+             "description": item.description, "input_schema": item.input_schema,
+             "version": item.version} for item in get_workflows()]
 
 
 @jobs_blueprint.route('/', methods=['POST'])
+@require_admin_or_service_key
 def upsert_job():
     try:
         data = request.get_json(silent=True)
@@ -109,6 +111,8 @@ def upsert_job():
         updated_job = update_job(job)
         return updated_job.to_dict() if updated_job is not None else job.to_dict()
 
+    except ValueError as e:
+        return {'message': str(e), 'status': 400, 'error': str(e)}, 400
     except Exception as e:
         return {
             'message': f"Something went wrong: {e}",
@@ -118,6 +122,7 @@ def upsert_job():
 
 
 @jobs_blueprint.route('/start', methods=['POST'])
+@require_admin_or_service_key
 def run_job_now():
     try:
         data = request.get_json(silent=True)
@@ -136,6 +141,8 @@ def run_job_now():
             'status': 200,
             'job_run_id': str(job_run_id),
         }
+    except ValueError as e:
+        return {'message': str(e), 'status': 400, 'error': str(e)}, 400
     except Exception as e:
         return {
             'message': f"Error: {e}",
@@ -145,6 +152,7 @@ def run_job_now():
 
 
 @jobs_blueprint.route('/<job_id>', methods=['DELETE'])
+@require_admin_or_service_key
 def delete_job_route(job_id):
     try:
         # data = request.get_json(silent=True)
@@ -176,6 +184,7 @@ def delete_job_route(job_id):
 
 
 @jobs_blueprint.route('/grouping', methods=['GET'])
+@require_admin_or_service_key
 def get_groupings():
     try:
         return get_grouping_values()
@@ -188,6 +197,7 @@ def get_groupings():
 
 
 @jobs_blueprint.route('/status', methods=['GET'])
+@require_admin_or_service_key
 def get_statuses():
     try:
         return get_status_values()
@@ -200,6 +210,7 @@ def get_statuses():
 
 
 @jobs_blueprint.route('/running', methods=['GET'])
+@require_admin_or_service_key
 def get_running_jobs():
     try:
         queued_jobs = get_running_jobs_from_scheduler()

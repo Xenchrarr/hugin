@@ -10,6 +10,10 @@ SELECT
     runs.parameter,
     runs.run_by,
     runs.run_by_group,
-    runs.metadata
+    runs.metadata,
+    runs.workflow_version,
+    runs.workflow_input,
+    runs.workflow_definition,
+    runs.last_activity_at
 FROM job_runs runs
-INNER JOIN jobs j ON j.id = runs.job_id
+LEFT JOIN jobs j ON j.id = runs.job_id

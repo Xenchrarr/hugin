@@ -13,6 +13,10 @@ export class Job{
     description: string = '';
     grouping_value: string = '';
     ran_last: string|undefined = undefined;
+    max_concurrent: number = 1;
+    input: Record<string, unknown> = {};
+    run_at: string|undefined = undefined;
+    once_status: string|undefined = undefined;
 
     constructor(init?: Partial<Job>) {
         Object.assign(this, init);

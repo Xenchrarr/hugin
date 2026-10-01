@@ -14,6 +14,7 @@ def run_power_aggregation(param: str = ""):
     if resp.status_code == 200:
         result = resp.json()
         logger.log_info(f"Aggregation completed: {result}")
+        return result
     else:
         logger.log_error(f"Power aggregation failed: {resp.status_code}: {resp.text}", "")
         raise Exception(f"Power aggregation failed: {resp.status_code}: {resp.text}")

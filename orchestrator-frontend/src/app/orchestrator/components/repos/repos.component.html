@@ -1,9 +1,4 @@
-<h1>Git Repositories</h1>
-
-<p>
-    <button mat-stroked-button (click)="loadRepos()">Reload</button>
-    <button mat-flat-button color="primary" (click)="addRepo()">Add repo</button>
-</p>
+<header class="page-heading"><div><span>Source control</span><h1>Git repositories</h1><p>Manage repositories available to scripts and scheduled jobs.</p></div><div><button mat-stroked-button (click)="loadRepos()">Reload</button><button mat-flat-button color="primary" (click)="addRepo()">Add repo</button></div></header>
 
 <div class="mat-elevation-z8">
     <table mat-table [dataSource]="repos" class="mat-elevation-z8">

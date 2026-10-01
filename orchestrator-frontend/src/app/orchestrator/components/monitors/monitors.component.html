@@ -1,0 +1,17 @@
+<main class="monitor-page">
+    <header class="page-header"><div><span>Automation</span><h1>Monitors</h1><p>Health and incident triggers for code-defined monitoring rules.</p></div><button mat-stroked-button type="button" (click)="load()" [disabled]="loading"><mat-icon>refresh</mat-icon>Refresh</button></header>
+    @if (errorMessage) { <div class="message error"><mat-icon>error_outline</mat-icon>{{ errorMessage }}</div> }
+    @else if (loading) { <div class="message">Loading monitor health…</div> }
+    @else if (!items.length) { <div class="message empty"><mat-icon>monitor_heart</mat-icon><strong>No monitors deployed</strong><span>Code-defined monitors appear here after registration.</span></div> }
+    @else {
+        <section class="monitor-grid">
+            @for (item of items; track item.key) {
+                <article><header><div class="icon"><mat-icon>monitor_heart</mat-icon></div><span class="status" [attr.data-status]="status(item).toLowerCase()">{{ status(item) }}</span></header><code>{{ item.key }}</code><h2>{{ item.description || item.key }}</h2>
+                    <dl><div><dt>Source</dt><dd>{{ item.source }}</dd></div><div><dt>Interval</dt><dd>{{ item.interval_seconds }} seconds</dd></div><div><dt>Last success</dt><dd>{{ item.runtime?.last_success_at || 'Never' }}</dd></div><div><dt>Failures</dt><dd>{{ item.runtime?.consecutive_failures || 0 }}</dd></div></dl>
+                    @if (item.runtime?.last_error) { <p class="last-error">{{ item.runtime.last_error }}</p> }
+                    <footer><button mat-stroked-button (click)="toggle(item)" [disabled]="busyKeys.has(item.key)">{{ item.runtime?.enabled ? 'Pause' : 'Resume' }}</button><button mat-stroked-button (click)="run(item)" [disabled]="busyKeys.has(item.key) || !item.runtime?.enabled">Run now</button><a mat-flat-button [routerLink]="['/monitors', item.key]">Incidents</a></footer>
+                </article>
+            }
+        </section>
+    }
+</main>

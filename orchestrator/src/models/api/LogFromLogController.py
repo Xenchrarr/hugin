@@ -11,11 +11,13 @@ class LogFromLogController:
         log_text: str,
         severity: str,
         stack_trace: str = '',
+        step_run_id: uuid.UUID | str | None = None,
     ):
         self.job_run_id = job_run_id
         self.log_text = log_text
         self.severity = severity
         self.stack_trace = stack_trace
+        self.step_run_id = step_run_id
 
     @staticmethod
     def from_dict(obj: dict[str, Any]) -> "LogFromLogController":
@@ -26,6 +28,7 @@ class LogFromLogController:
             obj.get("log_text", ""),
             obj.get("severity", ""),
             obj.get("stack_trace", ""),
+            obj.get("step_run_id"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -34,4 +37,5 @@ class LogFromLogController:
             "log_text": self.log_text,
             "severity": self.severity,
             "stack_trace": self.stack_trace,
+            "step_run_id": str(self.step_run_id) if self.step_run_id else None,
         }
