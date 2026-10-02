@@ -16,7 +16,8 @@ SELECT
     j.max_concurrent,
     j.workflow_input,
     j.run_at,
-    j.once_status
+    j.once_status,
+    j.workflow_revision_id
 FROM jobs j
 LEFT JOIN (
     SELECT DISTINCT ON (job_id)

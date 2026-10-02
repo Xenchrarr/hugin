@@ -14,6 +14,7 @@ import {AlarmsComponent} from './components/alarms/alarms.component';
 import {ReticulumChatComponent} from './components/reticulum-chat/reticulum-chat.component';
 import {WorkflowsComponent} from './components/workflows/workflows.component';
 import {WorkflowDetailComponent} from './components/workflows/workflow-detail.component';
+import {WorkflowBuilderComponent} from './components/workflows/workflow-builder.component';
 import {ExecutionDetailComponent} from './components/execution-detail/execution-detail.component';
 import {MonitorsComponent} from './components/monitors/monitors.component';
 import {MonitorDetailComponent} from './components/monitors/monitor-detail.component';
@@ -34,6 +35,8 @@ export const routes: Routes = [
     },
     { path: 'executions/:runId', component: ExecutionDetailComponent },
     { path: 'workflows', component: WorkflowsComponent, canActivate: [adminGuard] },
+    { path: 'workflows/new', component: WorkflowBuilderComponent, canActivate: [adminGuard] },
+    { path: 'workflows/:workflowKey/edit', component: WorkflowBuilderComponent, canActivate: [adminGuard] },
     { path: 'workflows/:workflowKey', component: WorkflowDetailComponent, canActivate: [adminGuard] },
     { path: 'monitors', component: MonitorsComponent, canActivate: [adminGuard] },
     { path: 'monitors/:monitorKey', component: MonitorDetailComponent, canActivate: [adminGuard] },

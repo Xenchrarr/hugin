@@ -8,8 +8,8 @@ from functools import wraps
 from zoneinfo import ZoneInfo
 
 import dateparser
-from telegram import ForceReply, Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram import ForceReply, Update
+from telegram.ext import Application, CommandHandler, ContextTypes
 
 from src.apis.core import HuginCoreClient
 from src.apis.orchestrator import OrchestratorClient
@@ -88,11 +88,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 @restricted()
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = (
-        "help - Show help\n"
-        "data - Show inverter data\n"
-        "weather - Show weather forecast\n"
-        "chart - Show daily production chart\n"
-        "chartdays - Show multi-day production"
+        "/help - Show help\n"
+        "/data - Show inverter data\n"
+        "/weather - Show weather forecast\n"
+        "/chart - Show daily production chart\n"
+        "/chartdays - Show multi-day production"
     )
     await update.message.reply_text(text)
 
@@ -525,44 +525,6 @@ async def registerphone_command(update: Update, context: ContextTypes.DEFAULT_TY
     await update.message.reply_text(f"✅ SMS notifications registered for {user_label} ({phone})")
 
 
-@restricted()
-async def reminder_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle inline keyboard button presses for snooze/dismiss."""
-    query = update.callback_query
-    await query.answer()
-
-    data = query.data
-    if not data:
-        return
-
-    parts = data.split(":")
-    if len(parts) < 2:
-        return
-
-    action = parts[0]
-    try:
-        reminder_id = int(parts[1])
-    except ValueError:
-        return
-
-    if action == "snooze":
-        duration = parts[2] if len(parts) > 2 else "10m"
-        result = orchestrator.snooze_reminder(reminder_id, duration)
-        if result:
-            due = result.get("due_at", "?")
-            if isinstance(due, str) and "T" in due:
-                due = due[:16].replace("T", " ")
-            await query.edit_message_text(f"Snoozed until {due}")
-        else:
-            await query.edit_message_text("Failed to snooze.")
-    elif action == "dismiss":
-        result = orchestrator.dismiss_reminder(reminder_id)
-        if result:
-            await query.edit_message_text("Dismissed.")
-        else:
-            await query.edit_message_text("Failed to dismiss.")
-
-
 async def _post_init(application: Application) -> None:
     """Capture the running event loop so the Flask API thread can schedule sends into it."""
     import src.api.telegram_api as telegram_api
@@ -573,9 +535,12 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     logger.error("Unhandled exception", exc_info=context.error)
 
 
-def main() -> None:
-    application = Application.builder().token(settings.TELEGRAM_API_KEY).post_init(_post_init).build()
+def register_update_handlers(application: Application) -> None:
+    """Register Telegram commands.
 
+    User actions must use CommandHandler so ordinary messages and callback
+    queries cannot invoke bot commands.
+    """
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("data", total_data_command))
@@ -599,8 +564,12 @@ def main() -> None:
     application.add_handler(CommandHandler("callme", callme_command))
     application.add_handler(CommandHandler("register", register_command))
     application.add_handler(CommandHandler("registerphone", registerphone_command))
-    application.add_handler(CallbackQueryHandler(reminder_callback))
     application.add_error_handler(error_handler)
+
+
+def main() -> None:
+    application = Application.builder().token(settings.TELEGRAM_API_KEY).post_init(_post_init).build()
+    register_update_handlers(application)
 
     # Register bot commands with orchestrator for GUI discovery (retries in background)
     def _register_commands():

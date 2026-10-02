@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 _STEP_KEY = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 _MAX_DEFINITION_BYTES = 1024 * 1024
 _MISSING = object()
+_CONDITION_OPERATORS = {"eq", "ne", "exists", "is_true", "is_false", "all", "any", "not"}
 
 
 class WorkflowDefinitionError(ValueError):
@@ -31,6 +32,34 @@ def _references(value: Any):
     elif isinstance(value, list):
         for child in value:
             yield from _references(child)
+
+
+def _validate_condition(condition: Any, location: str) -> None:
+    if not isinstance(condition, dict) or condition.get("op") not in _CONDITION_OPERATORS:
+        raise WorkflowDefinitionError(f"{location} must be a structured condition")
+    operator = condition["op"]
+    allowed = {"op"}
+    if operator in {"eq", "ne"}:
+        allowed |= {"left", "right"}
+        if "left" not in condition or "right" not in condition:
+            raise WorkflowDefinitionError(f"{location} requires left and right operands")
+    elif operator in {"exists", "is_true", "is_false"}:
+        allowed.add("value")
+        if "value" not in condition:
+            raise WorkflowDefinitionError(f"{location} requires a value operand")
+    elif operator in {"all", "any"}:
+        allowed.add("conditions")
+        children = condition.get("conditions")
+        if not isinstance(children, list) or not children:
+            raise WorkflowDefinitionError(f"{location}.conditions must not be empty")
+        for index, child in enumerate(children):
+            _validate_condition(child, f"{location}.conditions[{index}]")
+    else:
+        allowed.add("condition")
+        _validate_condition(condition.get("condition"), f"{location}.condition")
+    unknown = set(condition) - allowed
+    if unknown:
+        raise WorkflowDefinitionError(f"{location} has unknown properties: {', '.join(sorted(unknown))}")
 
 
 def validate_workflow_definition(definition: dict, registry: StepRegistry | None = None,
@@ -62,10 +91,15 @@ def validate_workflow_definition(definition: dict, registry: StepRegistry | None
         if key in prior:
             raise WorkflowDefinitionError(f"duplicate step key: {key}")
         step_type = invocation.get("step", invocation.pop("action", None))
-        registered = registry.get(step_type) if isinstance(step_type, str) else None
+        step_version = invocation.get("step_version", 1)
+        if not isinstance(step_version, int) or isinstance(step_version, bool) or step_version < 1:
+            raise WorkflowDefinitionError(f"step '{key}'.step_version must be a positive integer")
+        registered = registry.get(step_type, step_version) if isinstance(step_type, str) else None
         if registered is None:
-            raise WorkflowDefinitionError(f"unknown step type for step '{key}': {step_type}")
+            raise WorkflowDefinitionError(
+                f"unknown step type for step '{key}': {step_type}@{step_version}")
         invocation["step"] = step_type
+        invocation["step_version"] = step_version
         inputs = invocation.get("inputs", invocation.pop("with", {}))
         if not isinstance(inputs, dict):
             raise WorkflowDefinitionError(f"step '{key}'.inputs must be an object")
@@ -85,16 +119,13 @@ def validate_workflow_definition(definition: dict, registry: StepRegistry | None
                 if missing:
                     raise WorkflowDefinitionError(f"step '{key}' is missing required inputs: {', '.join(sorted(missing))}")
 
-        condition = invocation.get("run_if")
+        condition = invocation.get("when")
+        if "run_if" in invocation:
+            raise WorkflowDefinitionError(f"step '{key}'.run_if is no longer supported; use when")
         if condition is not None:
-            if not isinstance(condition, dict) or not isinstance(condition.get("input"), str):
-                raise WorkflowDefinitionError(f"step '{key}'.run_if is invalid")
-            if not isinstance(condition.get("equals"), bool) or not isinstance(condition.get("default"), bool):
-                raise WorkflowDefinitionError(f"step '{key}'.run_if equals/default must be boolean")
-            if strict_bindings and condition["input"] not in properties:
-                raise WorkflowDefinitionError(f"step '{key}' condition references undeclared workflow input")
+            _validate_condition(condition, f"step '{key}'.when")
 
-        for expression in _references(inputs):
+        for expression in list(_references(inputs)) + list(_references(condition)):
             if not set(expression).issubset({"$ref", "$optional"}):
                 raise WorkflowDefinitionError(f"invalid reference expression in step '{key}'")
             reference = expression.get("$ref")
@@ -112,9 +143,39 @@ def validate_workflow_definition(definition: dict, registry: StepRegistry | None
     return normalized
 
 
-def should_run_step(step: dict, workflow_input: dict) -> bool:
-    condition = step.get("run_if")
-    return condition is None or workflow_input.get(condition["input"], condition["default"]) == condition["equals"]
+def _condition_operand(value: Any, context: dict) -> Any:
+    if isinstance(value, dict) and "$ref" in value:
+        try:
+            return resolve_reference(value["$ref"], context)
+        except WorkflowReferenceError:
+            if value.get("$optional") is True:
+                return _MISSING
+            raise
+    return copy.deepcopy(value)
+
+
+def evaluate_condition(condition: dict, context: dict) -> bool:
+    operator = condition["op"]
+    if operator in {"all", "any"}:
+        values = (evaluate_condition(item, context) for item in condition["conditions"])
+        return all(values) if operator == "all" else any(values)
+    if operator == "not":
+        return not evaluate_condition(condition["condition"], context)
+    if operator == "exists":
+        return _condition_operand(condition["value"], context) is not _MISSING
+    if operator in {"is_true", "is_false"}:
+        value = _condition_operand(condition["value"], context)
+        return value is (operator == "is_true")
+    left = _condition_operand(condition["left"], context)
+    right = _condition_operand(condition["right"], context)
+    if left is _MISSING or right is _MISSING:
+        return False
+    return left == right if operator == "eq" else left != right
+
+
+def should_run_step(step: dict, context: dict) -> bool:
+    condition = step.get("when")
+    return condition is None or evaluate_condition(condition, context)
 
 
 def resolve_reference(reference: str, context: dict) -> Any:
@@ -133,6 +194,18 @@ def resolve_reference(reference: str, context: dict) -> Any:
 
 def _resolve(value: Any, context: dict) -> Any:
     if isinstance(value, dict):
+        if "$first_available" in value and set(value) == {"$first_available"}:
+            candidates = value["$first_available"]
+            if not isinstance(candidates, list) or not candidates:
+                raise WorkflowReferenceError("$first_available requires at least one candidate")
+            for candidate in candidates:
+                try:
+                    resolved = _resolve(candidate, context)
+                except WorkflowReferenceError:
+                    continue
+                if resolved is not _MISSING:
+                    return resolved
+            return _MISSING
         if "$ref" in value and set(value).issubset({"$ref", "$optional"}):
             try:
                 return resolve_reference(value["$ref"], context)

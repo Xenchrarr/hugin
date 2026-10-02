@@ -26,6 +26,7 @@ from src.controllers.reticulum_chat_controller import reticulum_chat_blueprint
 from src.controllers.workflow_controller import workflow_blueprint
 from src.controllers.monitor_controller import monitor_blueprint
 from src.controllers.powershell_controller import powershell_blueprint
+from src.controllers.sms_routing_controller import sms_routing_blueprint
 
 api = Blueprint('api', __name__)
 
@@ -72,3 +73,4 @@ api.register_blueprint(reticulum_chat_blueprint, url_prefix="/reticulum-chat")
 api.register_blueprint(workflow_blueprint, url_prefix="/workflows")
 api.register_blueprint(monitor_blueprint, url_prefix="/monitors")
 api.register_blueprint(powershell_blueprint, url_prefix="/powershell")
+api.register_blueprint(sms_routing_blueprint, url_prefix="/sms-routing")

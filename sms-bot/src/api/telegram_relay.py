@@ -1,5 +1,6 @@
 import logging
 import os
+from dataclasses import dataclass
 from typing import Optional
 
 import requests
@@ -7,7 +8,14 @@ import requests
 logger = logging.getLogger(__name__)
 
 _TELEGRAM_RELAY_URL = os.environ.get("TELEGRAM_RELAY_URL", "http://telegram-relay:8080")
-_SERVICE_KEY = os.environ.get("TELEGRAM_RELAY_SERVICE_KEY", "")
+_SERVICE_KEY = os.environ.get("TELEGRAM_RELAY_SERVICE_KEY") or os.environ.get("SERVICE_KEY", "")
+
+
+@dataclass(frozen=True)
+class IntegrationSendResult:
+    status: str
+    external_message_id: str | None = None
+    detail: str | None = None
 
 
 def _headers() -> dict:
@@ -46,6 +54,37 @@ class TelegramRelayClient:
         except Exception:
             logger.exception("TelegramRelayClient: send_message to chat %s failed", chat_id)
             return False
+
+    def send_routed_message(
+        self, chat_id: int, text: str, reply_to_message_id: str | int | None = None
+    ) -> IntegrationSendResult:
+        """Send once and distinguish a definite failure from an ambiguous timeout."""
+        payload = {"chat_id": chat_id, "text": text}
+        if reply_to_message_id is not None:
+            payload["reply_to_message_id"] = int(reply_to_message_id)
+        try:
+            response = requests.post(
+                f"{self._base}/api/telegram/send", json=payload,
+                headers=_headers(), timeout=(5, 30),
+            )
+            response.raise_for_status()
+            data = response.json()
+            message_id = data.get("message_id")
+            return IntegrationSendResult(
+                "accepted", str(message_id) if message_id is not None else None
+            )
+        except requests.ReadTimeout as exc:
+            logger.warning("Telegram send timed out after submission: %s", exc)
+            return IntegrationSendResult("uncertain", detail="integration response timed out")
+        except (requests.ConnectTimeout, requests.ConnectionError) as exc:
+            logger.warning("Telegram integration unavailable: %s", exc)
+            return IntegrationSendResult("failed", detail="integration unavailable")
+        except requests.RequestException as exc:
+            logger.warning("Telegram rejected routed message: %s", exc)
+            return IntegrationSendResult("failed", detail="integration rejected message")
+        except Exception as exc:
+            logger.warning("Telegram returned an unusable send response: %s", exc)
+            return IntegrationSendResult("uncertain", detail="invalid integration response")
 
     def send_media(
         self,

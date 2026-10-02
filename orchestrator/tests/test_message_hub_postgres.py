@@ -102,6 +102,8 @@ class MessageHubPostgresTests(unittest.TestCase):
                 "027_message_hub_bulk_operations.sql",
                 "029_messenger_relay_poc.sql",
                 "030_reticulum_relay.sql",
+                "034_sms_conversation_routing.sql",
+                "035_disable_deye_telegram_keywords.sql",
             ):
                 connection.execute((migrations / filename).read_text(encoding="utf-8"))
             connection.commit()
@@ -177,7 +179,7 @@ class MessageHubPostgresTests(unittest.TestCase):
                 "WHERE name = 'Deye Solar Webhook'"
             ).fetchone()[0]
             route_row = connection.execute(
-                "SELECT COUNT(*), MIN(filter::text) FROM message_relay_routes "
+                "SELECT COUNT(*), MIN(filter::text), MIN(enabled) "
                 "WHERE name = 'Deye solar query'"
             ).fetchone()
             old_tables = connection.execute(
@@ -190,6 +192,7 @@ class MessageHubPostgresTests(unittest.TestCase):
         self.assertIn("sender_is_bot", route_row[1])
         self.assertIn("/deye", route_row[1])
         self.assertIn("solar data", route_row[1])
+        self.assertEqual(0, route_row[2])
         self.assertEqual((None, None, None), old_tables)
 
     def test_enqueue_is_idempotent(self):
@@ -237,6 +240,42 @@ class MessageHubPostgresTests(unittest.TestCase):
         self.assertEqual(1, len(stored))
         self.assertEqual(b"jpeg-data", stored[0].content)
         self.assertEqual(0, remaining)
+
+    def test_sms_references_are_unique_under_concurrent_allocation_and_survive_reload(self):
+        from src.persistence.SmsRoutingStorage import SmsRoutingStorage
+
+        with self._connect() as connection:
+            owner_id = connection.execute(
+                "INSERT INTO users (username, password_hash, phone_number) "
+                "VALUES (%s, %s, %s) RETURNING id",
+                ("routing-owner", "test", "+4712345678"),
+            ).fetchone()[0]
+            storage = SmsRoutingStorage.__new__(SmsRoutingStorage)
+            storage._db = _ConnectionDb(connection)
+            conversation = storage.get_or_create_conversation(
+                owner_user_id=owner_id, service="tg", integration_account="main",
+                external_chat_id="42", alias="tg/nikolai", display_name="Nikolai",
+            )
+
+        def allocate(index):
+            with self._connect() as connection:
+                storage = SmsRoutingStorage.__new__(SmsRoutingStorage)
+                storage._db = _ConnectionDb(connection)
+                return storage.create_message(
+                    owner_user_id=owner_id, conversation_id=conversation.id,
+                    direction="inbound", body=f"message {index}",
+                    transport_event_id=f"event-{index}", send_status="received",
+                ).reference
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            references = list(pool.map(allocate, range(20)))
+
+        self.assertEqual(20, len(set(references)))
+        with self._connect() as connection:
+            reloaded = SmsRoutingStorage.__new__(SmsRoutingStorage)
+            reloaded._db = _ConnectionDb(connection)
+            persisted = reloaded.get_message_by_reference(owner_id, references[0])
+        self.assertEqual(references[0], persisted.reference)
 
     def test_idempotent_media_submission_rejects_different_attachment(self):
         first = {

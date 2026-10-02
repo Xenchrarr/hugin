@@ -16,8 +16,11 @@ from src.monitors import (
 from src.monitors.actions import IncidentActionExecution
 from src.services.core.callback_registry import CallbackRegistry
 from src.services.workflows.workflow_definition_service import (
-    WorkflowDefinitionError, resolve_step_input, validate_value_against_schema,
+    WorkflowDefinitionError, evaluate_condition, resolve_step_input,
+    validate_workflow_definition,
+    validate_value_against_schema,
 )
+from src.services.workflows.workflow_compiler import WorkflowCompileError, WorkflowCompiler
 from src.workflows import CallbackExecution, StepContext, StepResult, workflow
 from src.workflows.definitions import WorkflowRegistry
 from src.workflows.registry import StepRegistry
@@ -33,18 +36,115 @@ def _consumer(_context, values):
 
 
 class WorkflowRuntimeTests(unittest.TestCase):
+    def test_deployed_step_contracts_are_gui_addressable(self):
+        from src.workflows.core import steps as core_steps
+        from src.workflows.hugin import steps as _hugin_steps  # noqa: F401
+        from src.workflows.powershell import steps as _powershell_steps  # noqa: F401
+        from src.workflows.registry import workflow_step_registry
+
+        for registered in workflow_step_registry.list():
+            with self.subTest(step=registered.spec.key):
+                for schema in (registered.spec.input_schema, registered.spec.output_schema):
+                    self.assertEqual("object", schema.get("type"))
+                    self.assertIsInstance(schema.get("properties"), dict)
+                    self.assertIn("additionalProperties", schema)
+                    self.assertLessEqual(set(schema.get("required", [])), set(schema["properties"]))
+
+        echoed = core_steps.echo_step.execute(
+            StepContext("run", "step", "echo", 1), {"value": {"answer": 42}})
+        self.assertEqual({"value": {"answer": 42}}, echoed.output)
+
+        with self.assertRaisesRegex(ValueError, "properties map"):
+            StepRegistry().register(RegisteredStep(
+                StepSpec("test.anonymous", input_schema={"type": "object"}), _consumer))
+
+    def test_step_registry_keeps_deployed_versions(self):
+        steps = StepRegistry()
+        first = steps.register(RegisteredStep(StepSpec("test.versioned", version=1), _consumer))
+        second = steps.register(RegisteredStep(StepSpec("test.versioned", version=2), _consumer))
+        self.assertIs(first, steps.get("test.versioned", 1))
+        self.assertIs(second, steps.get("test.versioned", 2))
+        self.assertIs(second, steps.get("test.versioned"))
+
+    def test_compiles_branch_conditions_and_first_available_merge(self):
+        steps = StepRegistry()
+        steps.register(RegisteredStep(StepSpec(
+            "test.producer", input_schema={"type": "object", "required": ["seed"],
+                "properties": {"seed": {"type": "integer"}}, "additionalProperties": False},
+            output_schema={"type": "object", "properties": {"value": {"type": "integer"}},
+                           "additionalProperties": False}), _producer))
+        steps.register(RegisteredStep(StepSpec(
+            "test.consumer", input_schema={"type": "object", "required": ["value"],
+                "properties": {"value": {"type": "integer"}},
+                "additionalProperties": False}), _consumer))
+        definition = WorkflowCompiler(steps).compile({
+            "key": "test.branch", "input_schema": {"type": "object", "required": ["seed", "route"],
+                "properties": {"seed": {"type": "integer"}, "route": {"type": "string"}}},
+            "steps": [
+                {"key": "path_a", "step": "test.producer", "bindings": {
+                    "seed": {"source": "workflow_input", "path": ["seed"]}},
+                 "when": {"op": "eq", "left": {"source": "workflow_input", "path": ["route"]},
+                          "right": {"source": "literal", "value": "a"}}},
+                {"key": "path_b", "step": "test.producer", "bindings": {
+                    "seed": {"source": "workflow_input", "path": ["seed"]}},
+                 "when": {"op": "eq", "left": {"source": "workflow_input", "path": ["route"]},
+                          "right": {"source": "literal", "value": "b"}}},
+                {"key": "merge", "step": "test.consumer", "bindings": {"value": {
+                    "source": "first_available", "candidates": [
+                        {"source": "step_output", "step_key": "path_a", "path": ["value"], "optional": True},
+                        {"source": "step_output", "step_key": "path_b", "path": ["value"], "optional": True},
+                    ]}}},
+            ],
+        }, version=1)
+        self.assertEqual(1, definition["steps"][0]["step_version"])
+        self.assertEqual({"$first_available": [
+            {"$ref": "$.steps.path_a.output.value", "$optional": True},
+            {"$ref": "$.steps.path_b.output.value", "$optional": True},
+        ]}, definition["steps"][2]["inputs"]["value"])
+        self.assertTrue(evaluate_condition(definition["steps"][0]["when"], {
+            "input": {"route": "a"}, "steps": {}}))
+        self.assertEqual({"value": 7}, resolve_step_input(
+            definition["steps"][2]["inputs"], {"input": {}, "steps": {
+                "path_a": {"status": "Skipped", "output": {}},
+                "path_b": {"status": "Finished", "output": {"value": 7}},
+            }}))
+
+    def test_legacy_run_if_is_rejected(self):
+        steps = StepRegistry()
+        steps.register(RegisteredStep(StepSpec("test.consumer"), _consumer))
+        with self.assertRaises(WorkflowDefinitionError):
+            validate_workflow_definition({"key": "test.legacy", "version": 1,
+                "input_schema": {"type": "object"}, "steps": [{"key": "consumer",
+                    "step": "test.consumer", "inputs": {},
+                    "run_if": {"input": "enabled", "equals": True}}]}, steps)
+
+    def test_compiler_rejects_incompatible_binding(self):
+        steps = StepRegistry()
+        steps.register(RegisteredStep(StepSpec(
+            "test.consumer", input_schema={"type": "object", "required": ["value"],
+                "properties": {"value": {"type": "integer"}},
+                "additionalProperties": False}), _consumer))
+        with self.assertRaises(WorkflowCompileError):
+            WorkflowCompiler(steps).compile({
+                "key": "test.bad", "input_schema": {"type": "object", "properties": {
+                    "name": {"type": "string"}}}, "steps": [{"key": "consume",
+                    "step": "test.consumer", "bindings": {"value": {
+                        "source": "workflow_input", "path": ["name"]}}}]}, version=1)
+
     def test_infers_workflow_and_previous_step_bindings(self):
         steps = StepRegistry()
         workflows = WorkflowRegistry(steps)
 
         producer = steps.register(RegisteredStep(StepSpec(
             "test.producer", input_schema={"type": "object", "required": ["seed"],
-                "properties": {"seed": {"type": "integer"}}},
+                "properties": {"seed": {"type": "integer"}}, "additionalProperties": False},
             output_schema={"type": "object", "required": ["value"],
-                "properties": {"value": {"type": "integer"}}}), _producer))
+                "properties": {"value": {"type": "integer"}},
+                "additionalProperties": False}), _producer))
         consumer = steps.register(RegisteredStep(StepSpec(
             "test.consumer", input_schema={"type": "object", "required": ["value"],
-                "properties": {"value": {"type": "integer"}}}), _consumer))
+                "properties": {"value": {"type": "integer"}},
+                "additionalProperties": False}), _consumer))
 
         definition = workflow("test.inference", producer, consumer, version=1,
                               registry=workflows).definition()

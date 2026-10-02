@@ -163,7 +163,9 @@ def main():
                 response_key = f"sms-command:{msg.sender}:{msg.date}:{msg.index}"
                 if response_key in pending_responses:
                     continue
-                response = processor.process(msg.text, sender=msg.sender)
+                response = processor.process(
+                    msg.text, sender=msg.sender, event_id=response_key
+                )
                 if isinstance(response, CommandResponse):
                     pending = PendingResponse(
                         phone=msg.sender,

@@ -85,10 +85,12 @@ def get_job_from_id():
 @jobs_blueprint.route('/types', methods=['GET'])
 @require_admin_or_service_key
 def available_types():
-    from src.services.workflows.workflow_service import get_workflows
+    from src.services.workflows.workflow_service import get_all_workflow_revisions, get_workflows
+    active_ids = {item.id for item in get_workflows()}
     return [{"job_type": item.key, "function_name": item.key,
              "description": item.description, "input_schema": item.input_schema,
-             "version": item.version} for item in get_workflows()]
+             "version": item.version, "revision_id": item.id,
+             "active": item.id in active_ids} for item in get_all_workflow_revisions()]
 
 
 @jobs_blueprint.route('/', methods=['POST'])

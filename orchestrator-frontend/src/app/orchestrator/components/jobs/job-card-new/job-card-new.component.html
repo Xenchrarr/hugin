@@ -21,9 +21,9 @@
                     <td>
                         <mat-form-field>
                             <mat-label>Job Type</mat-label>
-                            <mat-select [(ngModel)]="job.job_type" (selectionChange)="onJobTypeChange($event.value)">
-                                <mat-option *ngFor="let type of job_types" [value]="type.job_type">
-                                    {{type.job_type}}
+                            <mat-select [(ngModel)]="job.workflow_revision_id" (selectionChange)="onRevisionChange($event.value)">
+                                <mat-option *ngFor="let type of job_types" [value]="type.revision_id">
+                                    {{type.job_type}} · v{{type.version}}{{type.active ? ' (current)' : ''}}
                                 </mat-option>
                             </mat-select>
                         </mat-form-field>

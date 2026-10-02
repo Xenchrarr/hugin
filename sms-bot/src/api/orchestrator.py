@@ -103,6 +103,46 @@ class OrchestratorClient:
     def lookup_user(self, channel: str, identifier: str) -> dict | None:
         return self._get("/api/users/lookup", channel=channel, identifier=identifier)
 
+    # ── Conversation-aware SMS routing ─────────────────────
+
+    def prepare_routed_message(
+        self, *, user_id: int, selector_type: str, selector, body: str,
+        event_id: str | None = None,
+    ) -> dict | None:
+        return self._post("/api/sms-routing/outbound", json={
+            "owner_user_id": user_id,
+            "selector_type": selector_type,
+            "selector": selector,
+            "body": body,
+            "event_id": event_id,
+        })
+
+    def update_routed_status(
+        self, user_id: int, reference: int, status: str,
+        detail: str | None = None, external_message_id: str | None = None,
+    ) -> dict | None:
+        return self._post(f"/api/sms-routing/outbound/{reference}/status", json={
+            "owner_user_id": user_id,
+            "status": status,
+            "detail": detail,
+            "external_message_id": external_message_id,
+        })
+
+    def routing_chats(self, user_id: int, offset: int = 0) -> dict | None:
+        data = self._get(
+            "/api/sms-routing/chats", owner_user_id=user_id, limit=10, offset=offset
+        )
+        return data if isinstance(data, dict) else None
+
+    def routing_history(
+        self, user_id: int, alias: str, before_reference: int | None = None,
+    ) -> dict | None:
+        params = {"owner_user_id": user_id, "alias": alias, "limit": 5}
+        if before_reference is not None:
+            params["before_reference"] = before_reference
+        data = self._get("/api/sms-routing/history", **params)
+        return data if isinstance(data, dict) else None
+
     def patch_user_config(self, user_id: int, values: dict) -> dict | None:
         return self._post(f"/api/users/{user_id}/service-config", json=values)
 

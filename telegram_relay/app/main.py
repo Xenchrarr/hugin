@@ -114,11 +114,16 @@ def _create_reload_server(forwarder: TelegramForwarder) -> threading.Thread:
                 return jsonify({"message": "Unauthorized"}), 401
         data = request.get_json(silent=True) or {}
         chat_id = data.get("chat_id")
-        text = data.get("text", "").strip()
-        if not chat_id or not text:
+        text = data.get("text", "")
+        reply_to_message_id = data.get("reply_to_message_id")
+        if not chat_id or not isinstance(text, str) or not text.strip():
             return jsonify({"message": "Missing chat_id or text"}), 400
         try:
-            message_id = forwarder.send_message(int(chat_id), text)
+            message_id = forwarder.send_message(
+                int(chat_id), text,
+                reply_to_message_id=(int(reply_to_message_id)
+                                     if reply_to_message_id is not None else None),
+            )
             return jsonify({"status": "ok", "message_id": message_id})
         except Exception as exc:
             logger.error("Failed to send Telegram message: %s", exc)

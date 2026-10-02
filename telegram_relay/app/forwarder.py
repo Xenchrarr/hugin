@@ -459,17 +459,25 @@ class TelegramForwarder:
 
     # ── Send message ───────────────────────────────────────────────────────────
 
-    def send_message(self, chat_id: int, text: str) -> int | None:
+    def send_message(
+        self, chat_id: int, text: str, reply_to_message_id: int | None = None
+    ) -> int | None:
         """Send a text message to a Telegram chat via TDLib (synchronous)."""
+        params = {
+            "chat_id": chat_id,
+            "input_message_content": {
+                "@type": "inputMessageText",
+                "text": {"@type": "formattedText", "text": text},
+            },
+        }
+        if reply_to_message_id is not None:
+            params["reply_to"] = {
+                "@type": "inputMessageReplyToMessage",
+                "message_id": reply_to_message_id,
+            }
         result = self._client.call_method(
             "sendMessage",
-            params={
-                "chat_id": chat_id,
-                "input_message_content": {
-                    "@type": "inputMessageText",
-                    "text": {"@type": "formattedText", "text": text},
-                },
-            },
+            params=params,
         )
         result.wait()
         if result.error:

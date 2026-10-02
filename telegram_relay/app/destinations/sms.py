@@ -1,6 +1,8 @@
 import base64
 import logging
 import os
+import re
+import unicodedata
 
 import httpx
 
@@ -18,6 +20,14 @@ class SmsAdapter(AbstractDestination):
     def __init__(self, destination_id: str, config: dict) -> None:
         self._id = destination_id
         self._phone: str = config.get("phone", "")
+        self._owner_user_id = config.get("owner_user_id")
+        self._integration_account = str(
+            config.get("integration_account") or "telegram-main"
+        )
+        self._conversation_aliases = {
+            str(key): str(value).strip().lower()
+            for key, value in (config.get("conversation_aliases") or {}).items()
+        }
         self._recovery_policy: str = config.get("recovery_policy", "digest_hold")
         if self._recovery_policy not in {"replay", "digest_hold", "inbox_only", "latest_only"}:
             self._recovery_policy = "digest_hold"
@@ -37,39 +47,60 @@ class SmsAdapter(AbstractDestination):
         return self._client
 
     @staticmethod
-    def _format_message(payload: dict) -> str:
-        chat_title = (payload.get("chat_title") or "")[:8] or None
-        sender_name = (payload.get("sender_name") or "")[:8] or None
-        chat_type = payload.get("chat_type", "")
+    def _slug(value: str) -> str:
+        ascii_value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode()
+        slug = re.sub(r"[^a-z0-9_-]+", "-", ascii_value.lower()).strip("-_")
+        return (slug or "chat")[:18]
+
+    def _alias_for(self, payload: dict) -> str:
+        chat_id = str(payload.get("chat_id"))
+        configured = self._conversation_aliases.get(chat_id)
+        if configured:
+            return configured
+        title = str(payload.get("chat_title") or payload.get("sender_name") or chat_id)
+        return f"tg/{self._slug(title)}"
+
+    async def _register_message(self, payload: dict) -> dict | None:
+        chat_id = payload.get("chat_id")
+        message_id = payload.get("message_id")
         text = payload.get("text") or payload.get("caption") or f"<{payload.get('media_type', 'media')}>"
-
-        # For private chats chat_title IS the contact's name — same as sender_name.
-        # Showing both would produce "Alice / Alice: hi", so use a single label.
-        if chat_type == "private":
-            label = sender_name or chat_title
-            if label:
-                return f"tg: {label}: {text}"
-            return f"tg: {text}"
-
-        # Groups: show chat name and, when available, who sent it
-        if chat_title and sender_name:
-            # Keep the generated prefix in the GSM-7 basic alphabet. The EC25
-            # treats the escape byte used by GSM-7 extension characters such
-            # as "|" as cancellation of AT+CMGS, forcing the entire message to
-            # UCS-2 and reducing one-part capacity from 160 to 70 characters.
-            return f"tg: {chat_title} / {sender_name}: {text}"
-        if chat_title:
-            return f"tg: {chat_title}: {text}"
-        if sender_name:
-            return f"tg: {sender_name}: {text}"
-        return f"tg: {text}"
+        body = {
+            "owner_phone": self._phone,
+            "service": "tg",
+            "integration_account": self._integration_account,
+            "external_chat_id": str(chat_id),
+            "alias": self._alias_for(payload),
+            "display_name": payload.get("chat_title") or payload.get("sender_name") or str(chat_id),
+            "event_id": f"tg:{self._integration_account}:{chat_id}:{message_id}",
+            "external_message_id": str(message_id),
+            "body": text,
+            "author": (payload.get("sender_name")
+                       if payload.get("chat_type") != "private" else None),
+        }
+        if self._owner_user_id is not None:
+            body["owner_user_id"] = self._owner_user_id
+        client = self._get_client()
+        try:
+            response = await client.post(
+                f"{_ORCHESTRATOR_URL}/api/sms-routing/external-messages",
+                json=body,
+                headers={"X-Service-Key": _SERVICE_KEY} if _SERVICE_KEY else {},
+            )
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as exc:
+            logger.error("SmsAdapter '%s' could not allocate reply reference: %s", self._id, exc)
+            return None
 
     async def send(self, payload: dict) -> None:
         if not self._phone:
             logger.error("SmsAdapter '%s': no phone number configured", self._id)
             return
 
-        body = self._format_message(payload)
+        routed = await self._register_message(payload)
+        if routed is None:
+            return
+        body = routed["text"]
         client = self._get_client()
         media_data = payload.get("media_data")
         media_mime_type = str(payload.get("media_mime_type") or "image/jpeg").lower()
@@ -78,7 +109,9 @@ class SmsAdapter(AbstractDestination):
         chat_id = payload.get("chat_id")
         message_id = payload.get("message_id")
         source_label = payload.get("chat_title") or payload.get("sender_name") or "Telegram"
-        idempotency_key = f"telegram:{chat_id}:{message_id}:{self._phone}"
+        idempotency_key = (
+            f"telegram:{self._integration_account}:{chat_id}:{message_id}:{self._phone}"
+        )
         url = f"{_ORCHESTRATOR_URL}/api/message-hub/messages"
         delivery: dict = {
             "gateway_key": "sms-main",
@@ -93,14 +126,18 @@ class SmsAdapter(AbstractDestination):
             "direction": "outbound",
             "kind": "mms" if is_mms else "text",
             "source_gateway_key": "telegram-main",
-            "external_id": f"{chat_id}:{message_id}",
-            "conversation_key": str(chat_id) if chat_id is not None else None,
+            "external_id": f"{self._integration_account}:{chat_id}:{message_id}",
+            "conversation_key": (
+                f"{self._integration_account}:{chat_id}" if chat_id is not None else None
+            ),
             "payload": {"text": body},
             "metadata": {
                 "source_type": "telegram",
                 "source_label": source_label,
                 "chat_id": chat_id,
                 "message_id": message_id,
+                "sms_reference": routed["reference"],
+                "conversation_alias": routed["alias"],
             },
             "priority": self._priority,
             "idempotency_key": idempotency_key,

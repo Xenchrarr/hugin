@@ -5,9 +5,9 @@ import time
 from dataclasses import dataclass, field
 
 
-# GSM-7 responses fit in one physical SMS after reserving the modem's trailing
-# workaround character. Other scripts automatically fall back to UCS-2.
-_MAX_PAGE_LENGTH = 159
+# A single GSM-7 SMS carries 160 septets. Other scripts automatically fall
+# back to UCS-2 in the transport layer.
+_MAX_PAGE_LENGTH = 160
 _SESSION_TTL_SECONDS = 6 * 60 * 60
 
 

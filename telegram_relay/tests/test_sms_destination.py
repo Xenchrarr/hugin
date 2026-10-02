@@ -1,8 +1,18 @@
 import asyncio
 import base64
 import importlib
+import sys
+import types
 import unittest
 from pathlib import Path
+
+
+destinations_package = types.ModuleType("app.destinations")
+destinations_package.__path__ = [str(Path(__file__).resolve().parents[1] / "app" / "destinations")]
+sys.modules.setdefault("app.destinations", destinations_package)
+base_module = types.ModuleType("app.destinations.base")
+base_module.AbstractDestination = object
+sys.modules.setdefault("app.destinations.base", base_module)
 
 
 # Another relay test replaces this module while isolating the TDLib wrapper.
@@ -16,11 +26,14 @@ SmsAdapter = sms_module.SmsAdapter
 
 
 class _Response:
+    def __init__(self, data):
+        self.data = data
+
     def raise_for_status(self):
         return None
 
     def json(self):
-        return {"message_id": 42}
+        return self.data
 
 
 class _Client:
@@ -30,7 +43,15 @@ class _Client:
 
     async def post(self, url, json, headers):
         self.calls.append((url, json, headers))
-        return _Response()
+        if url.endswith("/api/sms-routing/external-messages"):
+            alias = json["alias"]
+            author = f"{json['author']}: " if json.get("author") else ""
+            return _Response({
+                "reference": 184,
+                "alias": alias,
+                "text": f"({alias} #184)\n{author}{json['body']}",
+            })
+        return _Response({"message_id": 42})
 
 
 class SmsDestinationTests(unittest.TestCase):
@@ -52,13 +73,17 @@ class SmsDestinationTests(unittest.TestCase):
 
         asyncio.run(adapter.send(payload))
 
-        url, body, _ = client.calls[0]
+        registration_url, registration, _ = client.calls[0]
+        self.assertTrue(registration_url.endswith("/api/sms-routing/external-messages"))
+        self.assertEqual("tg/family", registration["alias"])
+        url, body, _ = client.calls[1]
         self.assertTrue(url.endswith("/api/message-hub/messages"))
         self.assertEqual("telegram-main", body["source_gateway_key"])
-        self.assertEqual("-1001:99", body["external_id"])
+        self.assertEqual("telegram-main:-1001:99", body["external_id"])
         self.assertEqual("digest_hold", body["deliveries"][0]["recovery_policy"])
         self.assertEqual(17, body["deliveries"][0]["target_endpoint_id"])
-        self.assertEqual("tg: Family / Alice: Hello", body["payload"]["text"])
+        self.assertEqual("(tg/family #184)\nAlice: Hello", body["payload"]["text"])
+        self.assertEqual(184, body["metadata"]["sms_reference"])
 
     def test_submits_telegram_photo_as_mms_attachment(self):
         adapter = SmsAdapter("17", {"phone": "+4712345678"})
@@ -78,28 +103,21 @@ class SmsDestinationTests(unittest.TestCase):
 
         asyncio.run(adapter.send(payload))
 
-        _, body, _ = client.calls[0]
+        _, body, _ = client.calls[1]
         self.assertEqual("mms", body["kind"])
-        self.assertEqual("tg: Alice: Cabin", body["payload"]["text"])
+        self.assertEqual("(tg/alice #184)\nCabin", body["payload"]["text"])
         self.assertEqual("image/jpeg", body["attachments"][0]["content_type"])
         self.assertEqual("telegram-99.jpg", body["attachments"][0]["filename"])
         self.assertEqual(image, base64.b64decode(body["attachments"][0]["data_base64"]))
 
-    def test_group_prefix_uses_only_gsm7_basic_characters(self):
-        body = SmsAdapter._format_message({
-            "chat_type": "group",
-            "chat_title": "Family",
-            "sender_name": "Alice",
-            "text": "a" * 80,
+    def test_explicit_alias_mapping_uses_stable_chat_id(self):
+        adapter = SmsAdapter("17", {
+            "phone": "+4712345678",
+            "conversation_aliases": {"-1001": "tg/close-family"},
         })
-
-        self.assertEqual("tg: Family / Alice: " + "a" * 80, body)
-        self.assertNotIn("|", body)
-
-    def test_source_prefix_is_present_without_chat_labels(self):
-        body = SmsAdapter._format_message({"text": "Hello"})
-
-        self.assertEqual("tg: Hello", body)
+        self.assertEqual("tg/close-family", adapter._alias_for({
+            "chat_id": -1001, "chat_title": "A renamed group",
+        }))
 
 if __name__ == "__main__":
     unittest.main()

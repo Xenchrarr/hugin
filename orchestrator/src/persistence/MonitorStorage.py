@@ -48,10 +48,14 @@ class MonitorStorage:
     def claim_incident(self, definition, candidate: IncidentCandidate):
         incident_id, run_id = uuid.uuid4(), uuid.uuid4(); workflow=candidate.response_workflow or definition.response_workflow
         payload=candidate.workflow_input(incident_id)
-        row=self.db.execute("""INSERT INTO monitor_incidents(id,monitor_key,incident_type,dedupe_key,correlation_key,first_seen_at,last_seen_at,evidence,response_workflow_key,workflow_run_id,workflow_input)
-          VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(monitor_key,dedupe_key) DO UPDATE SET last_seen_at=GREATEST(monitor_incidents.last_seen_at,EXCLUDED.last_seen_at),updated_at=NOW() RETURNING id,workflow_run_id,response_status""",
-          (incident_id,definition.key,candidate.incident_type,candidate.dedupe_key,candidate.correlation_key,candidate.first_seen_at,candidate.last_seen_at,json.dumps(payload["evidence"]),workflow,run_id,json.dumps(payload))).fetchone();self.db.commit()
-        return {"id":str(row[0]),"workflow_run_id":str(row[1]),"response_status":row[2],"workflow_key":workflow,"workflow_input":payload} if row and row[0]==incident_id else None
+        revision = self.db.execute("""SELECT active_revision_id FROM workflows
+          WHERE key=%s AND archived=FALSE AND active_revision_id IS NOT NULL""", (workflow,)).fetchone()
+        if not revision:
+            raise ValueError(f"Published response workflow not found: {workflow}")
+        row=self.db.execute("""INSERT INTO monitor_incidents(id,monitor_key,incident_type,dedupe_key,correlation_key,first_seen_at,last_seen_at,evidence,response_workflow_key,workflow_revision_id,workflow_run_id,workflow_input)
+          VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(monitor_key,dedupe_key) DO UPDATE SET last_seen_at=GREATEST(monitor_incidents.last_seen_at,EXCLUDED.last_seen_at),updated_at=NOW() RETURNING id,workflow_run_id,response_status,workflow_revision_id""",
+          (incident_id,definition.key,candidate.incident_type,candidate.dedupe_key,candidate.correlation_key,candidate.first_seen_at,candidate.last_seen_at,json.dumps(payload["evidence"]),workflow,revision[0],run_id,json.dumps(payload))).fetchone();self.db.commit()
+        return {"id":str(row[0]),"workflow_run_id":str(row[1]),"response_status":row[2],"workflow_revision_id":str(row[3]),"workflow_key":workflow,"workflow_input":payload} if row and row[0]==incident_id else None
 
     def finish_poll(self,key,owner,checkpoint,errors=()):
         self.db.execute("""UPDATE monitor_runtime_state SET checkpoint=%s,last_success_at=CASE WHEN %s='' THEN NOW() ELSE last_success_at END,
@@ -68,11 +72,12 @@ class MonitorStorage:
 
     def list_incidents(self,key):
         rows=self.db.execute("""SELECT id,incident_type,dedupe_key,correlation_key,first_seen_at,last_seen_at,
-          evidence,response_workflow_key,response_status,workflow_run_id,last_error FROM monitor_incidents
+          evidence,response_workflow_key,response_status,workflow_run_id,last_error,workflow_revision_id FROM monitor_incidents
           WHERE monitor_key=%s ORDER BY created_at DESC LIMIT 200""",(key,)).fetchall()
         return [{"id":str(r[0]),"incident_type":r[1],"dedupe_key":r[2],"correlation_key":r[3],
                  "first_seen_at":r[4],"last_seen_at":r[5],"evidence":r[6],"response_workflow":r[7],
-                 "response_status":r[8],"workflow_run_id":str(r[9]),"last_error":r[10]} for r in rows]
+                 "response_status":r[8],"workflow_run_id":str(r[9]),"last_error":r[10],
+                 "workflow_revision_id":str(r[11])} for r in rows]
 
     def set_enabled(self,key,value):
         self.db.execute("UPDATE monitor_runtime_state SET enabled_override=%s,updated_at=NOW() WHERE monitor_key=%s",(value,key));self.db.commit()
@@ -83,7 +88,7 @@ class MonitorStorage:
           ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1)
           UPDATE monitor_incidents i SET response_status='Dispatching',dispatch_lease_owner=%s,
           dispatch_lease_until=NOW()+make_interval(secs=>%s),updated_at=NOW() FROM candidate c WHERE i.id=c.id
-        RETURNING i.id,i.response_workflow_key,i.workflow_run_id,i.workflow_input""",(owner,lease_seconds)).fetchone();self.db.commit();return row
+        RETURNING i.id,i.response_workflow_key,i.workflow_revision_id,i.workflow_run_id,i.workflow_input""",(owner,lease_seconds)).fetchone();self.db.commit();return row
 
     def reconcile_finished_responses(self):
         self.db.execute("""UPDATE monitor_incidents i SET response_status=r.status,

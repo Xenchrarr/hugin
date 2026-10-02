@@ -35,6 +35,7 @@ class Job:
     workflow_input: dict = field(default_factory=dict)
     run_at: Optional[datetime] = None
     once_status: Optional[str] = None
+    workflow_revision_id: Optional[str] = None
 
     def to_dict(self):
         return {
@@ -56,6 +57,7 @@ class Job:
             "input": self.workflow_input or {},
             "run_at": self._dt(self.run_at),
             "once_status": self.once_status,
+            "workflow_revision_id": self.workflow_revision_id,
         }
 
     @staticmethod
@@ -87,6 +89,7 @@ class Job:
             workflow_input=row[15] if len(row) > 15 and row[15] else {},
             run_at=row[16] if len(row) > 16 else None,
             once_status=row[17] if len(row) > 17 else None,
+            workflow_revision_id=str(row[18]) if len(row) > 18 and row[18] else None,
         )
 
     @staticmethod
@@ -122,6 +125,7 @@ class Job:
             obj.get("input", obj.get("workflow_input", {})) or {},
             run_at,
             obj.get("once_status"),
+            obj.get("workflow_revision_id"),
         )
 
 

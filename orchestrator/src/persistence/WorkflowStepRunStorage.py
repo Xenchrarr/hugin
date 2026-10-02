@@ -13,12 +13,12 @@ class WorkflowStepRunStorage:
         self._db = JobDb.instance()
 
     def create_step_run(self, job_run_id: uuid.UUID | str, step_key: str,
-                        step_type: str, resolved_input: dict,
+                        step_type: str, step_version: int, resolved_input: dict,
                         attempt: int = 1) -> WorkflowStepRun:
         item = WorkflowStepRun(uuid.uuid4(), job_run_id, step_key, step_type,
-                               attempt, "Pending", resolved_input)
+                               step_version, attempt, "Pending", resolved_input)
         self._db.execute(read_sql_file("orchestrator/workflow_step_run/create.sql"),
-                         (item.id, str(job_run_id), step_key, step_type, attempt,
+                         (item.id, str(job_run_id), step_key, step_type, step_version, attempt,
                           json.dumps(resolved_input)))
         self._db.commit()
         return item

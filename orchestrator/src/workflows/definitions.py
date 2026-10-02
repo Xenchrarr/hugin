@@ -38,6 +38,7 @@ def input_flag(name: str, default: bool = True) -> dict:
 class WorkflowStepInvocation:
     key: str
     step_type: str
+    step_version: int
     inputs: dict | None
     run_if: dict | None = None
     on_failure: OnFailure = OnFailure.STOP
@@ -63,10 +64,11 @@ class Workflow:
                  on_failure: OnFailure = OnFailure.STOP) -> "Workflow":
         if self._compiled is not None:
             raise ValueError(f"Workflow is already registered: {self.key}")
-        if self._step_registry.get(registered_step.spec.key) is not registered_step:
+        if self._step_registry.get(registered_step.spec.key, registered_step.spec.version) is not registered_step:
             raise ValueError(f"Workflow step is not registered: {registered_step.spec.key}")
         invocation_key = key or registered_step.spec.key.rsplit(".", 1)[-1].replace("-", "_")
         self._steps.append(WorkflowStepInvocation(invocation_key, registered_step.spec.key,
+                                                  registered_step.spec.version,
                                                   copy.deepcopy(inputs), copy.deepcopy(run_if), on_failure))
         return self
 
@@ -78,7 +80,7 @@ class Workflow:
         inferred_properties: dict = {}
         inferred_required: list[str] = []
         for item in self._steps:
-            registered = self._step_registry.get(item.step_type)
+            registered = self._step_registry.get(item.step_type, item.step_version)
             inputs = copy.deepcopy(item.inputs)
             if inputs is None:
                 properties = registered.spec.input_schema.get("properties", {})
@@ -104,7 +106,8 @@ class Workflow:
                             inferred_properties.setdefault(name, copy.deepcopy(schema))
                             if not optional and name not in inferred_required:
                                 inferred_required.append(name)
-            invocation = {"key": item.key, "step": item.step_type, "inputs": inputs,
+            invocation = {"key": item.key, "step": item.step_type,
+                          "step_version": item.step_version, "inputs": inputs,
                           "on_failure": item.on_failure.value}
             if item.run_if is not None:
                 invocation["run_if"] = copy.deepcopy(item.run_if)

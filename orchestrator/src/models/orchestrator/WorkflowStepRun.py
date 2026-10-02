@@ -11,6 +11,7 @@ class WorkflowStepRun:
     job_run_id: uuid.UUID | str
     step_key: str
     step_type: str
+    step_version: int
     attempt: int
     status: str
     resolved_input: dict = field(default_factory=dict)
@@ -31,6 +32,7 @@ class WorkflowStepRun:
             "job_run_id": str(self.job_run_id),
             "step_key": self.step_key,
             "step_type": self.step_type,
+            "step_version": self.step_version,
             "attempt": self.attempt,
             "status": self.status,
             "resolved_input": self.resolved_input,
@@ -44,5 +46,4 @@ class WorkflowStepRun:
 
     @classmethod
     def from_db_row(cls, row) -> "WorkflowStepRun":
-        return cls(*row[:13])
-
+        return cls(*row[:14])

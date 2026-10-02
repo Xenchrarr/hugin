@@ -14,5 +14,6 @@ SET
     max_concurrent = %s,
     workflow_input = %s,
     run_at = %s,
-    once_status = %s
+    once_status = %s,
+    workflow_revision_id = %s
 WHERE id = %s;

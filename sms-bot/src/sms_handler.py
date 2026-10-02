@@ -17,6 +17,12 @@ from src.mms.sms_pdu import decode_sms_deliver_pdu
 logger = logging.getLogger(__name__)
 
 
+# Long messages are submitted as independent SMS messages. Keep their carrier
+# timestamps distinct so receiving phones that sort by timestamp preserve the
+# same order in which the parts were submitted.
+_SMS_PART_DELAY_SECONDS = 2.0
+
+
 _GSM7_ALPHABET = (
     "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ"
     "\x1bÆæßÉ !\"#¤%&'()*+,-./"
@@ -786,6 +792,7 @@ class SMSHandler:
                 }
 
     def _send_sms_locked(self, number: str, message: str) -> bool:
+        message = self._normalize_outbound_envelope(message)
         logger.info("Sending SMS to %s: %s", number, message)
         # GSM extension-table characters are introduced by the ESC byte.  In
         # the EC25 text-entry prompt that byte aborts AT+CMGS, so use UCS-2 for
@@ -801,26 +808,10 @@ class SMSHandler:
             return False
 
         recipient = number if use_gsm7 else number.encode("utf-16-be").hex().upper()
-        # GSM-7 has 160 septets and UCS-2 has 70 code units. Reserve one unit
-        # for the sacrificial trailing space appended by _send_sms_chunk.
-        chunk_size = 159 if use_gsm7 else 69
-        chunks: list[str] = []
-
-        while message:
-            prefix_end = self._encoded_prefix_end(message, chunk_size, use_gsm7)
-            if prefix_end == len(message):
-                chunks.append(message)
-                break
-
-            split_at = max(
-                message.rfind(" ", 0, prefix_end + 1),
-                message.rfind("\n", 0, prefix_end + 1),
-            )
-            if split_at <= 0:
-                split_at = prefix_end
-
-            chunks.append(message[:split_at])
-            message = message[split_at:].lstrip()
+        # The modem consumes the trailing workaround space instead of sending
+        # it, so the complete SMS payload remains available to message text.
+        chunk_size = 160 if use_gsm7 else 70
+        chunks = self._split_outbound_text(message, chunk_size, use_gsm7)
 
         for idx, chunk in enumerate(chunks):
             logger.info("Sending part %d/%d", idx + 1, len(chunks))
@@ -829,10 +820,112 @@ class SMSHandler:
             self._last_send_uncertain = True
 
             if idx < len(chunks) - 1:
-                time.sleep(1)
+                time.sleep(_SMS_PART_DELAY_SECONDS)
 
         logger.info("Message sent successfully")
         return True
+
+    @classmethod
+    def _split_outbound_text(
+        cls, message: str, chunk_size: int, use_gsm7: bool
+    ) -> list[str]:
+        """Split by encoding units and repeat a routing label on independent parts."""
+        if cls._encoded_prefix_end(message, chunk_size, use_gsm7) == len(message):
+            return [message]
+
+        labelled = re.match(
+            r"^\((?P<label>[a-z][a-z0-9_-]{0,9}/[a-z0-9][a-z0-9_-]{0,17} #\d+)\)\r?\n(?P<body>[\s\S]*)$",
+            message,
+            re.IGNORECASE,
+        )
+        if labelled:
+            label = labelled.group("label")
+            body = labelled.group("body")
+        else:
+            hub = re.match(r"^\(hub\)(?: |\r?\n)(?P<body>[\s\S]*)$", message)
+            if not hub:
+                return cls._split_by_units(message, chunk_size, use_gsm7)
+            label = "hub"
+            body = hub.group("body")
+
+        if not body:
+            return cls._split_by_units(message, chunk_size, use_gsm7)
+        total_guess = 2
+        while True:
+            parts: list[str] = []
+            remaining = body
+            index = 1
+            while remaining:
+                header = f"({label} {index}/{total_guess})\n"
+                header_end = cls._encoded_prefix_end(header, chunk_size, use_gsm7)
+                if header_end != len(header):
+                    # An excessively long alias cannot be repeated safely.
+                    return cls._split_by_units(message, chunk_size, use_gsm7)
+                header_units = cls._encoded_units(header, use_gsm7)
+                body_capacity = chunk_size - header_units
+                if body_capacity <= 0:
+                    return cls._split_by_units(message, chunk_size, use_gsm7)
+                split_at = cls._preferred_prefix_end(remaining, body_capacity, use_gsm7)
+                parts.append(header + remaining[:split_at])
+                remaining = remaining[split_at:]
+                index += 1
+            if len(parts) == total_guess:
+                return parts
+            total_guess = len(parts)
+
+    @classmethod
+    def _split_by_units(cls, text: str, capacity: int, use_gsm7: bool) -> list[str]:
+        chunks: list[str] = []
+        remaining = text
+        while remaining:
+            split_at = cls._preferred_prefix_end(remaining, capacity, use_gsm7)
+            chunks.append(remaining[:split_at])
+            remaining = remaining[split_at:]
+        return chunks
+
+    @classmethod
+    def _preferred_prefix_end(cls, text: str, capacity: int, use_gsm7: bool) -> int:
+        prefix_end = cls._encoded_prefix_end(text, capacity, use_gsm7)
+        if prefix_end == len(text):
+            return prefix_end
+        split_at = max(
+            text.rfind(" ", 0, prefix_end + 1),
+            text.rfind("\n", 0, prefix_end + 1),
+        )
+        # Avoid producing a tiny part when the only delimiter is near the start
+        # (for example an author followed by a long URL or identifier).
+        if split_at <= 0 or split_at < capacity // 2:
+            return prefix_end
+        # Include the delimiter so concatenating logical content remains lossless.
+        return split_at + 1
+
+    @staticmethod
+    def _normalize_outbound_envelope(message: str) -> str:
+        """Convert legacy bracketed hub envelopes to their GSM-safe form."""
+        routed = re.match(
+            r"^\[(?P<label>[a-z][a-z0-9_-]{0,9}/[a-z0-9][a-z0-9_-]{0,17} #\d+"
+            r"(?: [1-9]\d*/[1-9]\d*)?)\](?P<separator>\r?\n)(?P<body>[\s\S]*)$",
+            message,
+            re.IGNORECASE,
+        )
+        if routed:
+            return f"({routed.group('label')}){routed.group('separator')}{routed.group('body')}"
+        hub = re.match(
+            r"^\[hub(?P<part> [1-9]\d*/[1-9]\d*)?\](?P<separator> |\r?\n)"
+            r"(?P<body>[\s\S]*)$",
+            message,
+            re.IGNORECASE,
+        )
+        if hub:
+            return f"(hub{hub.group('part') or ''}){hub.group('separator')}{hub.group('body')}"
+        return message
+
+    @classmethod
+    def _encoded_units(cls, text: str, use_gsm7: bool) -> int:
+        if use_gsm7:
+            encoded = cls._gsm7_encode(text)
+            return len(encoded) if encoded is not None else len(text)
+        return len(text.encode("utf-16-be")) // 2
 
     @staticmethod
     def _encoded_prefix_end(text: str, max_units: int, use_gsm7: bool) -> int:

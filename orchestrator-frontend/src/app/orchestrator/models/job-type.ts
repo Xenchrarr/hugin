@@ -7,6 +7,8 @@ export class JobType {
     description: string = '';
     input_schema: JsonSchema = {};
     version: number = 1;
+    revision_id: string = '';
+    active: boolean = false;
 
     constructor(init?: Partial<JobType>) {
         Object.assign(this, init);

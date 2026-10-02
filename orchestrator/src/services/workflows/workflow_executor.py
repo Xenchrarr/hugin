@@ -108,9 +108,9 @@ class WorkflowExecutor:
             print(f"Could not persist workflow-step lifecycle log: {exc}")
 
     def _execute_step(self, run, invocation, resolved, attempt):
-        registered = workflow_step_registry.get(invocation["step"])
+        registered = workflow_step_registry.get(invocation["step"], invocation["step_version"])
         step_run = self.steps.create_step_run(run.id, invocation["key"], invocation["step"],
-                                              resolved, attempt)
+                                              invocation["step_version"], resolved, attempt)
         self.steps.mark_step_started(step_run.id)
         local = ThreadLocalSingleton.instance().thread_local
         local.step_run_id = str(step_run.id)
@@ -179,19 +179,22 @@ class WorkflowExecutor:
                 if is_cancelled(job_run_id):
                     raise JobCancelledException("Workflow execution was cancelled")
                 attempt = old.attempt + 1 if old else 1
-                if not should_run_step(invocation, progress.context["input"]):
-                    item = self.steps.create_step_run(run.id, invocation["key"], invocation["step"], {}, attempt)
+                if not should_run_step(invocation, progress.context):
+                    item = self.steps.create_step_run(
+                        run.id, invocation["key"], invocation["step"],
+                        invocation["step_version"], {}, attempt)
                     self.steps.finish_step_run(item.id, "Skipped", {}, {}, "Condition was false")
                     progress.record(invocation["key"], "Skipped", {})
                     continue
-                registered = workflow_step_registry.get(invocation["step"])
+                registered = workflow_step_registry.get(invocation["step"], invocation["step_version"])
                 try:
                     resolved = resolve_step_input(invocation.get("inputs", {}), progress.context)
                     validate_value_against_schema(resolved, registered.spec.input_schema,
                                                   f"steps.{invocation['key']}.input")
                 except Exception as exc:
                     item = self.steps.create_step_run(
-                        run.id, invocation["key"], invocation["step"], {}, attempt)
+                        run.id, invocation["key"], invocation["step"],
+                        invocation["step_version"], {}, attempt)
                     self.steps.mark_step_started(item.id)
                     self.steps.finish_step_run(
                         item.id, "Error", {},

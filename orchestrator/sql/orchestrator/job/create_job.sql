@@ -13,7 +13,8 @@ INSERT INTO jobs (
     max_concurrent,
     workflow_input,
     run_at,
-    once_status
+    once_status,
+    workflow_revision_id
 )
-VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s)
+VALUES (%s, %s, %s, %s, %s, NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 RETURNING id;

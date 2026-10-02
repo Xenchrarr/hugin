@@ -11,9 +11,9 @@ def _gsm_safe(s: str) -> str:
 
 
 _MAX_CONVERSATIONS = 10
-# Norwegian letters are part of GSM-7, so the complete menu can use the long
-# single-part format after reserving the modem's trailing workaround character.
-_MENU_MAX_LENGTH = 159
+# Norwegian letters are part of GSM-7, so the complete menu can use the full
+# single-part payload.
+_MENU_MAX_LENGTH = 160
 _LIST_OVERHEAD = sum(len(f"{i}. ") for i in range(1, _MAX_CONVERSATIONS + 1)) + (
     _MAX_CONVERSATIONS - 1
 )

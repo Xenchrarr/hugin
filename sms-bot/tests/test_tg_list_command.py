@@ -31,10 +31,10 @@ class TgListCommandTests(unittest.TestCase):
 
         result = tg_list.TgListCommand().execute(ParsedCommand(path="tg/list"))
 
-        self.assertLessEqual(len(result), 159)
+        self.assertEqual(160, len(result))
         self.assertEqual(10, len(result.splitlines()))
-        self.assertEqual("1. A very lon>", result.splitlines()[0])
-        self.assertEqual("10. A very lon>", result.splitlines()[-1])
+        self.assertEqual("1. A very long>", result.splitlines()[0])
+        self.assertEqual("10. A very long>", result.splitlines()[-1])
 
     def test_short_titles_are_not_padded(self):
         tg_list._relay = _FakeRelay([

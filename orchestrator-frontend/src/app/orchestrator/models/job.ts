@@ -17,6 +17,7 @@ export class Job{
     input: Record<string, unknown> = {};
     run_at: string|undefined = undefined;
     once_status: string|undefined = undefined;
+    workflow_revision_id: string|undefined = undefined;
 
     constructor(init?: Partial<Job>) {
         Object.assign(this, init);

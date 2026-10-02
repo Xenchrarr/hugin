@@ -53,16 +53,20 @@ from src.commands.checkin_command import CheckinCommand, CheckinOkCommand
 from src.commands.alarm_command import AlarmCommand, CallMeCommand
 from src.models.errors import (
     ERR_AUTH,
-    ERR_AMBIG,
     ERR_INTERNAL,
     ERR_PARSE,
-    ERR_UNKNOWN_CMD,
     error_response,
 )
 from src.models.media_relay_result import MediaRelayResult
 from src.parser import parse
-from src.services.ai_service import AIService, is_available as ai_available
+from src.services.ai_service import AIService
 from src.services.dumbphone_session import sessions
+from src.conversation_routing import (
+    AMBIGUOUS_RESPONSE,
+    ConversationRouter,
+    parse_routing_input,
+)
+from src.phone import normalize_phone
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +76,7 @@ _orchestrator = OrchestratorClient()
 class CommandProcessor:
     def __init__(self):
         self.resolver = CommandResolver()
+        self._conversation_router = ConversationRouter(orchestrator=_orchestrator)
 
         non_ai_commands: list[BaseCommand] = [
             HelpCommand(),
@@ -200,6 +205,7 @@ class CommandProcessor:
         ) is not None
 
     def process_missed_call(self, sender: str):
+        sender = normalize_phone(sender)
         user = _orchestrator.lookup_user(channel="sms", identifier=sender)
         if user is None:
             return None
@@ -217,6 +223,7 @@ class CommandProcessor:
         image_mime: str,
     ) -> MediaRelayResult:
         """Route an inbound MMS image to an explicit or sticky Telegram target."""
+        sender = normalize_phone(sender)
         user = _orchestrator.lookup_user(channel="sms", identifier=sender)
         if user is None:
             logger.warning("Unknown MMS sender %s. Rejecting.", sender)
@@ -265,12 +272,22 @@ class CommandProcessor:
             return MediaRelayResult(handled=False)
         return MediaRelayResult(handled=True, response=f"OK photo sent to {title}")
 
-    def process(self, text: str, sender: str = "") -> str:
+    def process(
+        self, text: str, sender: str = "", event_id: str | None = None
+    ) -> str | None:
+        sender = normalize_phone(sender)
         # Resolve user by phone number before processing any command
         user = _orchestrator.lookup_user(channel='sms', identifier=sender)
         if user is None:
             logger.warning("Unknown sender %s. Rejecting.", sender)
-            return "Unknown user. Contact admin."
+            # Silent rejection prevents reply loops and does not disclose hub data.
+            return None
+
+        routing_input = parse_routing_input(text)
+        if routing_input is not None:
+            return self._conversation_router.handle(
+                routing_input, user_id=int(user["id"]), event_id=event_id
+            )
 
         stripped = text.strip()
         control = stripped.lower()
@@ -340,30 +357,9 @@ class CommandProcessor:
                     break
 
         if handler is None:
-            if suggestions:
-                return error_response(
-                    ERR_AMBIG,
-                    f"Ambiguous command: {cmd.path}",
-                    f"Did you mean: {', '.join(suggestions)}?",
-                )
-            # NLU fallback: let AI interpret unrecognised input
-            if ai_available():
-                user_key = cmd.user_id or sender or "anon"
-                ai_result = self._ai.chat(text, user_key=user_key, nlu=True)
-                if ai_result["type"] == "command":
-                    path = ai_result.get("path", "")
-                    args = ai_result.get("args", [])
-                    logger.info("NLU mapped '%s' → %s %s", text, path, args)
-                    nlu_handler, _ = self.resolver.resolve(path)
-                    if nlu_handler is not None:
-                        cmd.path = path
-                        cmd.positional = args
-                        handler = nlu_handler
-                    # Fall through to permission check below
-                elif ai_result["type"] == "chat":
-                    return ai_result.get("message", "")
-            if handler is None:
-                return error_response(ERR_UNKNOWN_CMD, f"Unknown command: {cmd.path}", "help")
+            # Never infer a destination for an unaddressed conversational reply.
+            # AI remains available explicitly through the registered `ai` command.
+            return AMBIGUOUS_RESPONSE
 
         # Permission check: admins bypass; non-admins must have the command explicitly allowed
         if not user.get('is_admin'):

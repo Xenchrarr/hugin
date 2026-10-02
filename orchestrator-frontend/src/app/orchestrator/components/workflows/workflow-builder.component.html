@@ -1,0 +1,117 @@
+<main class="builder-page">
+    <a class="back-link" routerLink="/workflows"><mat-icon>arrow_back</mat-icon>Workflow catalog</a>
+
+    @if (loading) {
+        <div class="page-message"><span class="spinner"></span>Loading workflow designer…</div>
+    } @else if (isNew) {
+        <section class="create-card">
+            <span class="workflow-icon"><mat-icon>account_tree</mat-icon></span>
+            <div class="create-heading"><span class="eyebrow">New automation</span><h1>Create a workflow</h1><p>Start with a stable identity. You will compose the workflow from deployed code steps on the next screen.</p></div>
+            <form (ngSubmit)="create()">
+                <label>Workflow key<input name="key" [(ngModel)]="newKey" required pattern="[a-z][a-z0-9_.-]*" placeholder="operations.handle-alert"><small>Lowercase letters, numbers, dots, dashes, and underscores.</small></label>
+                <label>Display name<input name="name" [(ngModel)]="newName" required placeholder="Handle service alert"></label>
+                <label class="wide">Description<textarea name="description" [(ngModel)]="newDescription" rows="3" placeholder="What does this workflow accomplish?"></textarea></label>
+                @if (errorMessage) { <div class="feedback error"><mat-icon>error_outline</mat-icon>{{ errorMessage }}</div> }
+                <div class="create-actions"><a mat-button routerLink="/workflows">Cancel</a><button mat-flat-button type="submit" [disabled]="busy || !newKey || !newName"><mat-icon>arrow_forward</mat-icon>{{ busy ? 'Creating…' : 'Open designer' }}</button></div>
+            </form>
+        </section>
+    } @else if (errorMessage && !draft) {
+        <div class="page-message error"><mat-icon>error_outline</mat-icon><h2>Draft unavailable</h2><p>{{ errorMessage }}</p><button mat-stroked-button (click)="load()">Try again</button></div>
+    } @else if (draft && editor) {
+        <header class="builder-header">
+            <div class="identity"><span class="workflow-icon"><mat-icon>account_tree</mat-icon></span><div><span class="technical-key">{{ draft.key }}</span><input class="title-input" [(ngModel)]="draft.name" aria-label="Workflow name"><input class="description-input" [(ngModel)]="draft.description" aria-label="Workflow description" placeholder="Describe this workflow"></div></div>
+            <div class="header-actions"><span class="draft-badge"><i></i>Draft</span><button mat-stroked-button (click)="validate()" [disabled]="busy"><mat-icon>fact_check</mat-icon>Validate</button><button mat-stroked-button (click)="save()" [disabled]="busy"><mat-icon>save</mat-icon>Save draft</button><button mat-flat-button (click)="publish()" [disabled]="busy || !editor.steps.length"><mat-icon>publish</mat-icon>Publish</button></div>
+        </header>
+
+        @if (message) { <div class="feedback success"><mat-icon>check_circle</mat-icon>{{ message }}</div> }
+        @if (errorMessage) { <div class="feedback error"><mat-icon>error_outline</mat-icon><div><strong>{{ errorMessage }}</strong>@for (issue of issues; track $index) { <span>{{ issue.path.join(' › ') }} — {{ issue.message }}</span> }</div></div> }
+
+        <details class="contract-card">
+            <summary><span><mat-icon>input</mat-icon><b>Workflow input contract</b><small>{{ inputFields.length }} fields · {{ editor.input_schema.required?.length ?? 0 }} required</small></span><mat-icon>expand_more</mat-icon></summary>
+            <div class="input-table">
+                @for (field of inputFields; track field.name) {
+                    <div class="input-row">
+                        <input [ngModel]="field.name" (change)="renameInput(field, $any($event.target).value)" aria-label="Input name">
+                        <select [(ngModel)]="field.schema.type" aria-label="Input type"><option value="string">Text</option><option value="integer">Integer</option><option value="number">Number</option><option value="boolean">Boolean</option><option value="object">Object</option><option value="array">List</option></select>
+                        <input [(ngModel)]="field.schema.description" placeholder="Description" aria-label="Input description">
+                        <label class="check"><input type="checkbox" [ngModel]="field.required" (ngModelChange)="setRequired(field.name, $event)">Required</label>
+                        <button class="icon-button danger" type="button" (click)="removeInput(field.name)" title="Remove input"><mat-icon>delete</mat-icon></button>
+                    </div>
+                }
+                <button mat-stroked-button type="button" (click)="addInput()"><mat-icon>add</mat-icon>Add input</button>
+            </div>
+        </details>
+
+        <div class="designer-grid">
+            <aside class="palette panel">
+                <div class="panel-heading"><span>Code catalog</span><h2>Workflow steps</h2><p>Deployed, typed building blocks.</p></div>
+                <div class="palette-list">
+                    @for (type of stepTypes; track type.key + '@' + type.version) {
+                        <button type="button" class="palette-item" (click)="addStep(type)"><span><mat-icon>extension</mat-icon></span><div><b>{{ formatKey(type.key) }}</b><code>{{ type.key }}&#64;{{ type.version }}</code><small>{{ type.description || 'Reusable workflow step' }}</small></div><mat-icon>add_circle</mat-icon></button>
+                    } @empty { <p class="empty">No code steps are deployed.</p> }
+                </div>
+            </aside>
+
+            <section class="canvas panel">
+                <div class="panel-heading canvas-heading"><div><span>Definition</span><h2>Execution path</h2><p>Drag steps to reorder. Conditions create branching paths.</p></div><b>{{ editor.steps.length }} steps</b></div>
+                <div class="step-canvas" cdkDropList [cdkDropListData]="editor.steps" (cdkDropListDropped)="drop($event)">
+                    @for (step of editor.steps; track step.key; let index = $index) {
+                        <article class="canvas-step" cdkDrag [class.selected]="selectedIndex === index" [class.conditional]="step.when" (click)="selectedIndex = index">
+                            <div class="branch-rail"><span>{{ index + 1 }}</span>@if (!$last) { <i></i> }</div>
+                            <div class="step-body">
+                                <div class="drag-handle" cdkDragHandle title="Drag to reorder"><mat-icon>drag_indicator</mat-icon></div>
+                                <span class="step-symbol"><mat-icon>{{ step.when ? 'alt_route' : 'extension' }}</mat-icon></span>
+                                <div class="step-copy"><small>{{ step.key }}</small><b>{{ formatKey(step.step) }}</b><code>{{ step.step }}&#64;{{ step.step_version }}</code></div>
+                                <div class="badges">@if (step.when) { <span class="branch">Conditional</span> }@if (step.on_failure === 'continue') { <span>Continue</span> }</div>
+                                <button class="icon-button danger" type="button" (click)="$event.stopPropagation(); removeStep(index)" title="Remove step"><mat-icon>close</mat-icon></button>
+                            </div>
+                            @if (step.when) { <div class="condition-preview"><mat-icon>call_split</mat-icon>Runs when its branch condition is true</div> }
+                        </article>
+                    } @empty {
+                        <div class="canvas-empty"><mat-icon>account_tree</mat-icon><h3>Build your execution path</h3><p>Select a code step from the catalog. Each output can feed compatible inputs on later steps.</p></div>
+                    }
+                </div>
+            </section>
+
+            <aside class="inspector panel">
+                @if (selectedStep; as step) {
+                    <div class="panel-heading"><span>Inspector</span><h2>{{ formatKey(step.step) }}</h2><p>{{ selectedType?.description || step.step }}</p></div>
+                    <div class="inspector-scroll">
+                        <section class="inspector-section"><h3>Step identity</h3><label>Step key<input [(ngModel)]="step.key"></label><label>On failure<select [(ngModel)]="step.on_failure"><option value="stop">Stop workflow</option><option value="continue">Continue to next step</option></select></label></section>
+
+                        <section class="inspector-section"><h3>Input mapping</h3><p class="hint">Connect each step input to workflow data, a prior output, or a fixed value.</p>
+                            @for (entry of selectedInputs; track entry[0]) {
+                                <div class="binding-card"><header><b>{{ entry[0] }}</b><span>{{ entry[1].type || 'any JSON' }}</span>@if (selectedType?.input_schema?.required?.includes(entry[0])) { <em>Required</em> }</header>@if (entry[1].description) { <p class="contract-help">{{ entry[1].description }}</p> }
+                                    <select [ngModel]="sourceKind(step, entry[0])" (ngModelChange)="setSource(step, entry[0], $event, entry[1])">
+                                        <option value="none">Not connected</option><option value="literal">Fixed value</option><option value="workflow_input">Workflow input</option><option value="step_output">Earlier step output</option><option value="first_available">First available (merge)</option>
+                                    </select>
+                                    @switch (sourceKind(step, entry[0])) {
+                                        @case ('literal') { <textarea rows="3" [ngModel]="literalText[controlId(step, entry[0])]" (ngModelChange)="updateLiteral(step, entry[0], $event)" placeholder="JSON value"></textarea> }
+                                        @case ('workflow_input') { <select [ngModel]="$any(binding(step, entry[0])).path[0] || ''" (ngModelChange)="setWorkflowInput(step, entry[0], $event)"><option value="">Choose workflow input…</option>@for (field of workflowInputs(entry[1]); track field.name) { <option [value]="field.name">{{ field.name }} · {{ field.schema.type }}</option> }</select> }
+                                        @case ('step_output') { <select [ngModel]="$any(binding(step, entry[0])).step_key + '|' + $any(binding(step, entry[0])).path.join('|')" (ngModelChange)="setStepOutput(step, entry[0], $event)"><option value="|">Choose prior output…</option>@for (source of sourceOptions(step, entry[1]); track source.value) { <option [value]="source.value">{{ source.label }}{{ source.conditional ? ' (may be skipped)' : '' }}</option> }</select> }
+                                        @case ('first_available') { <label class="merge-label">Branch outputs<select multiple [ngModel]="mergeSelections[controlId(step, entry[0])]" (ngModelChange)="setMerge(step, entry[0], $event)">@for (source of sourceOptions(step, entry[1]); track source.value) { <option [value]="source.value">{{ source.label }}</option> }</select><small>Select at least two. The first output produced by a branch is used.</small></label> }
+                                    }
+                                </div>
+                            } @empty { <p class="empty-small">This step intentionally takes no input.</p> }
+                        </section>
+
+                        <section class="inspector-section"><div class="section-title"><h3>Branch condition</h3><label class="switch"><input type="checkbox" [ngModel]="!!step.when" (ngModelChange)="toggleCondition(step, $event)"><span></span></label></div><p class="hint">Skip this step unless the selected value matches.</p>
+                            @if (step.when) {
+                                <select [ngModel]="conditionSource(step)" (ngModelChange)="setConditionSource(step, $event)"><option value="">Choose a value…</option>@for (source of conditionSources(step); track source.value) { <option [value]="source.value">{{ source.label }}</option> }</select>
+                                <select [ngModel]="step.when.op" (ngModelChange)="setConditionOperator(step, $event)"><option value="eq">Equals</option><option value="ne">Does not equal</option><option value="exists">Exists</option><option value="is_true">Is true</option><option value="is_false">Is false</option></select>
+                                @if (step.when.op === 'eq' || step.when.op === 'ne') { <input [ngModel]="conditionLiteral[step.key]" (ngModelChange)="updateConditionLiteral(step, $event)" placeholder="JSON comparison value"> }
+                            }
+                        </section>
+                        <section class="inspector-section"><h3>Declared outputs</h3><p class="hint">These values can be connected to compatible inputs on later steps.</p><div class="output-list">@for (entry of selectedOutputs; track entry[0]) { <div><code>{{ entry[0] }}</code><span>{{ entry[1].type || 'any JSON' }}</span><small>{{ entry[1].description || 'Step output' }}</small></div> } @empty { <p class="empty-small">This step declares no reusable output.</p> }</div></section>
+                    </div>
+                } @else {
+                    <div class="inspector-empty"><mat-icon>touch_app</mat-icon><h3>Select a step</h3><p>Its input bindings, error behavior, and branch condition will appear here.</p></div>
+                }
+            </aside>
+        </div>
+
+        @if (revisions.length) {
+            <section class="history panel"><div class="panel-heading"><span>Immutable history</span><h2>Published revisions</h2><p>Executions and schedules stay pinned to the revision they started with.</p></div><div class="revision-list">@for (revision of revisions; track revision.revision_id) { <div><span>v{{ revision.version }}</span><b>{{ revision.published_at | date:'medium' }}</b><small>{{ revision.steps.length }} steps</small><button mat-stroked-button (click)="clone(revision)" [disabled]="busy">Copy to draft</button></div> }</div></section>
+        }
+    }
+</main>

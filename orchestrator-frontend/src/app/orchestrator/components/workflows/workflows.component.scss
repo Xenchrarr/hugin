@@ -5,6 +5,7 @@
 .page-header h1 { margin: 2px 0 4px; font-size: clamp(28px, 3vw, 36px); font-weight: 650; letter-spacing: -.025em; }
 .page-header p, .surface-heading p { margin: 0; color: var(--app-slate-500); }
 .page-header button mat-icon { margin-right: 5px; }
+.page-actions { display: flex; gap: 8px; }.page-actions mat-icon { margin-right: 5px; }
 .summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
 .summary-grid article { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 13px 15px; background: #fff; border: 1px solid var(--app-slate-200); border-radius: 13px; }
 .summary-grid mat-icon { display: grid; place-items: center; width: 38px; height: 38px; color: var(--app-purple); background: var(--app-purple-soft); border-radius: 10px; }
@@ -13,6 +14,7 @@
 .surface-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 20px; border-bottom: 1px solid var(--app-slate-200); }
 .surface-heading h2 { margin: 0 0 2px; font-size: 19px; }.surface-heading p { font-size: 12px; }.surface-heading mat-form-field { width: min(380px, 42vw); }.surface-heading mat-icon { margin: 0 7px; color: var(--app-slate-500); }
 .workflow-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 20px; }
+.draft-strip { display: flex; gap: 8px; overflow-x: auto; padding: 10px 20px; background: #fffbeb; border-bottom: 1px solid #fde68a; }.draft-strip a { display: grid; grid-template-columns: 25px minmax(140px,1fr) 18px; align-items: center; gap: 7px; min-width: 220px; padding: 7px 9px; color: #78350f; background: #fff; border: 1px solid #fde68a; border-radius: 8px; text-decoration: none; }.draft-strip a > mat-icon { color: #d97706; }.draft-strip span { display: grid; }.draft-strip b { font-size: 10px; }.draft-strip small { font: 8px ui-monospace,monospace; }
 .workflow-card { display: flex; flex-direction: column; min-width: 0; padding: 18px; border: 1px solid var(--app-slate-200); border-radius: 13px; transition: border-color .15s, box-shadow .15s, transform .15s; }
 .workflow-card:hover { transform: translateY(-1px); border-color: #c4b5fd; box-shadow: 0 10px 24px rgba(76,29,149,.08); }
 .card-topline { display: flex; align-items: center; justify-content: space-between; }.workflow-icon { display: grid; place-items: center; width: 38px; height: 38px; color: var(--app-purple); background: var(--app-purple-soft); border-radius: 10px; }.version { padding: 4px 8px; color: #5b21b6; background: var(--app-purple-soft); border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; }

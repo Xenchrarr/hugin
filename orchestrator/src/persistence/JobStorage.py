@@ -68,6 +68,7 @@ class JobStorage:
                 json.dumps(job.workflow_input or {}),
                 job.run_at,
                 'pending' if job.trigger == 'once_at' else None,
+                job.workflow_revision_id,
             ),
         ).fetchone()
         self.commit()
@@ -106,6 +107,7 @@ class JobStorage:
                 json.dumps(job.workflow_input or {}),
                 job.run_at,
                 job.once_status,
+                job.workflow_revision_id,
                 job.id,
             ),
         )

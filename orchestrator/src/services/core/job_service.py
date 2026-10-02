@@ -56,7 +56,9 @@ def create_job(job: Job) -> Job:
 
 
 def _validate_job(job: Job, previous: Job | None = None) -> None:
-    from src.services.workflows.workflow_service import get_workflow, workflow_input_for_job
+    from src.services.workflows.workflow_service import (
+        get_workflow, get_workflow_revision, workflow_input_for_job,
+    )
     from src.services.workflows.workflow_definition_service import validate_value_against_schema
 
     if not isinstance(job.name, str) or not job.name.strip():
@@ -65,9 +67,13 @@ def _validate_job(job: Job, previous: Job | None = None) -> None:
         raise ValueError(f"Unsupported trigger: {job.trigger}")
     if job.max_concurrent < 1:
         raise ValueError("max_concurrent must be at least 1")
-    workflow = get_workflow(job.job_type)
+    workflow = (get_workflow_revision(job.workflow_revision_id)
+                if job.workflow_revision_id else get_workflow(job.job_type))
     if workflow is None:
         raise ValueError(f"Unknown workflow: {job.job_type}")
+    if workflow.key != job.job_type:
+        raise ValueError("Workflow revision does not match the selected workflow")
+    job.workflow_revision_id = workflow.id
     validate_value_against_schema(
         workflow_input_for_job(job),
         workflow.input_schema,

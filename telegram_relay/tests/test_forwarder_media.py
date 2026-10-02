@@ -89,6 +89,18 @@ class ForwarderMediaTests(unittest.TestCase):
 
         self.assertEqual(123, message_id)
 
+    def test_text_reply_targets_original_telegram_message(self):
+        forwarder = TelegramForwarder.__new__(TelegramForwarder)
+        forwarder._client = _Client()
+
+        forwarder.send_message(42, "Reply", reply_to_message_id=700)
+
+        _, params = forwarder._client.calls[0]
+        self.assertEqual({
+            "@type": "inputMessageReplyToMessage",
+            "message_id": 700,
+        }, params["reply_to"])
+
     def test_enrichment_marks_bot_senders(self):
         forwarder = TelegramForwarder.__new__(TelegramForwarder)
         forwarder._client = _BotUserClient()

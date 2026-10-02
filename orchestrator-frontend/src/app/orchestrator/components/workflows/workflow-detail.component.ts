@@ -39,12 +39,12 @@ export class WorkflowDetailComponent implements OnInit {
 
     get title(): string { return this.workflow ? formatWorkflowKey(this.workflow.key) : 'Workflow'; }
     get requiredInputCount(): number { return this.workflow?.input_schema.required?.length ?? 0; }
-    get conditionalStepCount(): number { return this.workflow?.steps.filter(step => step.run_if).length ?? 0; }
+    get conditionalStepCount(): number { return this.workflow?.steps.filter(step => step.when).length ?? 0; }
     get continueStepCount(): number { return this.workflow?.steps.filter(step => step.on_failure === 'continue').length ?? 0; }
     get inputFields(): [string, unknown][] { return Object.entries(this.workflow?.input_schema.properties ?? {}); }
     formatKey(value: string): string { return formatWorkflowKey(value); }
     toggleStep(index: number): void { this.expandedStep = this.expandedStep === index ? -1 : index; }
-    stepBadges(step: WorkflowStep): string[] { return [step.run_if ? 'Conditional' : '', step.on_failure === 'continue' ? 'Continues on error' : ''].filter(Boolean); }
+    stepBadges(step: WorkflowStep): string[] { return [step.when ? 'Conditional' : '', step.on_failure === 'continue' ? 'Continues on error' : ''].filter(Boolean); }
     schemaType(value: unknown): string { const schema = value as {type?: string | string[]}; return Array.isArray(schema.type) ? schema.type.join(' / ') : schema.type ?? 'any'; }
     schemaDescription(value: unknown): string { return (value as {description?: string}).description ?? 'No description provided.'; }
     resetInput(): void { if (this.workflow) { this.inputText = JSON.stringify(exampleInput(this.workflow.input_schema), null, 2); this.runError = ''; } }

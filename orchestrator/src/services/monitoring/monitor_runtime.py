@@ -59,11 +59,13 @@ class MonitorDispatcher:
             for _ in range(limit):
                 row=storage.claim_pending_incident(self.owner,int(os.getenv('MONITOR_DISPATCH_LEASE_SECONDS','300')))
                 if not row: break
-                incident_id,workflow_key,run_id,workflow_input=row
+                incident_id,workflow_key,workflow_revision_id,run_id,workflow_input=row
                 try:
                     run=JobStorage().get_job_run_by_id(run_id)
                     if run is None:
-                        create_workflow_run(workflow_key,workflow_input,run_by='monitor',run_by_group='system',job_run_id=run_id)
+                        create_workflow_run(
+                            workflow_key, workflow_input, run_by='monitor', run_by_group='system',
+                            workflow_revision_id=workflow_revision_id, job_run_id=run_id)
                         run=JobStorage().get_job_run_by_id(run_id)
                     storage.register_incident_run(incident_id,run_id)
                     if run.status != 'Started':

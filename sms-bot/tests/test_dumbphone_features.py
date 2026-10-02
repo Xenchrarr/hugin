@@ -12,6 +12,13 @@ from src.call_handler import CallHandler
 
 
 class DumbphoneSessionTests(unittest.TestCase):
+    def test_full_160_character_result_stays_on_one_page(self):
+        service = DumbphoneSessionService()
+        text = "x" * 160
+
+        self.assertEqual(text, service.first_page("+47", text))
+        self.assertEqual("No more pages.", service.move("+47", 1))
+
     def test_long_result_is_paged_and_navigation_works(self):
         service = DumbphoneSessionService()
         first = service.first_page("+47", "word " * 100)

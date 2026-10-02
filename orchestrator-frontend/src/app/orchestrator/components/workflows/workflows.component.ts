@@ -6,7 +6,7 @@ import {MatIconModule} from '@angular/material/icon';
 import {MatInputModule} from '@angular/material/input';
 import {RouterLink} from '@angular/router';
 import {finalize, forkJoin} from 'rxjs';
-import {WorkflowDefinition, WorkflowStepType} from '../../models/workflow';
+import {WorkflowCatalogItem, WorkflowDefinition, WorkflowStepType} from '../../models/workflow';
 import {WorkflowService} from '../../services/workflow.service';
 import {formatWorkflowKey} from './shared/workflow-format';
 
@@ -20,6 +20,7 @@ import {formatWorkflowKey} from './shared/workflow-format';
 export class WorkflowsComponent implements OnInit {
     workflows: WorkflowDefinition[] = [];
     stepTypes: WorkflowStepType[] = [];
+    catalog: WorkflowCatalogItem[] = [];
     query = '';
     loading = true;
     errorMessage = '';
@@ -34,15 +35,16 @@ export class WorkflowsComponent implements OnInit {
     }
 
     get totalSteps(): number { return this.workflows.reduce((total, workflow) => total + workflow.steps.length, 0); }
-    get conditionalSteps(): number { return this.workflows.reduce((total, workflow) => total + workflow.steps.filter(step => step.run_if).length, 0); }
+    get conditionalSteps(): number { return this.workflows.reduce((total, workflow) => total + workflow.steps.filter(step => step.when).length, 0); }
+    get draftOnly(): WorkflowCatalogItem[] { return this.catalog.filter(item => item.draft_revision_id && !item.active_revision_id && !item.archived); }
 
     load(): void {
         this.loading = true;
         this.errorMessage = '';
-        forkJoin({workflows: this.workflowsApi.list(), stepTypes: this.workflowsApi.listStepTypes()})
+        forkJoin({workflows: this.workflowsApi.list(), stepTypes: this.workflowsApi.listStepTypes(), catalog: this.workflowsApi.catalog()})
             .pipe(finalize(() => this.loading = false))
             .subscribe({
-                next: ({workflows, stepTypes}) => { this.workflows = workflows.sort((a, b) => a.key.localeCompare(b.key)); this.stepTypes = stepTypes; },
+                next: ({workflows, stepTypes, catalog}) => { this.workflows = workflows.sort((a, b) => a.key.localeCompare(b.key)); this.stepTypes = stepTypes; this.catalog = catalog; },
                 error: () => this.errorMessage = 'Workflow definitions could not be loaded.',
             });
     }

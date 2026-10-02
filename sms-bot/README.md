@@ -154,6 +154,81 @@ caption with `tg/send <num>`, `tg/use <num>`, or `tg/target <num>` to override
 the selected target for that photo. A caption beginning with `r`, `reply`,
 `tg/r`, or `tg/reply` is treated as a reply caption.
 
+### Conversation-aware SMS routing
+
+Forwarded integration messages carry a stable alias and durable, per-user
+reference:
+
+```text
+(tg/nikolai #184)
+Are you coming tomorrow?
+
+(tg/family #185)
+Anna: Dinner at 17?
+```
+
+Parentheses keep the routing envelope in the GSM-7 basic alphabet, preserving
+the 160-septet capacity for ordinary Telegram text.
+
+Reply with `#184 Yes, around 18:00.`, or start a new message with
+`tg/nikolai Hello`. The routing prefix is removed and multiline bodies are
+retained. An unprefixed reply such as `Yes` is rejected; the hub never guesses
+from the newest or previously selected chat.
+
+- `/help` gives compact routing syntax. The existing `help` command still lists
+  all bot commands.
+- `/chats [page]` lists at most ten aliases and readable names.
+- `/history <alias> [before-ref]` returns at most five recent entries with
+  direction, send state, and reply references.
+
+The older `tg list`, `tg send`, `tg use`, and `tg reply` commands remain for
+compatibility. Sticky `tg reply` is not used by the new syntax. Unknown free
+text no longer enters AI command inference because it may be an ambiguous chat
+reply; use the explicit `ai` command instead.
+
+Routing state is stored in orchestrator PostgreSQL by migration
+`034_sms_conversation_routing.sql`. Back up the Compose
+`orchestrator_pgdata` volume: it contains stable identities, aliases, history,
+send state, deduplication keys, and monotonically allocated references.
+
+Configure aliases on each orchestrator SMS target endpoint. Stable Telegram
+chat IDs are keys, so display-name changes do not change identity:
+
+```json
+{
+  "phone": "+4712345678",
+  "owner_user_id": 7,
+  "integration_account": "telegram-main",
+  "conversation_aliases": {
+    "123456789": "tg/nikolai",
+    "-1001234567890": "tg/family"
+  }
+}
+```
+
+`owner_user_id` is recommended; otherwise the E.164 `phone` is looked up as an
+authorized user. Without an explicit mapping, the relay derives an alias from
+the first observed title. Alias collisions are rejected, never silently
+remapped. Once registered, the persisted alias wins over later title or
+endpoint-config changes.
+Aliases are lowercase ASCII, use `service/name`, and are capped at 29 characters
+so even Unicode multipart SMS leaves room for the reference and part indicator.
+
+Telegram is the connected adapter. A future integration can register inbound
+messages through `POST /api/sms-routing/external-messages` before queueing the
+returned labelled text, using a stable service event ID. A reply to a service
+without a sending adapter returns an actionable unavailable error.
+
+The modem sends long text as independent SMS chunks, so routed chunks repeat
+the alias/reference and add `1/N`, `2/N`, and so on. Splitting uses the actual
+GSM-7 septet or UCS-2 code-unit budget. Consecutive chunks are submitted two
+seconds apart so the carrier assigns distinct timestamps and receiving phones
+can retain their submission order.
+
+Standard dumb-phone SMS apps still show one thread with the hub number. Labels
+distinguish conversations within that thread. Separate visual threads require
+a custom app that parses this format, or separate phone numbers.
+
 ### Message routes
 
 | SMS text | Aliases | Action |
@@ -317,3 +392,15 @@ source .venv/bin/activate
 pip install -r requirements.txt
 python main.py
 ```
+
+Run the routing-focused fake-transport tests without modem or Telegram access:
+
+```bash
+cd sms-bot && python -m unittest discover -s tests -p 'test_conversation_routing.py'
+cd ../telegram_relay && python -m unittest discover -s tests -p 'test_sms_destination.py'
+cd ../orchestrator && python -m unittest discover -s tests -p 'test_sms_routing_service.py'
+```
+
+The PostgreSQL concurrency/restart check is opt-in through the existing
+`MESSAGE_HUB_TEST_DATABASE_URL` integration-test setting. Tests never send real
+SMS or contact Telegram.

@@ -150,16 +150,19 @@ export class JobCardNewComponent {
         })
     }
 
-    onJobTypeChange(selectedJobType: string) {
-        const selectedType = this.job_types.find(type => type.job_type === selectedJobType);
+    onRevisionChange(revisionId: string) {
+        const selectedType = this.job_types.find(type => type.revision_id === revisionId);
         if (selectedType) {
+            this.job.job_type = selectedType.job_type;
             this.job.description = selectedType.description;
+            this.job.workflow_revision_id = selectedType.revision_id;
             this.workflowInputText = JSON.stringify(exampleInput(selectedType.input_schema), null, 2);
         }
     }
 
     get selectedType(): JobType | undefined {
-        return this.job_types.find(type => type.job_type === this.job.job_type);
+        return this.job_types.find(type => type.revision_id === this.job.workflow_revision_id)
+            ?? this.job_types.find(type => type.job_type === this.job.job_type && type.active);
     }
 
     private localDateTime(value: string): string {

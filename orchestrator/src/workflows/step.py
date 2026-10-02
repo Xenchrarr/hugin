@@ -22,17 +22,23 @@ class DirectExecution:
 DIRECT_EXECUTION = DirectExecution()
 
 
+def empty_object_schema() -> dict:
+    return {"type": "object", "properties": {}, "additionalProperties": False}
+
+
 @dataclass(frozen=True, slots=True)
 class StepSpec:
     key: str
+    version: int = 1
     description: str = ""
-    input_schema: dict = field(default_factory=dict)
-    output_schema: dict = field(default_factory=dict)
+    input_schema: dict = field(default_factory=empty_object_schema)
+    output_schema: dict = field(default_factory=empty_object_schema)
     idempotent: bool = False
 
     def to_dict(self) -> dict:
         return {
             "key": self.key,
+            "version": self.version,
             "description": self.description,
             "input_schema": copy.deepcopy(self.input_schema),
             "output_schema": copy.deepcopy(self.output_schema),
@@ -56,6 +62,7 @@ class RegisteredStep:
 def step(
     key: str,
     *,
+    version: int = 1,
     description: str = "",
     input_schema: dict | None = None,
     output_schema: dict | None = None,
@@ -66,8 +73,12 @@ def step(
     def decorator(handler: StepHandler) -> RegisteredStep:
         from .registry import workflow_step_registry
         item = RegisteredStep(
-            StepSpec(key, description, copy.deepcopy(input_schema or {}),
-                     copy.deepcopy(output_schema or {}), idempotent),
+            StepSpec(
+                key, version, description,
+                copy.deepcopy(input_schema) if input_schema is not None else empty_object_schema(),
+                copy.deepcopy(output_schema) if output_schema is not None else empty_object_schema(),
+                idempotent,
+            ),
             handler,
             execution,
         )
