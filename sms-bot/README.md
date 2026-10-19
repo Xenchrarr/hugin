@@ -191,33 +191,26 @@ Routing state is stored in orchestrator PostgreSQL by migration
 `orchestrator_pgdata` volume: it contains stable identities, aliases, history,
 send state, deduplication keys, and monotonically allocated references.
 
-Configure aliases on each orchestrator SMS target endpoint. Stable Telegram
-chat IDs are keys, so display-name changes do not change identity:
+Conversations are registered automatically when Telegram, Messenger, or
+Reticulum messages are routed to SMS. Administrators can view every registered
+conversation in **Conversation Aliases** in the orchestrator UI, edit its
+generated alias or availability, or add a conversation manually. Stable
+service conversation IDs remain hidden during normal editing, so renaming an
+alias does not require knowing a Telegram chat ID, Messenger thread ID, or
+Reticulum destination hash.
 
-```json
-{
-  "phone": "+4712345678",
-  "owner_user_id": 7,
-  "integration_account": "telegram-main",
-  "conversation_aliases": {
-    "123456789": "tg/nikolai",
-    "-1001234567890": "tg/family"
-  }
-}
-```
-
-`owner_user_id` is recommended; otherwise the E.164 `phone` is looked up as an
-authorized user. Without an explicit mapping, the relay derives an alias from
-the first observed title. Alias collisions are rejected, never silently
-remapped. Once registered, the persisted alias wins over later title or
-endpoint-config changes.
+The generated prefixes are `tg/`, `fb/`, and `rns/`. Alias collisions are
+rejected, never silently remapped. Once a conversation is registered, its
+persisted alias wins over later generated suggestions while its display name is
+kept current by the connector.
 Aliases are lowercase ASCII, use `service/name`, and are capped at 29 characters
 so even Unicode multipart SMS leaves room for the reference and part indicator.
 
-Telegram is the connected adapter. A future integration can register inbound
-messages through `POST /api/sms-routing/external-messages` before queueing the
-returned labelled text, using a stable service event ID. A reply to a service
-without a sending adapter returns an actionable unavailable error.
+Telegram, Messenger, and Reticulum have connected inbound and outbound
+adapters. Other integrations can register inbound messages through
+`POST /api/sms-routing/external-messages` before queueing the returned labelled
+text, using a stable service event ID. A reply to a service without a sending
+adapter returns an actionable unavailable error.
 
 The modem sends long text as independent SMS chunks, so routed chunks repeat
 the alias/reference and add `1/N`, `2/N`, and so on. Splitting uses the actual

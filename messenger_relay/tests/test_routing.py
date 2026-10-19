@@ -6,8 +6,14 @@ from app.routing import RouteDispatcher, Target, compile_routes, matches_conditi
 
 
 class _Response:
+    def __init__(self, data=None):
+        self.data = data or {}
+
     def raise_for_status(self):
         return None
+
+    def json(self):
+        return self.data
 
 
 class _Client:
@@ -16,6 +22,12 @@ class _Client:
 
     async def post(self, url, json):
         self.calls.append((url, json))
+        if url.endswith("/api/sms-routing/external-messages"):
+            return _Response({
+                "reference": 8,
+                "alias": "fb/family",
+                "text": "(fb/family #8)\nAlice: Hello",
+            })
         return _Response()
 
 
@@ -72,7 +84,7 @@ class RoutingTests(unittest.TestCase):
         }
         self.assertTrue(matches_condition(condition, message))
 
-    def test_sms_payload_includes_messenger_source_prefix(self):
+    def test_sms_payload_uses_generated_messenger_alias(self):
         message = NormalizedMessage(
             message_id="$1",
             chat_id="123",
@@ -100,8 +112,12 @@ class RoutingTests(unittest.TestCase):
 
         asyncio.run(dispatcher.dispatch(message, target))
 
-        _, body = dispatcher._client.calls[0]
-        self.assertEqual("fb: Family / Alice: Hello", body["payload"]["text"])
+        registration_url, registration = dispatcher._client.calls[0]
+        self.assertTrue(registration_url.endswith("/api/sms-routing/external-messages"))
+        self.assertEqual("fb/family", registration["alias"])
+        _, body = dispatcher._client.calls[1]
+        self.assertEqual("(fb/family #8)\nAlice: Hello", body["payload"]["text"])
+        self.assertEqual("fb/family", body["metadata"]["conversation_alias"])
 
 
 if __name__ == "__main__":

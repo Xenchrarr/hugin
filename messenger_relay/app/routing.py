@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Any
 
@@ -10,6 +11,12 @@ import httpx
 from app.models import NormalizedMessage
 
 logger = logging.getLogger(__name__)
+
+
+def _slug(value: str) -> str:
+    ascii_value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode()
+    slug = re.sub(r"[^a-z0-9_-]+", "-", ascii_value.lower()).strip("-_")
+    return (slug or "chat")[:18]
 
 
 def _numeric_eq(value: Any, reference: Any) -> bool:
@@ -112,8 +119,12 @@ def compile_routes(raw: dict[str, Any], source_key: str) -> list[Route]:
 
 
 class RouteDispatcher:
-    def __init__(self, orchestrator_url: str, service_key: str) -> None:
+    def __init__(
+        self, orchestrator_url: str, service_key: str,
+        source_key: str = "messenger-main",
+    ) -> None:
         self._base = orchestrator_url.rstrip("/")
+        self._source_key = source_key
         headers = {"X-Service-Key": service_key} if service_key else {}
         self._client = httpx.AsyncClient(headers=headers, timeout=30)
 
@@ -130,6 +141,32 @@ class RouteDispatcher:
             labels = labels[:1]
         return f"{' / '.join(labels)}: {body}" if labels else body
 
+    async def _register_sms_message(
+        self, message: NormalizedMessage, phone: str,
+    ) -> dict[str, Any]:
+        text = message.text or message.caption or f"<{message.media_type or 'message'}>"
+        display_name = message.chat_title or message.sender_name or message.chat_id
+        response = await self._client.post(
+            f"{self._base}/api/sms-routing/external-messages",
+            json={
+                "owner_phone": phone,
+                "service": "fb",
+                "integration_account": getattr(self, "_source_key", "messenger-main"),
+                "external_chat_id": message.chat_id,
+                "alias": f"fb/{_slug(display_name)}",
+                "display_name": display_name,
+                "event_id": (
+                    f"fb:{getattr(self, '_source_key', 'messenger-main')}:"
+                    f"{message.chat_id}:{message.message_id}"
+                ),
+                "external_message_id": message.message_id,
+                "body": text,
+                "author": message.sender_name if message.chat_type != "private" else None,
+            },
+        )
+        response.raise_for_status()
+        return response.json()
+
     async def dispatch(self, message: NormalizedMessage, target: Target) -> None:
         transformed = message.redacted(target.transform.get("redact") or [])
         payload = transformed.to_payload(
@@ -142,12 +179,13 @@ class RouteDispatcher:
             phone = str(target.config.get("phone") or "").strip()
             if not phone:
                 raise ValueError(f"SMS endpoint {target.endpoint_key!r} has no phone")
+            routed = await self._register_sms_message(transformed, phone)
             delivery = {
                 "gateway_key": "sms-main",
                 "address": {"phone": phone},
                 "recovery_policy": target.config.get("recovery_policy", "digest_hold"),
             }
-            payload = {"text": f"fb: {self._display_text(transformed)}"}
+            payload = {"text": routed["text"]}
         elif target.endpoint_type == "telegram":
             chat_id = target.config.get("chat_id")
             if chat_id is None:
@@ -209,6 +247,9 @@ class RouteDispatcher:
             "idempotency_key": f"messenger:{message.message_id}",
             "deliveries": [delivery],
         }
+        if target.endpoint_type == "sms":
+            body["metadata"]["sms_reference"] = routed["reference"]
+            body["metadata"]["conversation_alias"] = routed["alias"]
         response = await self._client.post(f"{self._base}/api/message-hub/messages", json=body)
         response.raise_for_status()
 

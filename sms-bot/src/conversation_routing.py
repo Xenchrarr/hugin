@@ -4,6 +4,8 @@ import re
 from dataclasses import dataclass
 
 from src.api.orchestrator import OrchestratorClient
+from src.api.messenger_relay import MessengerRelayClient
+from src.api.reticulum_relay import ReticulumRelayClient
 from src.api.telegram_relay import TelegramRelayClient
 
 
@@ -13,7 +15,11 @@ _ALIAS = re.compile(
     r"(?:(?:[ \t]+|\r?\n)(?P<body>[\s\S]*))?$",
     re.IGNORECASE | re.ASCII,
 )
-_LEGACY_TG_ALIASES = {"tg/list", "tg/convos", "tg/send", "tg/use", "tg/target", "tg/reply", "tg/r"}
+_LEGACY_INTEGRATION_ALIASES = {
+    "tg/list", "tg/convos", "tg/send", "tg/use", "tg/target", "tg/reply", "tg/r",
+    "fb/list", "fb/convos", "fb/send", "fb/use", "fb/target", "fb/reply", "fb/r",
+    "rns/list", "rns/convos", "rns/send", "rns/use", "rns/target", "rns/reply", "rns/r",
+}
 
 
 @dataclass(frozen=True)
@@ -41,7 +47,7 @@ def parse_routing_input(text: str) -> RoutingInput | None:
             "route", int(match.group("reference")), match.group("body") or "", "reference"
         )
     match = _ALIAS.fullmatch(text)
-    if match and match.group("alias").lower() not in _LEGACY_TG_ALIASES:
+    if match and match.group("alias").lower() not in _LEGACY_INTEGRATION_ALIASES:
         return RoutingInput(
             "route", match.group("alias").lower(), match.group("body") or "", "alias"
         )
@@ -52,9 +58,13 @@ class ConversationRouter:
     def __init__(
         self, orchestrator: OrchestratorClient | None = None,
         telegram: TelegramRelayClient | None = None,
+        messenger: MessengerRelayClient | None = None,
+        reticulum: ReticulumRelayClient | None = None,
     ):
         self.orchestrator = orchestrator or OrchestratorClient()
         self.telegram = telegram or TelegramRelayClient()
+        self.messenger = messenger or MessengerRelayClient()
+        self.reticulum = reticulum or ReticulumRelayClient()
 
     def handle(
         self, parsed: RoutingInput, *, user_id: int, event_id: str | None = None
@@ -122,25 +132,42 @@ class ConversationRouter:
         if not route.get("available", True):
             self.orchestrator.update_routed_status(user_id, route["reference"], "failed", "integration unavailable")
             return f"(hub) {route['alias']} is unavailable. Try again later."
-        if route.get("service") != "tg":
+        service = route.get("service")
+        if service == "tg":
+            result = self.telegram.send_routed_message(
+                int(route["external_chat_id"]), route["body"],
+                reply_to_message_id=route.get("reply_to_external_message_id"),
+            )
+            status = result.status
+            detail = result.detail
+            external_message_id = result.external_message_id
+        elif service == "fb":
+            accepted = self.messenger.send_message(
+                str(route["external_chat_id"]), route["body"]
+            )
+            status = "accepted" if accepted else "failed"
+            detail = None if accepted else "integration failure"
+            external_message_id = None
+        elif service == "rns":
+            accepted = self.reticulum.send_message(
+                str(route["external_chat_id"]), route["body"]
+            )
+            status = "accepted" if accepted else "failed"
+            detail = None if accepted else "integration failure"
+            external_message_id = None
+        else:
             self.orchestrator.update_routed_status(user_id, route["reference"], "failed", "integration adapter unavailable")
-            return f"(hub) Integration '{route.get('service')}' is unavailable."
-
-        result = self.telegram.send_routed_message(
-            int(route["external_chat_id"]), route["body"],
-            reply_to_message_id=route.get("reply_to_external_message_id"),
-        )
+            return f"(hub) Integration '{service}' is unavailable."
         self.orchestrator.update_routed_status(
-            user_id, route["reference"], result.status, result.detail,
-            result.external_message_id,
+            user_id, route["reference"], status, detail, external_message_id,
         )
-        if result.status == "accepted":
+        if status == "accepted":
             return f"(hub) Sent to {route['alias']}."
-        if result.status == "queued":
+        if status == "queued":
             return f"(hub) Queued for {route['alias']}."
-        if result.status == "uncertain":
+        if status == "uncertain":
             return f"(hub) Send to {route['alias']} is uncertain; it will not be retried automatically."
-        return f"(hub) Could not send to {route['alias']}: {result.detail or 'integration failure'}."
+        return f"(hub) Could not send to {route['alias']}: {detail or 'integration failure'}."
 
 
 AMBIGUOUS_RESPONSE = (

@@ -1,0 +1,73 @@
+<h2 mat-dialog-title>{{ isNew ? 'Add conversation' : 'Edit conversation' }}</h2>
+<mat-dialog-content>
+    @if (isNew) {
+        <p class="intro">
+            Generated conversations appear automatically. Add one manually when you need an alias before
+            the first incoming message.
+        </p>
+    }
+    <div class="form-grid">
+        <mat-form-field>
+            <mat-label>Owner</mat-label>
+            <mat-select [(ngModel)]="form.owner_user_id" [disabled]="!isNew">
+                @for (user of data.users; track user.id) {
+                    <mat-option [value]="user.id">
+                        {{ user.display_name || user.username }}
+                        {{ user.phone_number ? ' · ' + user.phone_number : '' }}
+                    </mat-option>
+                }
+            </mat-select>
+        </mat-form-field>
+
+        <mat-form-field>
+            <mat-label>Channel prefix</mat-label>
+            <input matInput [(ngModel)]="form.service" [disabled]="!isNew"
+                   maxlength="10" list="conversation-service-prefixes"
+                   (change)="serviceChanged()" placeholder="tg">
+            <datalist id="conversation-service-prefixes">
+                @for (service of services; track service.value) {
+                    <option [value]="service.value">{{ service.label }}</option>
+                }
+            </datalist>
+            <mat-hint>Telegram: tg · Messenger: fb · Reticulum: rns</mat-hint>
+        </mat-form-field>
+
+        <mat-form-field>
+            <mat-label>Integration account</mat-label>
+            <input matInput [(ngModel)]="form.integration_account" [disabled]="!isNew"
+                   placeholder="telegram-main">
+            <mat-hint>The source connector account.</mat-hint>
+        </mat-form-field>
+
+        <mat-form-field>
+            <mat-label>External conversation ID</mat-label>
+            <input matInput [(ngModel)]="form.external_chat_id" [disabled]="!isNew"
+                   placeholder="Chat ID, thread ID, or destination hash">
+            <mat-hint>Generated rows fill this in automatically.</mat-hint>
+        </mat-form-field>
+
+        <mat-form-field>
+            <mat-label>Display name</mat-label>
+            <input matInput [(ngModel)]="form.display_name" maxlength="200" [disabled]="!isNew"
+                   placeholder="Family">
+            <mat-hint>{{ isNew ? 'A readable name for the conversation.' : 'Updated automatically by the connector.' }}</mat-hint>
+        </mat-form-field>
+
+        <mat-form-field>
+            <mat-label>Alias</mat-label>
+            <input matInput [(ngModel)]="form.alias" maxlength="29"
+                   (blur)="normalizeAlias()" placeholder="tg/family">
+            <mat-hint>The address used from SMS, for example tg/family.</mat-hint>
+        </mat-form-field>
+    </div>
+
+    <mat-checkbox [(ngModel)]="form.available">Available for sending</mat-checkbox>
+    @if (validationError) { <p class="validation">{{ validationError }}</p> }
+    @if (error) { <p class="error" role="alert">{{ error }}</p> }
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+    <button mat-button mat-dialog-close [disabled]="saving">Cancel</button>
+    <button mat-flat-button (click)="save()" [disabled]="!!validationError || saving">
+        {{ saving ? 'Saving…' : 'Save' }}
+    </button>
+</mat-dialog-actions>

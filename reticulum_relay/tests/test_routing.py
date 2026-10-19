@@ -63,8 +63,13 @@ class RoutingTests(unittest.TestCase):
         )
 
     @patch("app.routing.requests.post")
-    def test_sms_payload_includes_reticulum_source_prefix(self, post):
+    def test_sms_payload_uses_generated_reticulum_alias(self, post):
         post.return_value.raise_for_status.return_value = None
+        post.return_value.json.return_value = {
+            "reference": 9,
+            "alias": "rns/alice",
+            "text": "(rns/alice #9)\nAlice: Cabin alarm",
+        }
         target = Target(
             endpoint_id=2,
             endpoint_key="phone",
@@ -80,8 +85,11 @@ class RoutingTests(unittest.TestCase):
 
         dispatcher._submit(self.message, target)
 
-        body = post.call_args.kwargs["json"]
-        self.assertEqual("rns: Alice: Cabin alarm", body["payload"]["text"])
+        registration = post.call_args_list[0].kwargs["json"]
+        self.assertEqual("rns/alice", registration["alias"])
+        body = post.call_args_list[1].kwargs["json"]
+        self.assertEqual("(rns/alice #9)\nAlice: Cabin alarm", body["payload"]["text"])
+        self.assertEqual("rns/alice", body["metadata"]["conversation_alias"])
 
 
 if __name__ == "__main__":

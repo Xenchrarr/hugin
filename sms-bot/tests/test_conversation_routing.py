@@ -28,8 +28,9 @@ class RoutingParserTests(unittest.TestCase):
         self.assertIsNone(parse_routing_input("Yes"))
         self.assertIn("Specify a conversation", AMBIGUOUS_RESPONSE)
 
-    def test_legacy_telegram_commands_are_not_taken_as_aliases(self):
-        self.assertIsNone(parse_routing_input("tg/send 1 hello"))
+    def test_legacy_integration_commands_are_not_taken_as_aliases(self):
+        for command in ("tg/send 1 hello", "fb/send 1 hello", "rns/send 1 hello"):
+            self.assertIsNone(parse_routing_input(command))
 
 
 class _Orchestrator:
@@ -58,6 +59,16 @@ class _Telegram:
     def send_routed_message(self, chat_id, body, reply_to_message_id=None):
         self.calls.append((chat_id, body, reply_to_message_id))
         return self.result
+
+
+class _DirectRelay:
+    def __init__(self, accepted=True):
+        self.accepted = accepted
+        self.calls = []
+
+    def send_message(self, destination, body):
+        self.calls.append((destination, body))
+        return self.accepted
 
 
 class ConversationRouterTests(unittest.TestCase):
@@ -112,6 +123,29 @@ class ConversationRouterTests(unittest.TestCase):
         router = ConversationRouter(_Orchestrator(), _Telegram())
         self.assertIn("tg/family - Family", router.handle(parse_routing_input("/chats"), user_id=1))
         self.assertTrue(router.handle(parse_routing_input("/history tg/family"), user_id=1).startswith("(hub)"))
+
+    def test_alias_routes_to_messenger_and_reticulum_adapters(self):
+        messenger = _DirectRelay()
+        reticulum = _DirectRelay()
+        messenger_route = {
+            "duplicate": False, "reference": 3, "alias": "fb/family", "service": "fb",
+            "external_chat_id": "123", "body": "Hello", "available": True,
+        }
+        result = ConversationRouter(
+            _Orchestrator(messenger_route), _Telegram(), messenger, reticulum
+        ).handle(parse_routing_input("fb/family Hello"), user_id=1)
+        self.assertEqual("(hub) Sent to fb/family.", result)
+        self.assertEqual([("123", "Hello")], messenger.calls)
+
+        reticulum_route = {
+            "duplicate": False, "reference": 4, "alias": "rns/alice", "service": "rns",
+            "external_chat_id": "ab" * 16, "body": "Ping", "available": True,
+        }
+        result = ConversationRouter(
+            _Orchestrator(reticulum_route), _Telegram(), messenger, reticulum
+        ).handle(parse_routing_input("rns/alice Ping"), user_id=1)
+        self.assertEqual("(hub) Sent to rns/alice.", result)
+        self.assertEqual([("ab" * 16, "Ping")], reticulum.calls)
 
 
 class AuthorizationAndFallbackTests(unittest.TestCase):

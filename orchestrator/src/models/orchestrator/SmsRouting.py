@@ -36,6 +36,8 @@ class SmsConversation:
             "alias": self.alias,
             "display_name": self.display_name,
             "available": self.available,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
 
@@ -65,4 +67,3 @@ class SmsRoutedMessage:
             reply_to_reference=int(row[9]) if row[9] is not None else None,
             send_status=row[10], status_detail=row[11], created_at=row[12], updated_at=row[13],
         )
-

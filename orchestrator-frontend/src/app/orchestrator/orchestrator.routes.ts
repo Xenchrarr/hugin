@@ -18,6 +18,7 @@ import {WorkflowBuilderComponent} from './components/workflows/workflow-builder.
 import {ExecutionDetailComponent} from './components/execution-detail/execution-detail.component';
 import {MonitorsComponent} from './components/monitors/monitors.component';
 import {MonitorDetailComponent} from './components/monitors/monitor-detail.component';
+import {ConversationAliasesComponent} from './components/conversation-aliases/conversation-aliases.component';
 
 export const routes: Routes = [
     {
@@ -75,6 +76,11 @@ export const routes: Routes = [
     {
         path: 'message-hub',
         component: MessageHubComponent,
+        canActivate: [adminGuard],
+    },
+    {
+        path: 'conversation-aliases',
+        component: ConversationAliasesComponent,
         canActivate: [adminGuard],
     },
     {

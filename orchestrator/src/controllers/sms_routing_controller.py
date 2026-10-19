@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from flask import Blueprint, request
 
-from src.auth import require_service_key
+from src.auth import require_admin, require_service_key
 from src.persistence.UserStorage import UserStorage
 from src.services.core.sms_routing_service import SmsRoutingService
 
@@ -122,3 +122,56 @@ def history():
     except Exception as exc:
         return _error(exc)
 
+
+@sms_routing_blueprint.route("/conversations", methods=["GET"])
+@require_admin
+def list_conversations():
+    try:
+        return _service.list_all_conversations(
+            request.args.get("limit", 500), request.args.get("offset", 0)
+        )
+    except Exception as exc:
+        return _error(exc)
+
+
+@sms_routing_blueprint.route("/conversations", methods=["POST"])
+@require_admin
+def create_conversation():
+    data = request.get_json(silent=True) or {}
+    try:
+        return _service.create_conversation(
+            owner_user_id=_owner_id(data),
+            service=data.get("service"),
+            integration_account=data.get("integration_account"),
+            external_chat_id=data.get("external_chat_id"),
+            alias=data.get("alias"),
+            display_name=data.get("display_name"),
+            available=data.get("available", True),
+        ), 201
+    except Exception as exc:
+        return _error(exc)
+
+
+@sms_routing_blueprint.route("/conversations/<int:conversation_id>", methods=["PUT"])
+@require_admin
+def update_conversation(conversation_id: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        return _service.update_conversation(
+            conversation_id,
+            alias=data.get("alias"),
+            display_name=data.get("display_name"),
+            available=data.get("available", True),
+        )
+    except Exception as exc:
+        return _error(exc)
+
+
+@sms_routing_blueprint.route("/conversations/<int:conversation_id>", methods=["DELETE"])
+@require_admin
+def delete_conversation(conversation_id: int):
+    try:
+        _service.delete_conversation(conversation_id)
+        return {"message": "Conversation deleted"}
+    except Exception as exc:
+        return _error(exc)

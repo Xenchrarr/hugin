@@ -156,6 +156,70 @@ class SmsRoutingService:
             "next_offset": offset + limit if more else None,
         }
 
+    def list_all_conversations(self, limit: int = 500, offset: int = 0) -> dict:
+        limit = min(max(int(limit), 1), 500)
+        offset = max(int(offset), 0)
+        conversations = self.storage.list_all_conversations(limit + 1, offset)
+        more = len(conversations) > limit
+        return {
+            "conversations": [item.to_dict() for item in conversations[:limit]],
+            "more": more,
+            "next_offset": offset + limit if more else None,
+        }
+
+    def create_conversation(
+        self, *, owner_user_id: int, service: str, integration_account: str,
+        external_chat_id: str, alias: str, display_name: str, available: bool = True,
+    ) -> dict:
+        service = str(service or "").strip().lower()
+        account = str(integration_account or "").strip()
+        external_id = str(external_chat_id or "").strip()
+        normalized_alias = self.normalize_alias(alias)
+        name = str(display_name or "").strip()[:200]
+        if not service or not account or not external_id or not name:
+            raise ValueError(
+                "owner, service, integration account, external conversation ID and display name are required"
+            )
+        if normalized_alias.split("/", 1)[0] != service:
+            raise ValueError("alias service prefix must match service")
+        conversation = self.storage.create_conversation(
+            owner_user_id=owner_user_id,
+            service=service,
+            integration_account=account,
+            external_chat_id=external_id,
+            alias=normalized_alias,
+            display_name=name,
+            available=bool(available),
+        )
+        return conversation.to_dict()
+
+    def update_conversation(
+        self, conversation_id: int, *, alias: str, display_name: str,
+        available: bool,
+    ) -> dict:
+        existing = self.storage.get_conversation_by_id(int(conversation_id))
+        if existing is None:
+            raise LookupError("conversation not found")
+        normalized_alias = self.normalize_alias(alias)
+        if normalized_alias.split("/", 1)[0] != existing.service:
+            raise ValueError("alias service prefix must match service")
+        name = str(display_name or "").strip()[:200]
+        if not name:
+            raise ValueError("display name is required")
+        conversation = self.storage.update_conversation(
+            existing.id,
+            alias=normalized_alias,
+            display_name=name,
+            available=bool(available),
+        )
+        if conversation is None:
+            raise LookupError("conversation not found")
+        return conversation.to_dict()
+
+    def delete_conversation(self, conversation_id: int) -> None:
+        if not self.storage.delete_conversation(int(conversation_id)):
+            raise LookupError("conversation not found")
+
     def history(
         self, owner_user_id: int, alias: str, limit: int = 5,
         before_reference: int | None = None,

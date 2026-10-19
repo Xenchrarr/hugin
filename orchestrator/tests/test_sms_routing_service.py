@@ -81,6 +81,38 @@ class _Storage:
     def list_conversations(self, owner, limit, offset):
         return [c for c in self.conversations if c.owner_user_id == owner][offset:offset + limit]
 
+    def list_all_conversations(self, limit, offset):
+        return self.conversations[offset:offset + limit]
+
+    def create_conversation(self, **values):
+        if any(c.owner_user_id == values["owner_user_id"] and c.alias == values["alias"]
+               for c in self.conversations):
+            raise RuntimeError("unique alias")
+        item = SimpleNamespace(id=self.next_conversation, **values)
+        item.to_dict = lambda item=item: {
+            key: value for key, value in vars(item).items() if key != "to_dict"
+        }
+        self.next_conversation += 1
+        self.conversations.append(item)
+        return item
+
+    def get_conversation_by_id(self, conversation_id):
+        return next((c for c in self.conversations if c.id == conversation_id), None)
+
+    def update_conversation(self, conversation_id, **values):
+        item = self.get_conversation_by_id(conversation_id)
+        if item:
+            for key, value in values.items():
+                setattr(item, key, value)
+        return item
+
+    def delete_conversation(self, conversation_id):
+        item = self.get_conversation_by_id(conversation_id)
+        if item is None:
+            return False
+        self.conversations.remove(item)
+        return True
+
     def history(self, owner, conversation_id, limit, before):
         values = [m for m in self.messages if m.owner_user_id == owner and m.conversation_id == conversation_id]
         if before is not None:
@@ -162,6 +194,45 @@ class SmsRoutingServiceTests(unittest.TestCase):
         )
         self.assertEqual("tg/nikolai", second["alias"])
         self.assertNotEqual(first["reference"], second["reference"])
+
+    def test_admin_can_rename_an_automatically_generated_conversation(self):
+        self.external(chat="-100", alias="tg/family-chat")
+        conversation = self.storage.conversations[0]
+
+        updated = self.service.update_conversation(
+            conversation.id,
+            alias="tg/family",
+            display_name="Family",
+            available=True,
+        )
+
+        self.assertEqual("tg/family", updated["alias"])
+        self.assertEqual("-100", updated["external_chat_id"])
+
+    def test_admin_can_add_and_list_a_conversation_for_any_supported_prefix(self):
+        created = self.service.create_conversation(
+            owner_user_id=1,
+            service="fb",
+            integration_account="messenger-main",
+            external_chat_id="12345",
+            alias="fb/family",
+            display_name="Family Messenger",
+        )
+
+        result = self.service.list_all_conversations()
+
+        self.assertEqual("fb/family", created["alias"])
+        self.assertEqual(["fb/family"], [item["alias"] for item in result["conversations"]])
+
+    def test_alias_prefix_must_match_conversation_service(self):
+        self.external()
+        with self.assertRaises(ValueError):
+            self.service.update_conversation(
+                self.storage.conversations[0].id,
+                alias="fb/nikolai",
+                display_name="Nikolai",
+                available=True,
+            )
 
 
 if __name__ == "__main__":

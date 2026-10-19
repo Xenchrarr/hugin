@@ -1,0 +1,6 @@
+:host { display: block; }
+.intro { color: var(--mat-sys-on-surface-variant); margin-top: 0; max-width: 42rem; }
+.form-grid { display: grid; gap: .75rem 1rem; grid-template-columns: 1fr 1fr; padding-top: .5rem; }
+mat-form-field { width: 100%; }
+.validation, .error { color: var(--mat-sys-error); margin: .75rem 0 0; }
+@media (max-width: 620px) { .form-grid { grid-template-columns: 1fr; } }

@@ -65,6 +65,68 @@ class SmsRoutingStorage:
         ).fetchall()
         return [SmsConversation.from_row(row) for row in rows]
 
+    def list_all_conversations(self, limit: int = 500, offset: int = 0) -> list[SmsConversation]:
+        rows = self._db.execute(
+            f"SELECT {_CONVERSATION_COLUMNS} FROM sms_routing_conversations "
+            "ORDER BY updated_at DESC, id DESC LIMIT %s OFFSET %s",
+            (limit, offset),
+        ).fetchall()
+        return [SmsConversation.from_row(row) for row in rows]
+
+    def create_conversation(
+        self, *, owner_user_id: int, service: str, integration_account: str,
+        external_chat_id: str, alias: str, display_name: str, available: bool,
+    ) -> SmsConversation:
+        try:
+            row = self._db.execute(
+                "INSERT INTO sms_routing_conversations "
+                "(owner_user_id, service, integration_account, external_chat_id, alias, "
+                "display_name, available) VALUES (%s, %s, %s, %s, %s, %s, %s) "
+                "RETURNING " + _CONVERSATION_COLUMNS,
+                (owner_user_id, service, integration_account, external_chat_id, alias,
+                 display_name, available),
+            ).fetchone()
+            self._db.commit()
+            return SmsConversation.from_row(row)
+        except Exception:
+            self._db.rollback()
+            raise
+
+    def get_conversation_by_id(self, conversation_id: int) -> SmsConversation | None:
+        row = self._db.execute(
+            f"SELECT {_CONVERSATION_COLUMNS} FROM sms_routing_conversations WHERE id = %s",
+            (conversation_id,),
+        ).fetchone()
+        return SmsConversation.from_row(row) if row else None
+
+    def update_conversation(
+        self, conversation_id: int, *, alias: str, display_name: str, available: bool,
+    ) -> SmsConversation | None:
+        try:
+            row = self._db.execute(
+                "UPDATE sms_routing_conversations SET alias = %s, display_name = %s, "
+                "available = %s, updated_at = NOW() WHERE id = %s RETURNING "
+                + _CONVERSATION_COLUMNS,
+                (alias, display_name, available, conversation_id),
+            ).fetchone()
+            self._db.commit()
+            return SmsConversation.from_row(row) if row else None
+        except Exception:
+            self._db.rollback()
+            raise
+
+    def delete_conversation(self, conversation_id: int) -> bool:
+        try:
+            row = self._db.execute(
+                "DELETE FROM sms_routing_conversations WHERE id = %s RETURNING id",
+                (conversation_id,),
+            ).fetchone()
+            self._db.commit()
+            return row is not None
+        except Exception:
+            self._db.rollback()
+            raise
+
     def get_message_by_reference(self, owner_user_id: int, reference: int) -> SmsRoutedMessage | None:
         row = self._db.execute(
             f"SELECT {_MESSAGE_COLUMNS} FROM sms_routing_messages "

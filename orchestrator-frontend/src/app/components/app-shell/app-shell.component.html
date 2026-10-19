@@ -30,6 +30,7 @@
             @if ((auth.user$ | async)?.is_admin) {
                 @if (!collapsed) { <span class="nav-label">Administration</span> }
                 <a mat-list-item routerLink="/message-hub" routerLinkActive="active"><mat-icon matListItemIcon>hub</mat-icon>@if (!collapsed) { <span>Message Hub</span> }</a>
+                <a mat-list-item routerLink="/conversation-aliases" routerLinkActive="active"><mat-icon matListItemIcon>alternate_email</mat-icon>@if (!collapsed) { <span>Conversation Aliases</span> }</a>
                 <a mat-list-item routerLink="/alarms" routerLinkActive="active"><mat-icon matListItemIcon>alarm_on</mat-icon>@if (!collapsed) { <span>Calling Alarms</span> }</a>
                 <a mat-list-item routerLink="/users/list" routerLinkActive="active"><mat-icon matListItemIcon>admin_panel_settings</mat-icon>@if (!collapsed) { <span>Users</span> }</a>
                 <a mat-list-item routerLink="/users/notification-settings" routerLinkActive="active"><mat-icon matListItemIcon>notifications_active</mat-icon>@if (!collapsed) { <span>Notifications</span> }</a>

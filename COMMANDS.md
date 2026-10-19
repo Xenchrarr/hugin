@@ -98,6 +98,13 @@ scene heat 60
 
 ### Telegram Conversations
 
+Messages forwarded to SMS also receive stable aliases such as `tg/family`,
+`fb/alice`, and `rns/cabin`. Send `<alias> <message>` to start a message, or
+`#<reference> <message>` to reply to a labelled incoming message. Administrators
+can view, edit, and add these records under **Conversation Aliases** in the
+orchestrator UI; generated records can be renamed without entering their raw
+chat or destination ID.
+
 | Command | Aliases | Description | Parameters | PIN |
 |---|---|---|---|---|
 | `tg/list` | `tg/convos` | List recent Telegram conversations (numbered index) | — | No |

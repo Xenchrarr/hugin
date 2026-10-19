@@ -19,7 +19,9 @@ class MessengerRelay:
     def __init__(self, config: Config) -> None:
         self._config = config
         self._matrix = MatrixClient(config.matrix_url, config.matrix_access_token)
-        self._dispatcher = RouteDispatcher(config.orchestrator_url, config.service_key)
+        self._dispatcher = RouteDispatcher(
+            config.orchestrator_url, config.service_key, config.source_endpoint_key
+        )
         self._state = StateStore(config.state_path)
         self._normalizer = MatrixEventNormalizer(
             config.matrix_user_id,

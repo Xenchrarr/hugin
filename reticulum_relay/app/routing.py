@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import re
 import threading
+import unicodedata
 from dataclasses import dataclass
 from typing import Any
 
@@ -12,6 +13,12 @@ from app.normalizer import NormalizedMessage
 from app.state import StateStore
 
 logger = logging.getLogger(__name__)
+
+
+def _slug(value: str) -> str:
+    ascii_value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode()
+    slug = re.sub(r"[^a-z0-9_-]+", "-", ascii_value.lower()).strip("-_")
+    return (slug or "peer")[:18]
 
 
 @dataclass(frozen=True)
@@ -149,6 +156,33 @@ class RouteDispatcher:
                 self._submit(message, target)
             logger.info("Route %r forwarded LXMF message %s", route.name, message.message_id)
 
+    def _register_sms_message(
+        self, message: NormalizedMessage, phone: str,
+    ) -> dict[str, Any]:
+        display_name = message.sender_name or message.source_hash[:12]
+        response = requests.post(
+            f"{self._base}/api/sms-routing/external-messages",
+            json={
+                "owner_phone": phone,
+                "service": "rns",
+                "integration_account": getattr(self, "_source_key", "reticulum-main"),
+                "external_chat_id": message.source_hash,
+                "alias": f"rns/{_slug(display_name)}",
+                "display_name": display_name,
+                "event_id": (
+                    f"rns:{getattr(self, '_source_key', 'reticulum-main')}:"
+                    f"{message.source_hash}:{message.message_id}"
+                ),
+                "external_message_id": message.message_id,
+                "body": message.text or message.title or "<LXMF message>",
+                "author": message.sender_name or message.source_hash[:12],
+            },
+            headers=self._headers,
+            timeout=(5, 30),
+        )
+        response.raise_for_status()
+        return response.json()
+
     def _submit(self, message: NormalizedMessage, target: Target) -> None:
         message = message.redacted(target.transform.get("redact") or [])
         display = message.display_text()
@@ -158,12 +192,13 @@ class RouteDispatcher:
             phone = str(target.config.get("phone") or "").strip()
             if not phone:
                 raise ValueError(f"SMS endpoint {target.endpoint_key!r} has no phone")
+            routed = self._register_sms_message(message, phone)
             delivery = {
                 "gateway_key": "sms-main",
                 "address": {"phone": phone},
                 "recovery_policy": target.config.get("recovery_policy", "digest_hold"),
             }
-            payload = {"text": f"rns: {display}"}
+            payload = {"text": routed["text"]}
         elif target.endpoint_type == "telegram":
             chat_id = target.config.get("chat_id")
             if chat_id is None:
@@ -240,6 +275,9 @@ class RouteDispatcher:
             "idempotency_key": f"reticulum:{message.message_id}",
             "deliveries": [delivery],
         }
+        if target.endpoint_type == "sms":
+            body["metadata"]["sms_reference"] = routed["reference"]
+            body["metadata"]["conversation_alias"] = routed["alias"]
         response = requests.post(
             f"{self._base}/api/message-hub/messages",
             json=body,
